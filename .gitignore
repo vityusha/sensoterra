@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+node_modules/
+build/
+.gradle/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+package-lock.json

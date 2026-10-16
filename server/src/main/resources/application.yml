@@ -1,0 +1,98 @@
+logger:
+  levels:
+    # HTTP access log — видны реальные запросы браузера (метод, путь, статус).
+    io.micronaut.http.server.accesslog: DEBUG
+
+micronaut:
+  application:
+    name: sensoterra-server
+  server:
+    port: 8080
+    cors:
+      enabled: true
+      configurations:
+        all:
+          allowed-origins:
+            - "http://localhost:3000"
+            - "http://127.0.0.1:3000"
+            - "http://10.0.3.130:3000"
+          # Приватные сети (телефон/ноут в локалке) — чтобы работало и после смены IP по DHCP.
+          # Наличие regex снимает защиту Micronaut от drive-by localhost: иначе origin != localhost
+          # при Host=localhost:8080 (serve.py переписывает Host) отбивается 403.
+          # Авторизация только bearer-токеном, cookie не используются — CSRF-риска нет.
+          allowed-origins-regex: 'https?://(localhost|127\.0\.0\.1|10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3})(:[0-9]{1,5})?'
+          allowedMethods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          allowedHeaders:
+            - "*"
+            - Authorization
+  security:
+    enabled: true
+    authentication: bearer
+    endpoints:
+      login:
+        # Встроенный /login Micronaut отдаёт JWT мимо нашего AuthController — лишняя
+        # точка входа. Вход только через /api/auth/login (там свои проверки и единый формат).
+        enabled: false
+    token:
+      jwt:
+        enabled: true
+        signatures:
+          secret:
+            generator:
+              secret: "${JWT_SECRET}"
+              jws-algorithm: HS256
+        claims:
+          issuer: "sensoterra-server"
+
+datasources:
+  default:
+    url: ${DB_URL:`jdbc:postgresql://localhost:5432/sensoterra`}
+    driverClassName: org.postgresql.Driver
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    maximum-pool-size: 10
+
+flyway:
+  datasources:
+    default:
+      enabled: true
+      locations: classpath:db/migration
+
+jpa:
+  default:
+    entity-scan:
+      packages:
+        - "ru.sensoterra.server"
+    properties:
+      hibernate:
+        hbm2ddl:
+          auto: none
+        show_sql: false
+
+sensoterra:
+  oauth:
+    # Вход через Google. Выключен по умолчанию: без client-id и без HTTPS кнопка
+    # на фронте не показывается (см. /api/auth/status -> googleEnabled).
+    # Client ID — публичный идентификатор, секретов на сервере нет.
+    enabled: ${GOOGLE_OAUTH_ENABLED:false}
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      # Адрес публичных ключей Google. Переопределяется в тестах на локальный сервер.
+      jwks-url: ${GOOGLE_JWKS_URL:https://www.googleapis.com/oauth2/v3/certs}
+  invite:
+    # Срок жизни ссылки-приглашения на доступ к устройству, дней.
+    ttl-days: 7
+  mqtt:
+    broker: "ssl://m6.wqtt.ru:19395"
+    client-id: "sensoterra-server-1"
+    device-id: "13034338"
+    topic: "13034338/STATUS"
+    username: "${SENSOTERRA_MQTT_USERNAME}"
+    password: "${SENSOTERRA_MQTT_PASSWORD}"
+    keep-alive-interval: 60
+    connection-timeout: 10

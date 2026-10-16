@@ -1,0 +1,602 @@
+<template>
+  <div class="sensor">
+    <div class="header-row">
+      <button @click="$router.back()" class="btn small secondary">&larr;</button>
+      <h2>{{ displayName }} <span class="chip-id">({{ chipId }})</span></h2>
+      <span class="type-tag">{{ isIndividual ? 'автономный' : `${blockLabel} &nbsp;S${blockRole?.slot ?? ''}` }}</span>
+      <button class="btn small calibrate-btn" v-if="canEditPrefs && isIndividual" @click="openSettings">Настройка</button>
+      <button class="btn small calibrate-btn" v-if="canEditPrefs" @click="openCalibrate">Калибровка</button>
+    </div>
+
+    <section class="section" v-if="latest">
+      <h3>Последние данные</h3>
+      <div class="last-received" v-if="latest.time">
+        Получено: <b>{{ fmtEventTimeWithZone(latest.time, tzOffset) }}</b>
+        <span class="ago">({{ agoText }})</span>
+      </div>
+      <div class="immersion-warning" v-if="immersionWarningShown">
+        Проверьте уровень погружения датчика в почву
+      </div>
+      <div class="latest-grid">
+        <div class="latest-cell" v-for="che in cellCharts" :key="'l' + che.key">
+          <span class="l-label">{{ label(che.key) }}<button v-if="isGradientField(che.key)" class="gradient-btn" @click.stop="openGradient(che.key)" :title="gradientTitle(che.key)"></button></span>
+          <span class="l-value">{{ cellValue(che, latest) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span><span v-if="che.key === 'v0' && pctColor" class="pct-color" :style="{ background: pctColor }"></span><span v-if="che.key !== 'v0' && fieldColor(che, latest)" class="pct-color" :style="{ background: fieldColor(che, latest) }"></span></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" v-if="canEditPrefs">
+      <h3>Показ измерений</h3>
+      <div class="field-toggles">
+        <label class="field-check" v-for="key in fieldKeys" :key="'tg' + key">
+          <input type="checkbox" :checked="!isFieldHidden(chipId, key)" @change="toggleField(chipId, key)" />
+          {{ key.toUpperCase() }} — {{ label(key) }}
+        </label>
+      </div>
+      <p class="hint">
+        Каналы этого датчика: скрытые не показываются ни в последних данных, ни на графиках.
+        Выбор хранится в вашем аккаунте и переносится на другие устройства.
+      </p>
+    </section>
+
+    <section class="section" v-if="calibSectionVisible">
+      <h3>Калибровка влажности (АЦП v0 → %)</h3>
+      <div class="calib-row">
+        <label>Воздух <input type="number" v-model.number="calibForm.value1" /></label>
+        <label>Сухая почва (0%) <input type="number" v-model.number="calibForm.value2" /></label>
+        <label>Вода (100%) <input type="number" v-model.number="calibForm.value3" /></label>
+        <button class="btn small" :disabled="calibForm.busy" @click="saveCalib">
+          {{ calibForm.busy ? '...' : 'Сохранить' }}
+        </button>
+      </div>
+      <p class="hint">
+        Опорные точки для этого датчика: текущие значения из БД, при их отсутствии —
+        дефолтные. Правка калибровки — только админом.
+      </p>
+    </section>
+
+    <section class="section">
+      <h3>Статистика измерений</h3>
+      <div class="range-select">
+        <button v-for="r in ranges" :key="r.label" class="btn small" :class="{ active: range === r.value }" @click="setRange(r.value)">{{ r.label }}</button>
+        <button class="btn small" :class="{ active: range === 'custom' }" @click="showCustom = !showCustom">{{ showCustom ? 'Скрыть' : 'Свой период' }}</button>
+      </div>
+      <div v-if="showCustom" class="custom-range">
+        <label>С <input v-model="customFrom" type="datetime-local" /></label>
+        <label>По <input v-model="customTo" type="datetime-local" /></label>
+        <button class="btn small" @click="applyCustom">Применить</button>
+      </div>
+      <div v-if="loading" class="empty small">Загрузка...</div>
+      <template v-else-if="rows.length">
+        <div class="chart-section" v-for="che in chartSections" :key="che.key">
+          <div class="chart-head">
+            <h4>{{ label(che.key) }} <span class="unit" v-if="chartUnit(che)">, {{ chartUnit(che) }}</span></h4>
+            <div class="y-edit" v-if="isYEditable(che.key) && canEditPrefs">
+              <label>min <input type="number" step="any" v-model="yEdit(che.key).min" @keyup.enter="applyY(che.key)" /></label>
+              <label>max <input type="number" step="any" v-model="yEdit(che.key).max" @keyup.enter="applyY(che.key)" /></label>
+              <button class="btn small" @click="applyY(che.key)">ОК</button>
+              <button class="btn small ghost" @click="resetY(che.key)">Авто</button>
+            </div>
+          </div>
+          <LineChart :labels="timeLabels" :datasets="chartDatasets(che)" :unit="chartUnit(che)" :zone-offset="tzOffset ?? undefined" :x-min="statsXMin" :x-max="statsXMax" :y-min="yBounds(che.key).min" :y-max="yBounds(che.key).max" />
+        </div>
+        <div class="empty small" v-if="!chartSections.length">За выбранный период данных нет</div>
+      </template>
+      <div v-else class="empty small">Нет данных за выбранный период</div>
+    </section>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { getSensorCatalog, getSensorTelemetry, getDevice, listDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales } from '../api/auth'
+import { auth, deviceAccess, rememberDeviceAccess } from '../store/auth'
+import { getIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
+import { pushNotification } from '../store/notifications'
+import { calibrationFor, loadCalibration, setCalibration } from '../store/calibration'
+import { adcToPercent, immersionWarning } from '../utils/moisture'
+import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
+import { fmtEventTimeWithZone, fmtAgo } from '../utils/datetime'
+import LineChart from '../components/LineChart.vue'
+
+const route = useRoute()
+const router = useRouter()
+const chipId = Number(route.params.chipId)
+const queryDeviceId = route.query.deviceId ? Number(route.query.deviceId) : null
+const rows = ref([])
+const range = ref('24h')
+const showCustom = ref(false)
+const customFrom = ref('')
+const customTo = ref('')
+const loading = ref(true)
+const catalogEntry = ref(null)
+const tzOffset = ref(null)
+
+const ranges = [
+  { label: '3ч', value: '3h' },
+  { label: '24ч', value: '24h' },
+  { label: '3д', value: '3d' },
+  { label: '7д', value: '7d' },
+]
+
+const isIndividual = computed(() => catalogEntry.value?.individual === true)
+const blockRole = computed(() => catalogEntry.value?.blockRoles?.[0] || null)
+
+/** Подпись блока-владельца: «Имя (id)» либо просто id, если имени нет. */
+const blockLabel = computed(() => {
+  if (isIndividual.value || !blockRole.value) return null
+  const id = blockRole.value.blockId
+  const name = getBlockName(id)
+  return name ? `${name} (${id})` : String(id)
+})
+
+const displayName = computed(() => {
+  const local = getIndividualName(chipId)
+  if (local) return local
+  return catalogEntry.value?.name || 'Датчик'
+})
+
+const sensorType = computed(() => {
+  const last = rows.value.slice().reverse().find(r => r.sensorType != null)
+  return last?.sensorType ?? 0
+})
+
+const timeLabels = computed(() => rows.value.map(r => r.time))
+
+const statsXMin = ref(null)
+const statsXMax = ref(null)
+
+/**
+ * Права текущего пользователя на устройство датчика. Границы оси и скрытие
+ * каналов (v0–v3) — «настройка», а не отображение: viewer их не меняет
+ * (сервер тоже отклоняет запись).
+ */
+const accessRole = ref(null)
+const resolvedDeviceId = ref(null)
+
+const canEditPrefs = computed(() => {
+  if (auth.user?.role === 'ADMIN') return true
+  if (accessRole.value) return accessRole.value !== 'VIEWER'
+  // Роль ещё не загружена — сверяемся с общим кэшем, иначе не блокируем.
+  return deviceAccess[resolvedDeviceId.value ?? chipId] !== 'VIEWER'
+})
+
+async function loadAccess(deviceId) {
+  if (auth.user?.role === 'ADMIN') {
+    accessRole.value = null
+    return
+  }
+  if (accessRole.value) return
+  const cached = deviceAccess[deviceId]
+  if (cached) {
+    accessRole.value = cached
+    return
+  }
+  try {
+    const list = await listDeviceAccess(deviceId)
+    const mine = list.find(a => a.userId === auth.user?.id)
+    if (mine?.accessRole) {
+      accessRole.value = mine.accessRole
+      rememberDeviceAccess(deviceId, mine.accessRole)
+    }
+  } catch {
+    accessRole.value = null
+  }
+}
+
+// --- Калибровка влажности этого датчика (только админ; PUT /api/sensors/{id}/calibration) ---
+
+const isAdmin = computed(() => auth.user?.role === 'ADMIN')
+
+/** Секция только для админов и датчиков типа 0 (влажность). */
+const calibSectionVisible = computed(() =>
+  isAdmin.value && (!catalogEntry.value || Number(catalogEntry.value.sensorType ?? 0) === 0))
+
+const calibForm = reactive({ value1: null, value2: null, value3: null, busy: false })
+let calibFormReady = false
+
+/** Заполняет форму один раз при первой загрузке страницы (кэш store-калибровки). */
+async function initCalibForm() {
+  if (calibFormReady || !calibSectionVisible.value) return
+  const cal = await loadCalibration(chipId)
+  if (cal) Object.assign(calibForm, { value1: cal.value1, value2: cal.value2, value3: cal.value3 })
+  calibFormReady = true
+}
+
+async function saveCalib() {
+  if (calibForm.busy) return
+  if (calibForm.value1 == null || calibForm.value2 == null || calibForm.value3 == null) {
+    pushNotification('Заполните все три опорных значения', 'error')
+    return
+  }
+  calibForm.busy = true
+  try {
+    const v = await saveSensorCalibration(chipId, {
+      value1: calibForm.value1, value2: calibForm.value2, value3: calibForm.value3,
+    })
+    if (v) {
+      Object.assign(calibForm, { value1: v.value1, value2: v.value2, value3: v.value3 })
+      // Обновляем кеш — график v0 в процентах сразу пересчитается.
+      setCalibration(chipId, { value1: v.value1, value2: v.value2, value3: v.value3 })
+    }
+    pushNotification('Калибровка сохранена', 'success')
+  } catch (e) {
+    pushNotification(e?.response?.data?.message || 'Не удалось сохранить калибровку', 'error')
+  } finally {
+    calibForm.busy = false
+  }
+}
+
+/** Страница калибровки 0% (value2): показана всем, кроме viewer. */
+function openCalibrate() {
+  router.push(`/sensor/${chipId}/calibrate${queryDeviceId ? `?deviceId=${queryDeviceId}` : ''}`)
+}
+
+/** Настройки автономного датчика: только не-viewer, только индивидуальный. */
+function openSettings() {
+  router.push(`/sensor/${chipId}/settings`)
+}
+
+/** Поля с редактируемым градиентом: v0 (влажность) и v1/v2/v3 (sensor_scale). */
+function isGradientField(key) {
+  return ['v0', 'v1', 'v2', 'v3'].includes(key)
+}
+
+function gradientTitle(key) {
+  if (key === 'v0') return 'Градиент влажности'
+  return `Градиент: ${label(key)}`
+}
+
+/** Цветовой градиент поля — отдельная страница настройки. */
+function openGradient(key) {
+  if (key === 'v0') {
+    router.push(`/sensor/${chipId}/moisture-gradient`)
+  } else {
+    router.push({ path: `/sensor/${chipId}/field-gradient/${key}`, query: { name: label(key) } })
+  }
+}
+
+/**
+ * Последняя запись датчика в целом — грузится отдельно с limit=1, чтобы раздел
+ * «Последние данные» показывал её, даже когда она старше выбранного периода.
+ */
+const lastAny = ref(null)
+
+const latest = computed(() => lastAny.value || (rows.value.length ? rows.value[rows.value.length - 1] : null))
+
+/** Текущее время для подписи «сколько назад» — обновляется вместе с таймером освежения. */
+const nowTick = ref(Date.now())
+const agoText = computed(() => fmtAgo(latest.value?.time, nowTick.value))
+
+const moistureCal = computed(() => {
+  if (sensorType.value !== 0) return null
+  return calibrationFor(chipId)
+})
+
+/** Сохранённая шкала-градиент датчика (для цветной индикации влажности). */
+const moistureScale = ref(null)
+
+/** Шкалы-градиенты полей v1/v2/v3 (sensor_scale) — для цветной индикации показаний. */
+const fieldScales = ref({})
+
+const latestPct = computed(() => {
+  const cal = moistureCal.value
+  if (!cal || latest.value?.moistureAdc == null) return null
+  return adcToPercent(latest.value.moistureAdc, cal)
+})
+
+const pctColor = computed(() => moistureScaleColor(moistureScale.value, latestPct.value))
+
+function fieldColor(che, row) {
+  if (che.key === 'v0') return null // влажность — отдельная логика (moistureScaleColor)
+  const v = che.value(row)
+  const scale = fieldScales.value[che.key]
+  return sensorScaleColor(scale, v)
+}
+
+const immersionWarningShown = computed(() => {
+  if (!latest.value || latest.value.moistureAdc == null) return false
+  const cal = moistureCal.value
+  return cal ? immersionWarning(latest.value.moistureAdc, cal) : false
+})
+
+const charts = computed(() => [
+  { key: 'v0', value: r => r.moistureAdc, color: '#3498db' },
+  { key: 'v1', value: r => r.temperature, color: '#e74c3c' },
+  { key: 'v2', value: r => r.humidity, color: '#2ecc71' },
+  { key: 'v3', value: r => r.light, color: '#f39c12' },
+  { key: 'battery', value: r => r.battery, color: '#9b59b6' },
+  // BatLoad — батарея под нагрузкой (автономные датчики): своя ячейка в
+  // последних данных + вторая линия на графике батареи, не отдельный график.
+  { key: 'batload', value: r => r.batload, color: '#e67e22', onBattery: true },
+  { key: 'rssi', value: r => r.rssi, color: '#1abc9c' },
+])
+
+const availableCharts = computed(() => charts.value.filter(c => {
+  if (isFieldHidden(chipId, c.key)) return false
+  return rows.value.some(r => c.value(r) != null && !isNaN(c.value(r)))
+}))
+
+/**
+ * Ячейки «Последних данных» — по последней записи датчика, даже если она старше
+ * выбранного периода (иначе при пустом периоде показания не отображаются вовсе).
+ */
+const cellCharts = computed(() => charts.value.filter(c => {
+  if (isFieldHidden(chipId, c.key)) return false
+  const r = latest.value
+  return r != null && c.value(r) != null && !isNaN(c.value(r))
+}))
+
+/** Графики-секции: BatLoad не рисуется отдельно, а входит в график батареи. */
+const chartSections = computed(() => availableCharts.value.filter(c => !c.onBattery))
+
+/** Подпись канала — из настроек (страница «Настройки»); дефолты для батареи/RSSI. */
+function label(key) {
+  const name = getFieldName(sensorType.value, key)
+  if (name !== key) return name
+  if (key === 'battery') return 'Батарея'
+  if (key === 'batload') return 'Батарея под нагрузкой'
+  if (key === 'rssi') return 'RSSI'
+  return name
+}
+
+/** Единица величины — из настроек; дефолты для батареи/RSSI. */
+function fieldUnit(key) {
+  const u = getFieldUnit(sensorType.value, key)
+  if (u) return u
+  if (key === 'battery') return 'В'
+  if (key === 'batload') return 'В'
+  if (key === 'rssi') return 'dBm'
+  return ''
+}
+
+/** Влажность почвы в процентах (как на странице блока): "74.2% (512)". */
+function moistureDisplay(adc) {
+  const cal = moistureCal.value
+  const pct = cal ? adcToPercent(adc, cal) : null
+  return pct != null ? `${pct}% (${adc})` : fmtValue(adc)
+}
+
+function cellValue(che, row) {
+  const v = che.value(row)
+  if (che.key === 'v0') return moistureDisplay(v)
+  return fmtValue(v)
+}
+
+function cellUnit(che) {
+  // Процент уже внутри значения «74.2% (1554)» — единица не дублируется.
+  if (che.key === 'v0') return moistureCal.value ? '' : fieldUnit('v0')
+  return fieldUnit(che.key)
+}
+
+function chartData(che) {
+  if (che.key === 'v0' && moistureCal.value) {
+    return rows.value.map(r => r.moistureAdc != null ? adcToPercent(r.moistureAdc, moistureCal.value) : null)
+  }
+  return rows.value.map(r => che.value(r))
+}
+
+/** На графике батареи второй линией — BatLoad (нагрузка), если по датчику есть. */
+function chartDatasets(che) {
+  const ds = [{ label: label(che.key), data: chartData(che), color: che.color }]
+  if (che.key === 'battery') {
+    const bl = availableCharts.value.find(c => c.key === 'batload')
+    if (bl) ds.push({ label: label('batload'), data: chartData(bl), color: bl.color })
+  }
+  return ds
+}
+
+function chartUnit(che) {
+  if (che.key === 'v0') {
+    if (moistureCal.value) return getFieldUnit(sensorType.value, 'v0') || '%'
+    return fieldUnit('v0')
+  }
+  return fieldUnit(che.key)
+}
+
+// --- Выбор границ вертикальной шкалы (v0–v3), запоминается в настройках пользователя ---
+
+const Y_EDITABLE = ['v0', 'v1', 'v2', 'v3']
+
+function isYEditable(key) {
+  return Y_EDITABLE.includes(key)
+}
+
+const yEdits = reactive({})
+
+function yEdit(key) {
+  if (!yEdits[key]) {
+    const r = getFieldY(chipId, key)
+    yEdits[key] = { min: r.min ?? '', max: r.max ?? '' }
+  }
+  return yEdits[key]
+}
+
+/** График батареи всегда в фиксированном диапазоне 1,5–3,5 В (для всех датчиков). */
+const BATTERY_Y = { min: 1.5, max: 3.5 }
+
+function yBounds(key) {
+  if (key === 'battery') return BATTERY_Y
+  if (!isYEditable(key)) return { min: null, max: null }
+  return getFieldY(chipId, key)
+}
+
+function parseBound(v) {
+  if (v === '' || v == null) return null
+  const n = Number(String(v).replace(',', '.'))
+  return Number.isFinite(n) ? n : NaN
+}
+
+function applyY(key) {
+  if (!canEditPrefs.value) return
+  const e = yEdit(key)
+  const min = parseBound(e.min)
+  const max = parseBound(e.max)
+  if ((min != null && !Number.isFinite(min)) || (max != null && !Number.isFinite(max))) {
+    pushNotification('Граница шкалы — число (допустима запятая)', 'error')
+    return
+  }
+  if (min != null && max != null && max <= min) {
+    pushNotification('max должен быть больше min', 'error')
+    return
+  }
+  setFieldY(chipId, key, min, max)
+  pushNotification('Шкала сохранена', 'success')
+}
+
+function resetY(key) {
+  if (!canEditPrefs.value) return
+  const e = yEdit(key)
+  e.min = ''
+  e.max = ''
+  setFieldY(chipId, key, null, null)
+}
+
+function fmtValue(v) {
+  if (v == null || isNaN(v)) return '—'
+  return typeof v === 'number' ? v.toFixed(1).replace(/\.0$/, '') : String(v)
+}
+
+function parseRange(r) {
+  const num = parseInt(r)
+  const unit = r.slice(-1)
+  const ms = unit === 'h' ? num * 3600000 : num * 86400000
+  return new Date(Date.now() - ms).toISOString()
+}
+
+async function setRange(r) {
+  range.value = r
+  await loadData()
+}
+
+/** Начало периода: для «своего» — поле «С», для пресетов — откат от сейчас. */
+function currentSince() {
+  if (range.value === 'custom') {
+    return customFrom.value ? new Date(customFrom.value).toISOString() : ''
+  }
+  return parseRange(range.value)
+}
+
+/** Конец периода: только у «своего» периода, у пресетов — до текущего момента. */
+function currentTo() {
+  if (range.value === 'custom') {
+    return customTo.value ? new Date(customTo.value).toISOString() : ''
+  }
+  return ''
+}
+
+function applyCustom() {
+  range.value = 'custom'
+  loadData()
+}
+
+async function loadData(silent = false) {
+  if (!silent) loading.value = true
+  try {
+    const catalog = await getSensorCatalog()
+    catalogEntry.value = catalog.find(c => Number(c.chipId) === chipId) || null
+    // Форма калибровки (админ): один раз, не блокирует загрузку данных.
+    initCalibForm()
+    let deviceId = queryDeviceId
+    if (!deviceId) {
+      const entry = catalogEntry.value
+      if (entry && !entry.individual && entry.blockRoles?.length) {
+        deviceId = entry.blockRoles[0].blockId
+      } else {
+        deviceId = chipId
+      }
+    }
+    resolvedDeviceId.value = deviceId
+    await loadAccess(deviceId)
+    if (tzOffset.value == null) {
+      try {
+        const device = await getDevice(deviceId)
+        tzOffset.value = device?.tzOffsetMinutes ?? null
+      } catch { /* зона остаётся по умолчанию */ }
+    }
+    const since = currentSince()
+    const to = currentTo()
+    const [periodRows, fresh] = await Promise.all([
+      getSensorTelemetry(deviceId, chipId, since || undefined, to || undefined),
+      // Последняя запись без привязки к периоду; ошибка не обнуляет прежнее значение.
+      getSensorTelemetry(deviceId, chipId, undefined, undefined, 1).catch(() => null),
+    ])
+    rows.value = periodRows
+    rows.value.reverse()
+    if (Array.isArray(fresh)) lastAny.value = fresh.length ? fresh[0] : null
+    statsXMin.value = since ? Date.parse(since) : (rows.value.length ? Date.parse(rows.value[0].time) : Date.now() - 3600000)
+    statsXMax.value = to
+      ? Date.parse(to)
+      : (rows.value.length ? Date.parse(rows.value[rows.value.length - 1].time) : statsXMin.value + 1)
+    if (!(statsXMax.value > statsXMin.value)) statsXMax.value = statsXMin.value + 1
+    if (sensorType.value === 0) await loadCalibration(chipId)
+  } finally {
+    loading.value = false
+  }
+}
+
+let refreshTimer = null
+
+onMounted(() => {
+  loadData()
+  getMoistureScale(chipId).then(s => { moistureScale.value = s }).catch(() => {})
+  getSensorScales(chipId).then(list => {
+    const map = {}
+    for (const sc of list || []) {
+      if (sc.enabled && sc.minValue != null && sc.maxValue != null) map[sc.fieldKey] = sc
+    }
+    fieldScales.value = map
+  }).catch(() => { fieldScales.value = {} })
+  refreshTimer = setInterval(() => { nowTick.value = Date.now(); loadData(true) }, 30000)
+})
+onUnmounted(() => clearInterval(refreshTimer))
+</script>
+
+<style scoped>
+.sensor { max-width: 600px; margin: 0 auto; padding: 1rem; }
+.header-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+.header-row h2 { color: var(--text-strong); flex: 1; }
+.header-row h2 .chip-id { color: var(--text-dim); font-weight: 400; font-size: 0.85em; }
+.type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg); color: var(--tag-text); }
+.ago { color: var(--text-dim); font-size: 0.85em; margin-left: 0.35rem; }
+.gradient-btn {
+  width: 16px; height: 16px; flex: none; padding: 0; cursor: pointer;
+  border: 2px solid #fff; border-radius: 50%;
+  background: conic-gradient(#ff0000 0 120deg, #00ff00 120deg 240deg, #0000ff 240deg 360deg);
+}
+.btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
+.btn.small { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+.btn.secondary { background: var(--bg-accent); }
+.btn.active { background: var(--bg-active); border: 1px solid var(--accent); }
+.section { margin-bottom: 2rem; }
+.section h3 { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
+.range-select { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.custom-range { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: var(--bg-card); border-radius: 10px; }
+.custom-range label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.78rem; }
+.custom-range input { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.8rem; padding: 0.3rem 0.5rem; }
+.last-received { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.6rem; }
+.last-received b { color: var(--text-strong); }
+.immersion-warning { color: var(--danger); background: #3a1518; font-weight: 600; font-size: 0.85rem; padding: 0.5rem 0.7rem; border-radius: 8px; margin-bottom: 0.7rem; }
+.latest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; }
+.latest-cell { background: var(--bg-card); border-radius: 10px; padding: 0.7rem 0.9rem; }
+.l-label { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; color: var(--text-dim); font-size: 0.7rem; margin-bottom: 0.25rem; }
+.l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: inline-flex; align-items: center; }
+.pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin: 0.2em 0 0 0.4rem; flex: none; border: 1px solid #fff; border-radius: 2px; }
+.l-unit { color: var(--text-dim); font-size: 0.75rem; font-weight: 400; }
+.chart-section { margin-bottom: 1.5rem; }
+.chart-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
+.chart-section h4 { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 0; }
+.y-edit { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.y-edit label { display: flex; align-items: center; gap: 0.3rem; color: var(--text-dim); font-size: 0.7rem; }
+.y-edit input { width: 5.5rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.75rem; padding: 0.2rem 0.4rem; }
+.btn.ghost { background: transparent; border: 1px solid var(--border-soft); color: var(--text-muted); }
+.field-toggles { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; }
+.field-check { display: flex; align-items: center; gap: 0.35rem; color: var(--text-sub); font-size: 0.8rem; cursor: pointer; }
+.hint { color: var(--text-dim); font-size: 0.75rem; margin-top: 0.5rem; }
+.calib-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+.calib-row label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.78rem; background: var(--bg-card); border-radius: 8px; padding: 0.4rem 0.6rem; }
+.calib-row input { width: 4.5rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.85rem; padding: 0.3rem 0.5rem; }
+.unit { color: var(--text-faint); font-weight: 400; }
+.empty.small { color: var(--text-faint); text-align: center; padding: 1rem; font-size: 0.85rem; }
+</style>

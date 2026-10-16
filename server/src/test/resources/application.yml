@@ -1,0 +1,62 @@
+micronaut:
+  server:
+    port: -1
+  security:
+    enabled: true
+    authentication: bearer
+    endpoints:
+      login:
+        enabled: false
+    token:
+      jwt:
+        enabled: true
+        signatures:
+          secret:
+            generator:
+              secret: "dGVzdC1zZWNyZXQta2V5LWZvci11bml0LXRlc3RzLTMyYg=="
+              jws-algorithm: HS256
+        claims:
+          issuer: "test"
+
+datasources:
+  default:
+    url: "jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE"
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+
+jpa:
+  default:
+    entity-scan:
+      packages:
+        - "ru.sensoterra.server"
+    properties:
+      hibernate:
+        hbm2ddl:
+          auto: create
+        show_sql: false
+        dialect: org.hibernate.dialect.H2Dialect
+
+flyway:
+  datasources:
+    default:
+      enabled: false
+
+sensoterra:
+  oauth:
+    # Ключи Google в тестах подменены локальным сервером FakeGoogle на этом порту.
+    # Конфиг читается при старте контекста, а сервер поднимается в @BeforeAll, поэтому
+    # адрес должен быть заранее известен, а не вычисляться.
+    enabled: true
+    google:
+      client-id: "test-client.apps.googleusercontent.com"
+      jwks-url: "http://127.0.0.1:18443/certs"
+  mqtt:
+    broker: "tcp://localhost:1883"
+    client-id: "test-client"
+    device-id: "12345"
+    topic: "12345/STATUS"
+    username: ""
+    password: ""
+    keep-alive-interval: 60
+    connection-timeout: 10
