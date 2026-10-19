@@ -244,8 +244,13 @@ public class MqttClientService {
     }
 
     public String firmwareTime(Long deviceId) {
+        // Прошивка применяет PARAM_R/PARAM_S только при timeBoard < timeMQTT, где
+        // timeBoard — часы платы реле. Они синхронизируются с NTP и переписываются
+        // лишь при расхождении > 5 минут, поэтому реальный уход до ~5 минут штатен.
+        // Запас в 1 минуту делал команды для отстающих/спешащих плат лотереей
+        // (блок 3282079: RTC спешит ~на минуту, все настройки молча игнорировались).
         return ZonedDateTime.now(deviceZoneService.zoneFor(deviceId))
-                .plusMinutes(1)
+                .plusMinutes(6)
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"));
     }
 

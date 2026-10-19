@@ -223,7 +223,7 @@ import { useRoute } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, getDeviceStatuses, sendRelayParams, getMoistureScale, getSensorScale } from '../api/auth'
 import { getBlockName, getFieldName, getFieldUnit } from '../store/settings'
 import { pushNotification } from '../store/notifications'
-import { canControlDevice } from '../store/auth'
+import { canControlDevice, isAdmin } from '../store/auth'
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, percentToAdc } from '../utils/moisture'
 import { moistureGradientCss } from '../utils/gradient'
@@ -558,6 +558,11 @@ const thresholdUnit = computed(() => {
   return getFieldUnit(sensorTypeFor(form.idSensor), `v${form.dataType}`) || ''
 })
 
+/** Порог в % для сводки; админу в скобках показываем реальное значение (АЦП). */
+function thresholdSummary(pct, raw) {
+  return isAdmin() ? `${pct}% (${raw})` : `${pct}%`
+}
+
 const summary = computed(() => {
   const items = [
     { l: 'Название', v: form.name || '—' },
@@ -573,7 +578,9 @@ const summary = computed(() => {
   } else if (isTypeOne.value) {
     items.push({ l: 'Датчик', v: sensorLabelById(form.idSensor) })
     items.push({ l: oneThresholdUnit.value ? `Порог включения, ${oneThresholdUnit.value}` : 'Порог включения',
-      v: isOnePct.value ? `${limitPct.value}%` : `${form.limitSingle}${oneThresholdUnit.value ? ' ' + oneThresholdUnit.value : ''}` })
+      v: isOnePct.value
+        ? thresholdSummary(limitPct.value, pctAdcPreview.value ?? form.limitSingle)
+        : `${form.limitSingle}${oneThresholdUnit.value ? ' ' + oneThresholdUnit.value : ''}` })
     items.push({ l: 'Начало запретного интервала', v: fm(form.startTime) ? form.startTime : 'не задано' })
     items.push({ l: 'Конец запретного интервала', v: fm(form.finishTime) ? form.finishTime : 'не задано' })
   } else if (isTypeThreshold.value) {
@@ -583,8 +590,8 @@ const summary = computed(() => {
     const u = thresholdUnit.value ? `, ${thresholdUnit.value}` : ''
     const uv = thresholdUnit.value ? ` ${thresholdUnit.value}` : ''
     if (isThresholdPct.value) {
-      items.push({ l: `Верхний порог${u}`, v: `${lowPct.value}%` })
-      items.push({ l: `Нижний порог${u}`, v: `${highPct.value}%` })
+      items.push({ l: `Верхний порог${u}`, v: thresholdSummary(lowPct.value, form.limitHigh) })
+      items.push({ l: `Нижний порог${u}`, v: thresholdSummary(highPct.value, form.limitLow) })
     } else {
       items.push({ l: `Нижний порог${u}`, v: `${form.limitLow}${uv}` })
       items.push({ l: `Верхний порог${u}`, v: `${form.limitHigh}${uv}` })
@@ -721,19 +728,58 @@ async function doSend() {
   }
   sending.value = true
   try {
+    const previousSignature = relay.value ? relayParamSignature(relay.value) : null
     await sendRelayParams(relay.value.id, buildRequest())
     pushNotification(`Настройки канала R${relayNumber} отправлены на блок`, 'success')
-    const relays = await getDeviceRelays(chipId)
-    const next = relays.find(r => Number(r.relayNumber) === relayNumber)
-    if (next) {
-      relay.value = next
-      applyFromRelay(next)
+    // Блок подтверждает настройки асинхронно (STATE_R приходит после применения).
+    // Не перечитываем канал сразу: иначе форма и «Текущие настройки» откатятся
+    // к старым значениям из БД до прихода подтверждения.
+    const confirmed = await waitRelayUpdate(previousSignature)
+    if (confirmed) {
+      relay.value = confirmed
+      applyFromRelay(confirmed)
     }
   } catch (e) {
     pushNotification(errorMessage(e, 'Не удалось отправить настройки'), 'error')
   } finally {
     sending.value = false
   }
+}
+
+/**
+ * Отпечаток настроек канала без служебных полей. EVENT_R (сработка канала)
+ * тоже обновляет updatedAt, но не трогает параметры — по одному updatedAt
+ * нельзя отличить его от подтверждения STATE_R, иначе форма откатывалась
+ * к старым настройкам (порог «возвращался» к прежнему значению).
+ */
+function relayParamSignature(r) {
+  if (!r) return ''
+  return JSON.stringify([
+    r.name, r.activity, r.typeEnum, r.timerEnabled, r.dataType,
+    r.mainTime, r.durationMain, r.extraTime, r.durationExtra,
+    r.intervalH, r.sensorId, r.startTime, r.finishTime,
+    r.oneLimit, r.lowLimit, r.highLimit,
+  ])
+}
+
+/**
+ * Ждём, пока блок пришлёт STATE_R с новыми настройками (изменится отпечаток).
+ * Если подтверждение не пришло (тихий канал, блок пришлёт его позже), оставляем
+ * в форме то, что отправили.
+ */
+async function waitRelayUpdate(previousSignature, attempts = 6, delay = 400) {
+  if (previousSignature == null) return null
+  for (let i = 0; i < attempts; i++) {
+    await new Promise(resolve => setTimeout(resolve, delay))
+    try {
+      const relays = await getDeviceRelays(chipId)
+      const next = relays.find(r => Number(r.relayNumber) === relayNumber)
+      if (next && relayParamSignature(next) !== previousSignature) return next
+    } catch (e) {
+      // следующий опрос может пройти успешно
+    }
+  }
+  return null
 }
 
 function errorMessage(e, fallback) {
