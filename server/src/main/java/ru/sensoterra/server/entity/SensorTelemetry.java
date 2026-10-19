@@ -61,6 +61,17 @@ public class SensorTelemetry {
 
     private String error;
 
+    /**
+     * Только для точек из непрерывных агрегатов (TelemetryAggregateService): "hour" / "day".
+     * У сырых строк null — в JSON не попадает.
+     */
+    @Transient
+    private String resolution;
+
+    /** Число сырых сообщений в бакете агрегата; у сырых строк null. */
+    @Transient
+    private Long samples;
+
     public static class PK implements Serializable {
         private Instant time;
         private Long deviceId;
