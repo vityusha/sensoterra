@@ -49,12 +49,22 @@ set +a
 
 Generate a JWT secret with `openssl rand -base64 32`. Keep `.env` private; it is excluded by `.gitignore`.
 
-## Run locally
+## Run with Docker Compose
 
-Start the database from the repository root:
+`docker-compose.yml` runs the whole stack: TimescaleDB, the server, and the client (built and served by nginx, which also proxies `/api` and `/ws` to the server). With `.env` in place, from the repository root:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
+```
+
+The app is available at `http://localhost:3000` (change with `APP_PORT`). The compose file sets the server's database connection itself, so `DB_URL`/`DB_USER`/`DB_PASSWORD` in `.env` are only used when running the server on the host. The database port (`POSTGRES_PORT`) stays published for local development. Follow logs with `docker compose logs -f server`.
+
+## Run locally
+
+Start only the database from the repository root:
+
+```bash
+docker compose up -d timescaledb
 ```
 
 Start the server in a second terminal (the server runs Flyway migrations at startup):
@@ -73,7 +83,7 @@ npm ci
 npm run dev
 ```
 
-The client is available at `http://localhost:3000`; the server listens on port `8080`. Vite proxies `/api` to the server. Its development server does not proxy `/ws/status`, so live WebSocket updates require a reverse proxy or a separately configured WebSocket proxy.
+The client is available at `http://localhost:3000`; the server listens on port `8080`. Vite proxies `/api` and the `/ws` WebSocket to the server.
 
 ## Build
 
@@ -113,6 +123,6 @@ Google sign-in is disabled by default. Enable it with `GOOGLE_OAUTH_ENABLED=true
 ├── client/                 # Vue application
 ├── server/                 # Micronaut application and database migrations
 ├── .env.example            # Safe configuration template
-├── docker-compose.yml      # Local PostgreSQL/TimescaleDB
+├── docker-compose.yml      # TimescaleDB + server + client
 └── README.md
 ```
