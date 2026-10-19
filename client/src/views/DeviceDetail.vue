@@ -1056,13 +1056,16 @@ async function loadStats() {
   await ensureDowntimes()
   const since = windowSince.value || undefined
   const to = windowTo.value || undefined
-  const [block, statusLog] = await Promise.all([
+  // Последнее статус-событие до начала окна: нужно, чтобы растянуть ряд влево
+  // только при реально известном значении. Без него линия «выдумывала» онлайн
+  // за период до запуска сервиса, когда данных ещё не было (как у RSSI/Vbat).
+  const [block, statusLog, statusBefore] = await Promise.all([
     getBlockTelemetry(chipId, since, to),
     getDeviceStatusLog(chipId, since, to),
+    since ? getDeviceStatusLog(chipId, undefined, since).catch(() => []) : Promise.resolve([]),
   ])
   blockStatsData.value = block.reverse()
   statusStatsData.value = statusLog.reverse()
-  statusIntervals.value = classifyIntervals(statusStatsData.value)
   timeLabels.value = blockStatsData.value.map(d => d.time)
   statusTimeLabels.value = statusStatsData.value.map(d => d.time)
 
@@ -1076,20 +1079,27 @@ async function loadStats() {
   statsXMin.value = rangeStartMs.value != null ? rangeStartMs.value : dataMin
   statsXMax.value = rangeEndMs.value != null ? rangeEndMs.value : dataMax
 
-  // Растягиваем статусный ряд до границ периода, чтобы линия была видна
-  // от левого края до правого (как у остальных графиков).
+  // Растягиваем статусный ряд до границ окна: влево — только если статус на
+  // левом крае известен (последнее событие до окна), иначе линия начинается
+  // от первой записи — период неопределённости остаётся пустым, как на
+  // графиках телеметрии. Вправо — по последнему известному значению.
   const rows = statusStatsData.value
-  if (rows.length) {
-    const xMin = statsXMin.value
-    const xMax = statsXMax.value
-    if (xMin != null && new Date(rows[0].time).getTime() > xMin) {
-      rows.unshift({ ...rows[0], time: new Date(xMin).toISOString() })
+  const xMin = statsXMin.value
+  const xMax = statsXMax.value
+  const knownBefore = statusBefore.length ? statusBefore[0] : null
+  if (xMin != null) {
+    const firstMs = rows.length ? new Date(rows[0].time).getTime() : null
+    if (firstMs == null && knownBefore) {
+      rows.push({ ...knownBefore, time: new Date(xMin).toISOString() })
+    } else if (firstMs != null && firstMs > xMin && knownBefore) {
+      rows.unshift({ ...knownBefore, time: new Date(xMin).toISOString() })
     }
-    if (xMax != null && new Date(rows[rows.length - 1].time).getTime() < xMax) {
-      rows.push({ ...rows[rows.length - 1], time: new Date(xMax).toISOString() })
-    }
-    statusTimeLabels.value = rows.map(d => d.time)
   }
+  if (xMax != null && rows.length && new Date(rows[rows.length - 1].time).getTime() < xMax) {
+    rows.push({ ...rows[rows.length - 1], time: new Date(xMax).toISOString() })
+  }
+  statusTimeLabels.value = rows.map(d => d.time)
+  statusIntervals.value = classifyIntervals(rows)
 }
 
 async function setRange(r) {
