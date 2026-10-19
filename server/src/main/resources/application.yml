@@ -90,8 +90,7 @@ sensoterra:
   mqtt:
     broker: "ssl://m6.wqtt.ru:19395"
     client-id: "sensoterra-server-1"
-    device-id: "13034338"
-    topic: "13034338/STATUS"
+    status-topic: "sensoterra/server/status"
     username: "${SENSOTERRA_MQTT_USERNAME}"
     password: "${SENSOTERRA_MQTT_PASSWORD}"
     keep-alive-interval: 60

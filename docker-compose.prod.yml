@@ -1,0 +1,36 @@
+# Production-оверлей для VPS за nginx на хосте:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# (или COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml в .env на сервере).
+# Лимиты рассчитаны на VPS 2 vCPU / 4 GB.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  timescaledb:
+    # Docker публикует порты в обход ufw — БД наружу не открываем.
+    ports: !reset []
+    environment:
+      # timescaledb-tune при initdb подбирает shared_buffers и т.п. под эти значения.
+      # Применяется только к новому тому.
+      TS_TUNE_MEMORY: 2GB
+      TS_TUNE_NUM_CPUS: 2
+    mem_limit: 2g
+    logging: *logging
+
+  server:
+    environment:
+      MICRONAUT_ENVIRONMENTS: prod
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseSerialGC
+    mem_limit: 768m
+    logging: *logging
+
+  client:
+    # Только loopback: снаружи доступ через nginx хоста (TLS).
+    ports: !override
+      - "127.0.0.1:${APP_PORT:-3000}:80"
+    mem_limit: 128m
+    logging: *logging

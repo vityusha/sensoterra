@@ -32,4 +32,15 @@ public class Device {
 
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
+
+    /**
+     * Последний STATUS устройства. device_status_log чистится retention-политикой,
+     * поэтому последнее значение хранится здесь. Пишется только нативным SQL
+     * (TelemetryService.saveDeviceStatus) — JPA не перезаписывает его устаревшим значением.
+     */
+    @Column(name = "last_status", length = 20, insertable = false, updatable = false)
+    private String lastStatus;
+
+    @Column(name = "last_status_at", insertable = false, updatable = false)
+    private Instant lastStatusAt;
 }

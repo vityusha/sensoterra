@@ -1,0 +1,16 @@
+# Профиль production: включается MICRONAUT_ENVIRONMENTS=prod (см. docker-compose.prod.yml).
+# Накладывается поверх application.yml.
+
+logger:
+  levels:
+    io.micronaut.http.server.accesslog: INFO
+    # В logback.xml для приложения стоит DEBUG — в проде только INFO и выше.
+    ru.sensoterra.server: INFO
+
+micronaut:
+  server:
+    cors:
+      # В проде браузер ходит на один origin (nginx на хосте -> nginx клиента -> /api, /ws),
+      # CORS не нужен. Выключаем целиком: dev-список (localhost, LAN-адреса, regex частных
+      # сетей) не попадает в прод, а сторонние сайты не получают CORS-заголовков.
+      enabled: false

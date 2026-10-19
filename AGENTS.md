@@ -12,6 +12,7 @@ Two independent apps, no monorepo tooling — each has its own build:
 ```bash
 docker compose up -d --build    # full stack: DB + server + client(nginx) on :3000 — from repo root
 docker compose up -d timescaledb   # DB only, for host-side dev
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build   # prod overlay (VPS)
 cd server && ./gradlew build    # build + all tests
 cd server && ./gradlew run      # serves :8080
 cd client && npm install && npm run dev   # :3000
@@ -23,6 +24,9 @@ cd client && npm run build      # static output in client/dist/
 - Host-side dev start order matters: `docker compose up -d timescaledb` → `./gradlew run` (Flyway runs at startup; server fails without DB) → `npm run dev`.
 - No lint / typecheck / frontend-test scripts exist — don't invent them.
 - Root `.env` (gitignored) supplies `POSTGRES_*`, `JWT_SECRET`, MQTT and OAuth vars to compose. In compose the server's `DB_URL/DB_USER/DB_PASSWORD` are derived from `POSTGRES_*`; the `.env` `DB_*` values only matter for `./gradlew run` on the host.
+- `V2__retention.sql` runs non-transactionally (`.sql.conf`) and holds compression/retention policies plus continuous aggregates `sensor_telemetry_hourly`/`_daily` built on `sensor_telemetry` columns — dropping/altering those columns requires recreating the aggregates.
+- Prod profile `application-prod.yml` (`MICRONAUT_ENVIRONMENTS=prod`) disables CORS and DEBUG logging; dev CORS list stays in `application.yml`.
+- MQTT client ID must be unique per running server (`SENSOTERRA_MQTT_CLIENT_ID`), otherwise the broker keeps kicking both. The server's LWT goes to its own `status-topic` (`sensoterra/server/status`), never a device topic.
 - Timescale image is pinned (`2.30.2-pg16`); never downgrade it — the extension version in the existing volume must be loadable.
 - In compose, `client/nginx.conf` serves the SPA and proxies `/api` + `/ws` to `server:8080`, forwarding `Host` so Micronaut's CORS check passes.
 
