@@ -8,15 +8,13 @@ import io.micronaut.http.client.HttpClient;
 import io.micronaut.http.client.annotation.Client;
 import io.micronaut.http.client.exceptions.HttpClientResponseException;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
+import io.micronaut.transaction.TransactionOperations;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import io.micronaut.data.connection.annotation.Connectable;
-import javax.sql.DataSource;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -46,7 +44,7 @@ class BlockPaymentTest {
     HttpClient client;
 
     @Inject
-    DataSource dataSource;
+    TransactionOperations<Connection> tx;
 
     private static final String BUYER = "pay-buyer";
     private static final String SECOND = "pay-second";
@@ -433,18 +431,20 @@ class BlockPaymentTest {
      * Сдвигаем срок в прошлое прямо в строке оплаты: ждать истечения нельзя, а проверять
      * надо поведение гейта. Через JDBC, а не через репозиторий, — тест специально правит
      * то, чего интерфейс админа делать не позволяет.
+     *
+     * Транзакция программная, а не {@code @Connectable}: аннотация на методе делает тестовый
+     * класс AOP-бином, и Micronaut Test молча пропускает все его тесты.
      */
-    @Connectable
-    void expireNow(Long chipId) {
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(
-                     "UPDATE block_entitlement SET expires_at = ? WHERE chip_id = ?")) {
-            ps.setTimestamp(1, Timestamp.from(Instant.now().minusSeconds(3600)));
-            ps.setLong(2, chipId);
-            ps.executeUpdate();
-        } catch (java.sql.SQLException e) {
-            throw new IllegalStateException("не удалось выставить истёкший срок", e);
-        }
+    private void expireNow(Long chipId) {
+        tx.executeWrite(status -> {
+            try (var ps = status.getConnection().prepareStatement(
+                    "UPDATE block_entitlement SET expires_at = ? WHERE chip_id = ?")) {
+                ps.setTimestamp(1, Timestamp.from(Instant.now().minusSeconds(3600)));
+                ps.setLong(2, chipId);
+                ps.executeUpdate();
+            }
+            return null;
+        });
     }
 
     private int post(String path, Map<String, Object> body, String token) {
