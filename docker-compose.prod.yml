@@ -1,0 +1,45 @@
+# Production-оверлей для VPS за nginx на хосте.
+# Образы собирает GitHub Actions (deploy.yml) и кладёт в GHCR; на VPS только pull:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull server client
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+# Обычно это делает deploy/deploy.sh. IMAGE_TAG (sha коммита) он же пишет в .env.
+# Лимиты рассчитаны на VPS 2 vCPU / 4 GB.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  timescaledb:
+    # Docker публикует порты в обход ufw — БД наружу не открываем.
+    ports: !reset []
+    environment:
+      # timescaledb-tune при initdb подбирает shared_buffers и т.п. под эти значения.
+      # Применяется только к новому тому.
+      TS_TUNE_MEMORY: 2GB
+      TS_TUNE_NUM_CPUS: 2
+    mem_limit: 2g
+    logging: *logging
+
+  server:
+    image: ${IMAGE_PREFIX:-ghcr.io/vityusha/sensoterra}-server:${IMAGE_TAG:-latest}
+    # На VPS исходников нет — сборка только в CI.
+    build: !reset null
+    environment:
+      MICRONAUT_ENVIRONMENTS: prod
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseSerialGC
+    mem_limit: 768m
+    logging: *logging
+
+  client:
+    image: ${IMAGE_PREFIX:-ghcr.io/vityusha/sensoterra}-client:${IMAGE_TAG:-latest}
+    build: !reset null
+    # Только loopback: снаружи доступ через nginx хоста (TLS), см. deploy/nginx-host.conf.
+    # Формат IP_хоста:порт_на_хосте:порт_в_контейнере — на хосте 127.0.0.1:3000,
+    # внутри контейнера nginx клиента слушает 80.
+    ports: !override
+      - "127.0.0.1:${APP_PORT:-3000}:80"
+    mem_limit: 128m
+    logging: *logging

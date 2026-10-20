@@ -292,13 +292,19 @@ public class TelemetryService {
                     .setParameter("deviceId", deviceId)
                     .setParameter("status", status)
                     .executeUpdate();
+            entityManager.createNativeQuery(
+                    "UPDATE device SET last_status = :status, last_status_at = now() WHERE chip_id = :deviceId")
+                    .setParameter("deviceId", deviceId)
+                    .setParameter("status", status)
+                    .executeUpdate();
         } catch (Exception e) {
             log.warn("Device status insert failed for device {}: {}", deviceId, e.getMessage());
         }
     }
 
     /**
-     * Последний известный STATUS каждого устройства из device_status_log.
+     * Последний известный STATUS каждого устройства (device.last_status — переживает
+     * retention device_status_log).
      * Используется для восстановления статусов в DeviceStateStore при старте сервера,
      * чтобы блоки с persistent MQTT-сессией (не переподключаются и не публикуют
      * STATUS online повторно) не "залипали" оффлайн до реального события.
@@ -308,9 +314,7 @@ public class TelemetryService {
         try {
             @SuppressWarnings("unchecked")
             java.util.List<Object[]> rows = entityManager.createNativeQuery(
-                    "SELECT DISTINCT ON (device_id) device_id, status " +
-                    "FROM device_status_log " +
-                    "ORDER BY device_id, time DESC")
+                    "SELECT chip_id, last_status FROM device WHERE last_status IS NOT NULL")
                     .getResultList();
             for (Object[] r : rows) {
                 if (r[0] == null) {

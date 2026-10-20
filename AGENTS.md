@@ -7,16 +7,12 @@ Two independent apps, no monorepo tooling — each has its own build:
 - `server/` — Java 21, Micronaut 4, Gradle wrapper (8.14.5). Entry: `ru.sensoterra.server.Application`.
 - `client/` — Vue 3 + Vite 6, plain JS (no TypeScript, no ESLint/Prettier config).
 
-**README.md is stale** — trust config/code instead:
-
-- Project is a full IoT platform (auth, invites, telemetry, calibration, relays, admin), not a single-device status monitor.
-- Java 21 (README says 17+); config key is `sensoterra:` lowercase (README shows `Sensoterra:`).
-- Default MQTT broker is a remote SSL broker hardcoded in `server/src/main/resources/application.yml`, not `localhost:1883`.
-
 ## Commands
 
 ```bash
-docker compose up -d            # Postgres (Timescale image) — from repo root
+docker compose up -d --build    # full stack: DB + server + client(nginx) on :3000 — from repo root
+docker compose up -d timescaledb   # DB only, for host-side dev
+./deploy/deploy.sh <sha>        # on the VPS: backup, pull GHCR images, up, healthcheck, rollback on failure
 cd server && ./gradlew build    # build + all tests
 cd server && ./gradlew run      # serves :8080
 cd client && npm install && npm run dev   # :3000
@@ -25,9 +21,15 @@ cd client && npm run build      # static output in client/dist/
 
 - Always use `./gradlew` (plain `gradle` may not match wrapper 8.14.5). `gradle.properties` caps the build JVM at 256m / 2 workers — don't raise it casually.
 - Single test: `./gradlew test --tests 'GoogleOAuthTest'`.
-- Start order matters: `docker compose up -d` → `./gradlew run` (Flyway runs at startup; server fails without DB) → `npm run dev`.
+- Host-side dev start order matters: `docker compose up -d timescaledb` → `./gradlew run` (Flyway runs at startup; server fails without DB) → `npm run dev`.
 - No lint / typecheck / frontend-test scripts exist — don't invent them.
-- Root `.env` (gitignored) supplies `POSTGRES_DB/USER/PASSWORD/PORT` to compose; values must match `application.yml` datasource defaults (`sensoterra` / `sensoterra_secret`) or be overridden via `DB_URL` / `DB_USER` / `DB_PASSWORD`.
+- Root `.env` (gitignored) supplies `POSTGRES_*`, `JWT_SECRET`, MQTT and OAuth vars to compose. In compose the server's `DB_URL/DB_USER/DB_PASSWORD` are derived from `POSTGRES_*`; the `.env` `DB_*` values only matter for `./gradlew run` on the host.
+- `V2__retention.sql` runs non-transactionally (`.sql.conf`) and holds compression/retention policies plus continuous aggregates `sensor_telemetry_hourly`/`_daily` built on `sensor_telemetry` columns — dropping/altering those columns requires recreating the aggregates.
+- CD: push to `main` → `.github/workflows/deploy.yml` (reuses `ci.yml` via `workflow_call`; `ci.yml` skips direct pushes to main) → images to GHCR tagged with the SHA → SSH to the VPS → `deploy/deploy.sh`. The prod overlay has `build: !reset null` — the VPS never builds, it only pulls `${IMAGE_PREFIX}-server|client:${IMAGE_TAG}`. Validate workflow edits with actionlint and the script with shellcheck.
+- Prod profile `application-prod.yml` (`MICRONAUT_ENVIRONMENTS=prod`) disables CORS and DEBUG logging; dev CORS list stays in `application.yml`.
+- MQTT client ID must be unique per running server (`SENSOTERRA_MQTT_CLIENT_ID`), otherwise the broker keeps kicking both. The server's LWT goes to its own `status-topic` (`sensoterra/server/status`), never a device topic.
+- Timescale image is pinned (`2.30.2-pg16`); never downgrade it — the extension version in the existing volume must be loadable.
+- In compose, `client/nginx.conf` serves the SPA and proxies `/api` + `/ws` to `server:8080`, forwarding `Host` so Micronaut's CORS check passes.
 
 ## Server tests
 
@@ -41,7 +43,7 @@ cd client && npm run build      # static output in client/dist/
 
 ## Gotchas
 
-- Vite dev proxies **only `/api`** → `:8080` (`client/vite.config.js`). The client opens its WebSocket at same-origin `/ws/status`, which Vite does *not* proxy (code comments reference a `serve.py` that is not in the repo) — live updates won't work under plain `npm run dev` without adding a proxy entry or serving behind your own reverse proxy.
+- Vite dev proxies `/api` and `/ws` → `:8080` (`client/vite.config.js`); the client opens its WebSocket at same-origin `/ws/status`.
 - WebSocket auth: browser can't send headers on WS, so the JWT goes as `?token=` query param; validated in `ws/DeviceStatusWebSocket.java`.
 - Micronaut's built-in `/login` is disabled; login only via `POST /api/auth/login`.
 - Google OAuth is off by default: requires `GOOGLE_OAUTH_ENABLED=true` + `GOOGLE_CLIENT_ID` (button hidden otherwise, exposed through `/api/auth/status`).

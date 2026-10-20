@@ -1,9 +1,13 @@
 package ru.sensoterra.server.controller;
 
+import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.entity.RelayEvent;
+import ru.sensoterra.server.entity.Sensor;
 import ru.sensoterra.server.entity.SensorTelemetry;
 import ru.sensoterra.server.repository.SensorRepository;
 import ru.sensoterra.server.service.DeviceAccessService;
+import ru.sensoterra.server.service.TelemetryAggregateService;
+import ru.sensoterra.server.service.TelemetryAggregateService.Resolution;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
@@ -24,13 +28,16 @@ public class TelemetryController {
     private final EntityManager em;
     private final DeviceAccessService access;
     private final SensorRepository sensorRepository;
+    private final TelemetryAggregateService aggregates;
 
     public TelemetryController(EntityManager em,
                                DeviceAccessService access,
-                               SensorRepository sensorRepository) {
+                               SensorRepository sensorRepository,
+                               TelemetryAggregateService aggregates) {
         this.em = em;
         this.access = access;
         this.sensorRepository = sensorRepository;
+        this.aggregates = aggregates;
     }
 
     @Get("/sensor")
@@ -50,6 +57,15 @@ public class TelemetryController {
             });
         } else {
             return List.of();
+        }
+        // Длинные окна (> 7 дней — по часу, > 90 дней — по суткам) и окна старше срока
+        // хранения сырых данных отдаём из непрерывных агрегатов: те же поля, значения — средние.
+        Resolution resolution = TelemetryAggregateService.choose(since, to, Instant.now());
+        if (resolution != Resolution.RAW) {
+            List<SensorTelemetry> points = aggregates.load(resolution, deviceId, sensorChipId, since, to,
+                    limit != null && limit > 0 ? limit : TelemetryAggregateService.MAX_POINTS);
+            fillSensorMeta(points, deviceId, sensorChipId);
+            return points;
         }
         StringBuilder jpql = new StringBuilder("SELECT t FROM SensorTelemetry t WHERE 1=1");
         if (deviceId != null) {
@@ -81,6 +97,28 @@ public class TelemetryController {
         // limit=1 — «последние данные» вне выбранного периода: одна строка вместо 500.
         q.setMaxResults(limit != null && limit > 0 ? Math.min(limit, 500) : 500);
         return q.getResultList();
+    }
+
+    /**
+     * В агрегатах нет sensor_name / sensor_type, а клиент по типу выбирает подписи и графики —
+     * берём их из карточки датчика.
+     */
+    private void fillSensorMeta(List<SensorTelemetry> points, @Nullable Long deviceId, @Nullable Long sensorChipId) {
+        if (points.isEmpty() || sensorChipId == null) {
+            return;
+        }
+        List<Sensor> sensors = sensorRepository.findBySensorChipIdOrderByUpdatedAtDesc(sensorChipId);
+        Sensor sensor = sensors.stream()
+                .filter(s -> deviceId == null || deviceId.equals(s.getDeviceId()))
+                .findFirst()
+                .orElse(sensors.isEmpty() ? null : sensors.get(0));
+        if (sensor == null) {
+            return;
+        }
+        for (SensorTelemetry p : points) {
+            p.setSensorName(sensor.getName());
+            p.setSensorType(sensor.getSensorType());
+        }
     }
 
     @Get("/sensor/start")
@@ -245,6 +283,12 @@ public class TelemetryController {
                 .toList();
     }
 
+    /**
+     * Журнал статусов. Запрос только с to (без since) — «статус на момент to»: одна
+     * последняя запись до to. device_status_log хранится 90 дней, поэтому если записи
+     * нет, берём device.last_status, когда он выставлен не позже to (значит, статус с тех
+     * пор не менялся).
+     */
     @Get("/status")
     @Transactional
     public List<DeviceStatusRow> status(
@@ -252,12 +296,13 @@ public class TelemetryController {
             @Nullable @QueryValue Instant since,
             @Nullable @QueryValue Instant to) {
         access.requireView(deviceId);
+        boolean latestBefore = since == null && to != null;
         var q = em.createNativeQuery(
                 "SELECT time, status FROM device_status_log " +
                 "WHERE device_id = :deviceId " +
                 (since != null ? "AND time >= :since " : "") +
                 (to != null ? "AND time <= :to " : "") +
-                "ORDER BY time DESC LIMIT 1000")
+                "ORDER BY time DESC LIMIT " + (latestBefore ? 1 : 1000))
                 .setParameter("deviceId", deviceId);
         if (since != null) {
             q.setParameter("since", since);
@@ -267,15 +312,25 @@ public class TelemetryController {
         }
         @SuppressWarnings("unchecked")
         var rows = q.getResultList();
-        return rows.stream()
+        List<DeviceStatusRow> result = rows.stream()
                 .map(row -> {
                     Object[] r = (Object[]) row;
-                    Instant time = r[0] instanceof Instant i ? i : ((java.sql.Timestamp) r[0]).toInstant();
+                    Instant time = r[0] instanceof Instant i ? i
+                            : r[0] instanceof java.time.OffsetDateTime odt ? odt.toInstant()
+                            : ((java.sql.Timestamp) r[0]).toInstant();
                     return new DeviceStatusRow(
                             time,
                             (String) r[1]);
                 })
                 .toList();
+        if (latestBefore && result.isEmpty()) {
+            Device device = em.find(Device.class, deviceId);
+            if (device != null && device.getLastStatus() != null && device.getLastStatusAt() != null
+                    && !device.getLastStatusAt().isAfter(to)) {
+                return List.of(new DeviceStatusRow(device.getLastStatusAt(), device.getLastStatus()));
+            }
+        }
+        return result;
     }
 
     @Serdeable

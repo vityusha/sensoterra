@@ -36,7 +36,7 @@ public class RelayCommandConfirmationService {
         commandLogRepository
                 .findFirstByDeviceIdAndCommandTypeAndConfirmedFalseOrderBySentAtDesc(
                         deviceId, RELAY_PARAM)
-                .filter(log -> firstNum(log, relayNumber))
+                .filter(log -> targetsRelay(log, relayNumber))
                 .ifPresent(this::confirmLog);
     }
 
@@ -96,11 +96,22 @@ public class RelayCommandConfirmationService {
         }
     }
 
-    private boolean firstNum(CommandLog log, int relayNumber) {
+    /**
+     * В payload PARAM_R первым полем идёт название канала, а не номер реле,
+     * поэтому номер берём из топика вида "{deviceId}/PARAM_R{n}".
+     */
+    private boolean targetsRelay(CommandLog log, int relayNumber) {
+        String topic = log.getTopic();
+        if (topic == null) {
+            return false;
+        }
+        int idx = topic.lastIndexOf("/PARAM_R");
+        if (idx < 0) {
+            return false;
+        }
         try {
-            String[] parts = log.getPayload().split(";", -1);
-            return parts.length >= 1 && Integer.parseInt(parts[0].trim()) == relayNumber;
-        } catch (Exception e) {
+            return Integer.parseInt(topic.substring(idx + "/PARAM_R".length()).trim()) == relayNumber;
+        } catch (NumberFormatException e) {
             return false;
         }
     }

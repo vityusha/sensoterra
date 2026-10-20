@@ -177,14 +177,15 @@ public class MqttClientService {
             if (config.getPassword() != null && !config.getPassword().isEmpty()) {
                 options.setPassword(config.getPassword().toCharArray());
             }
-            if (config.getTopic() != null && !config.getTopic().isEmpty()) {
-                options.setWill(config.getTopic(), "offline".getBytes(), 1, true);
+            if (hasStatusTopic()) {
+                options.setWill(config.getStatusTopic(), "offline".getBytes(), 1, true);
             }
 
             client.setCallback(new MqttCallbackExtended() {
                 @Override
                 public void connectComplete(boolean reconnect, String serverURI) {
                     log.info("MQTT connected to {}", serverURI);
+                    publishServerOnline();
                     subscribe();
                 }
 
@@ -195,13 +196,16 @@ public class MqttClientService {
 
                 @Override
                 public void messageArrived(String topic, MqttMessage message) {
+                    if (hasStatusTopic() && topic.equals(config.getStatusTopic())) {
+                        return;
+                    }
                     boolean retained = message.isRetained();
                     trackTopic(topic);
                     if (retained) {
                         retainedSeen.add(topic);
                     }
                     if (retained || topic.endsWith("/STATUS") || topic.endsWith("/PING")) {
-                        log.info("MQTT retained={} topic={} payload={}", retained, topic, new String(message.getPayload()));
+                        log.debug("MQTT retained={} topic={} payload={}", retained, topic, new String(message.getPayload()));
                     }
                     messageProcessor.process(topic, new String(message.getPayload()), retained);
                 }
@@ -213,6 +217,22 @@ public class MqttClientService {
             client.connect(options);
         } catch (MqttException e) {
             log.error("Failed to connect to MQTT broker {}", config.getBroker(), e);
+        }
+    }
+
+    private boolean hasStatusTopic() {
+        return config.getStatusTopic() != null && !config.getStatusTopic().isEmpty();
+    }
+
+    /** Retained online поверх LWT offline — по топику видно, жив ли сервер. */
+    private void publishServerOnline() {
+        if (!hasStatusTopic()) {
+            return;
+        }
+        try {
+            client.publish(config.getStatusTopic(), "online".getBytes(), 1, true);
+        } catch (MqttException e) {
+            log.warn("Failed to publish server status to {}: {}", config.getStatusTopic(), e.getMessage());
         }
     }
 
@@ -244,8 +264,13 @@ public class MqttClientService {
     }
 
     public String firmwareTime(Long deviceId) {
+        // Прошивка применяет PARAM_R/PARAM_S только при timeBoard < timeMQTT, где
+        // timeBoard — часы платы реле. Они синхронизируются с NTP и переписываются
+        // лишь при расхождении > 5 минут, поэтому реальный уход до ~5 минут штатен.
+        // Запас в 1 минуту делал команды для отстающих/спешащих плат лотереей
+        // (блок 3282079: RTC спешит ~на минуту, все настройки молча игнорировались).
         return ZonedDateTime.now(deviceZoneService.zoneFor(deviceId))
-                .plusMinutes(1)
+                .plusMinutes(6)
                 .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"));
     }
 
