@@ -83,7 +83,9 @@ sensoterra:
     google:
       client-id: ${GOOGLE_CLIENT_ID:}
       # Адрес публичных ключей Google. Переопределяется в тестах на локальный сервер.
-      jwks-url: ${GOOGLE_JWKS_URL:https://www.googleapis.com/oauth2/v3/certs}
+      # Дефолт в обратных кавычках: иначе Micronaut читает "https" как ещё один
+      # плейсхолдер и отдаёт "//www.googleapis.com/..." без протокола.
+      jwks-url: ${GOOGLE_JWKS_URL:`https://www.googleapis.com/oauth2/v3/certs`}
   invite:
     # Срок жизни ссылки-приглашения на доступ к устройству, дней.
     ttl-days: 7

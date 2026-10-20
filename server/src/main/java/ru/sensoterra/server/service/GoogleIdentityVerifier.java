@@ -57,7 +57,7 @@ public class GoogleIdentityVerifier {
     private volatile JWTProcessor<SecurityContext> processor;
 
     public GoogleIdentityVerifier(@Value("${sensoterra.oauth.google.client-id:}") String clientId,
-                                  @Value("${sensoterra.oauth.google.jwks-url:https://www.googleapis.com/oauth2/v3/certs}") String jwksUrl,
+                                  @Value("${sensoterra.oauth.google.jwks-url:`https://www.googleapis.com/oauth2/v3/certs`}") String jwksUrl,
                                   @Value("${sensoterra.oauth.enabled:false}") boolean enabled) {
         this.clientId = clientId == null ? "" : clientId.trim();
         this.jwksUrl = jwksUrl;
