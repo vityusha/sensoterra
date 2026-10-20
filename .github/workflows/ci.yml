@@ -1,9 +1,12 @@
 name: CI
 
 on:
+  # main собирается и тестируется в deploy.yml (через workflow_call) — без дублей.
   push:
+    branches-ignore: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

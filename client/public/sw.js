@@ -3,7 +3,7 @@ const CACHE = 'sensoterra-precache'
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) =>
-      cache.addAll(['/', '/index.html', '/manifest.webmanifest', '/favicon.ico', '/icon-192.png', '/icon-512.png']).catch(() => {})
+      cache.addAll(['/', '/index.html', '/site.webmanifest', '/favicon.ico', '/favicon-96x96.png', '/favicon.svg', '/apple-touch-icon.png']).catch(() => {})
     )
   )
   self.skipWaiting()

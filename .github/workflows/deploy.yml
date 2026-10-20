@@ -1,0 +1,118 @@
+name: Deploy
+
+# После мержа в main: тесты (ci.yml) -> образы в GHCR -> деплой на VPS по SSH.
+# Ручной запуск с image_tag — откат/передеплой уже собранного образа без сборки.
+#
+# Нужно в Settings -> Environments -> production:
+#   secrets: VPS_HOST, VPS_USER, VPS_SSH_KEY (приватный ключ), VPS_KNOWN_HOSTS (ssh-keyscan хоста)
+#   vars (необязательно): VPS_PORT (22), VPS_APP_DIR (/opt/sensoterra)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Existing image tag (commit SHA) to deploy without building. Empty = build this commit.'
+        required: false
+        default: ''
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    if: ${{ inputs.image_tag == '' }}
+    uses: ./.github/workflows/ci.yml
+
+  images:
+    name: Build and push ${{ matrix.app }} image
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app: [server, client]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.app }}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.app }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  deploy:
+    name: Deploy to VPS
+    needs: [ci, images]
+    # Пропущенные ci/images (ручной откат по тегу) не блокируют, упавшие — блокируют.
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TAG: ${{ inputs.image_tag || github.sha }}
+      APP_DIR: ${{ vars.VPS_APP_DIR || '/opt/sensoterra' }}
+      SSH_PORT: ${{ vars.VPS_PORT || '22' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            docker-compose.yml
+            docker-compose.prod.yml
+            deploy
+          sparse-checkout-cone-mode: false
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps
+            HostName ${{ secrets.VPS_HOST }}
+            User ${{ secrets.VPS_USER }}
+            Port $SSH_PORT
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          EOF
+
+      - name: Upload compose files and deploy script
+        run: |
+          # shellcheck disable=SC2029 # путь намеренно подставляется на стороне раннера
+          tar czf -docker-compose.yml docker-compose.prod.yml deploy \
+            | ssh vps "mkdir -p '$APP_DIR' && tar xzf - -C '$APP_DIR' && chmod +x '$APP_DIR/deploy/deploy.sh'"
+
+      - name: Deploy ${{ env.TAG }}
+        # Токен GHCR уходит через stdin — не светится в командной строке на сервере.
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          # shellcheck disable=SC2029 # путь и тег намеренно подставляются на стороне раннера
+          printf '%s\n' "$GHCR_TOKEN" \
+            | ssh vps "cd '$APP_DIR' && ./deploy/deploy.sh '$TAG' --login '$GHCR_USER'"

@@ -61,19 +61,51 @@ The app is available at `http://localhost:3000` (change with `APP_PORT`). The co
 
 ### Production
 
-`docker-compose.prod.yml` is an overlay for a VPS behind nginx on the host:
+`docker-compose.prod.yml` is an overlay for a VPS behind nginx on the host. It runs prebuilt images from GHCR (`ghcr.io/vityusha/sensoterra-server|client:${IMAGE_TAG}`) instead of building on the VPS. It also:
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-```
-
-On the server you can instead put `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` and use plain `docker compose`. The overlay:
-
-- binds the client to `127.0.0.1:${APP_PORT}` only and stops publishing the database port (Docker-published ports bypass ufw); terminate TLS in the host nginx and proxy to `http://127.0.0.1:3000`, including WebSocket upgrade headers for `/ws/` and `proxy_set_header Host $host`;
+- binds the client to `127.0.0.1:${APP_PORT}` only and stops publishing the database port (Docker-published ports bypass ufw); terminate TLS in the host nginx and proxy to `http://127.0.0.1:3000` (template: [`deploy/nginx-host.conf`](deploy/nginx-host.conf));
 - enables the `prod` Micronaut profile (`server/src/main/resources/application-prod.yml`): INFO logging and CORS disabled, since the browser only talks to one origin;
 - sets memory limits for a 2 vCPU / 4 GB VPS, `JAVA_OPTS`, TimescaleDB auto-tuning (applied only when the volume is first created), and Docker log rotation.
 
 Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with the same ID keep disconnecting each other on the broker.
+
+### Continuous deployment
+
+`.github/workflows/deploy.yml` runs on every push to `main` (i.e. after a PR is merged):
+
+1. **CI** — the same server build/tests and client build as `ci.yml` (reused via `workflow_call`).
+2. **Images** — builds `server` and `client` and pushes them to GHCR tagged with the commit SHA and `latest`.
+3. **Deploy** — copies `docker-compose.yml`, `docker-compose.prod.yml` and `deploy/` to the VPS over SSH and runs `deploy/deploy.sh <sha>`, which:
+   - dumps the database to `backups/pre-deploy-*.dump` (keeps the last 10) — Flyway migrates on startup;
+   - pulls the images and runs `docker compose up -d`;
+   - waits for the server healthcheck and `GET /api/auth/status` through the client (3 minutes);
+   - on success writes `IMAGE_TAG=<sha>` to `.env` and removes old app images (keeps current and previous);
+   - on failure rolls the containers back to the previous tag and fails the job. The database is **not** restored automatically; the log prints the dump path.
+
+**Rollback / redeploy:** Actions → Deploy → Run workflow, with `image_tag` set to an earlier commit SHA. That skips CI and the build.
+
+#### One-time VPS setup
+
+1. Install Docker Engine with the compose plugin, and `curl`.
+2. Create a deploy user in the `docker` group and the app directory:
+   ```bash
+   sudo useradd -m -s /bin/bash -G docker deploy
+   sudo install -d -o deploy -g deploy /opt/sensoterra
+   ```
+3. Put the production `.env` into `/opt/sensoterra/.env` (`chmod 600`). Use a unique `SENSOTERRA_MQTT_CLIENT_ID`, a strong `JWT_SECRET` and `POSTGRES_PASSWORD`.
+4. Generate a key pair for GitHub Actions: `ssh-keygen -t ed25519 -f sensoterra-deploy -N ""`. Append `sensoterra-deploy.pub` to `/home/deploy/.ssh/authorized_keys`.
+5. Configure host nginx from the template [`deploy/nginx-host.conf`](deploy/nginx-host.conf): TLS via certbot, proxy to `http://127.0.0.1:3000`, WebSocket headers for `/ws/`, rate limiting on login, and no access log for `/ws/` (the JWT is in its query string). Installation steps are at the top of the file.
+
+#### GitHub settings
+
+- Settings → Environments → create `production` (optionally add required reviewers to approve each deploy). Add the environment secrets:
+  - `VPS_HOST` — server address;
+  - `VPS_USER` — `deploy`;
+  - `VPS_SSH_KEY` — contents of the private key `sensoterra-deploy`;
+  - `VPS_KNOWN_HOSTS` — output of `ssh-keyscan -p <port> <host>` (verify the fingerprint against the server).
+- Optional environment variables: `VPS_PORT` (default `22`), `VPS_APP_DIR` (default `/opt/sensoterra`).
+- Settings → Branches → protect `main`: require a PR and the CI checks to pass before merging.
+- The first push creates the GHCR packages, linked to the repository. Deploys pull them with the workflow's own token, so they can stay private.
 
 ## Run locally
 
