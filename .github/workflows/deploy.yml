@@ -103,8 +103,9 @@ jobs:
 
       - name: Upload compose files and deploy script
         run: |
+          set -o pipefail
           # shellcheck disable=SC2029 # путь намеренно подставляется на стороне раннера
-          tar czf -docker-compose.yml docker-compose.prod.yml deploy \
+          tar -czf - docker-compose.yml docker-compose.prod.yml deploy \
             | ssh vps "mkdir -p '$APP_DIR' && tar xzf - -C '$APP_DIR' && chmod +x '$APP_DIR/deploy/deploy.sh'"
 
       - name: Deploy ${{ env.TAG }}
