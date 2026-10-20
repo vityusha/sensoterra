@@ -1,13 +1,21 @@
 package ru.sensoterra.server.security;
 
+import io.micronaut.context.annotation.Value;
 import jakarta.inject.Singleton;
 import org.mindrot.jbcrypt.BCrypt;
 
 @Singleton
 public class PasswordEncoder {
 
+    /** Стоимость BCrypt для новых хэшей; у старых она записана в самом хэше, проверка от неё не зависит. */
+    private final int cost;
+
+    public PasswordEncoder(@Value("${sensoterra.security.bcrypt-cost:12}") int cost) {
+        this.cost = cost;
+    }
+
     public String encode(String rawPassword) {
-        return BCrypt.hashpw(rawPassword, BCrypt.gensalt(12));
+        return BCrypt.hashpw(rawPassword, BCrypt.gensalt(cost));
     }
 
     public boolean matches(String rawPassword, String encodedPassword) {
