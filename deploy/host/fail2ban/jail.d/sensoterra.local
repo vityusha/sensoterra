@@ -1,27 +1,27 @@
-# fail2ban для VPS Sensoterra. Ставится скриптом deploy/host/setup-fail2ban.sh:
-# он подставляет @SSH_PORT@, @SSH_BACKEND@ и @IGNOREIP@ и кладёт файл в /etc/fail2ban/jail.d/.
-# Правьте этот шаблон в репозитории, а не копию на сервере — скрипт её перезапишет.
+# fail2ban for the Sensoterra VPS. Installed by deploy/host/setup-fail2ban.sh:
+# it fills in @SSH_PORT@, @SSH_BACKEND@ and @IGNOREIP@ and writes the file to /etc/fail2ban/jail.d/.
+# Edit this template in the repository, not the copy on the server — the script overwrites it.
 
 [DEFAULT]
-# Свои адреса никогда не баним (loopback + IGNOREIP из скрипта, например офис/дом).
+# Never ban our own addresses (loopback + IGNOREIP from the script, e.g. office/home).
 ignoreip = 127.0.0.1/8 ::1 @IGNOREIP@
 findtime = 10m
 bantime  = 1h
-# Повторные нарушители получают бан дольше: 1 ч, 2 ч, 4 ч ... до недели.
+# Repeat offenders get longer bans: 1 h, 2 h, 4 h ... up to a week.
 bantime.increment = true
 bantime.maxtime   = 1w
 
-# Перебор паролей/ключей SSH. Деплой из GitHub Actions входит по ключу с первой попытки
-# и сюда не попадает.
+# SSH password/key brute force. The GitHub Actions deploy logs in with its key on the first
+# try and never shows up here.
 [sshd]
 enabled  = true
 port     = @SSH_PORT@
 backend  = @SSH_BACKEND@
 maxretry = 5
 
-# Перебор паролей в приложении: 401/403/429 на эндпоинтах входа в access log host nginx.
-# 429 — это уже сработавший limit_req (5/мин) из deploy/nginx-host.conf; fail2ban
-# закрывает такой IP целиком, а не только /api/auth/login.
+# App login brute force: 401/403/429 on the login endpoints in the host nginx access log.
+# 429 means the limit_req (5/min) from deploy/nginx-host.conf already fired; fail2ban then
+# blocks the whole IP, not just /api/auth/login.
 [sensoterra-auth]
 enabled  = true
 port     = http,https

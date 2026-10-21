@@ -365,8 +365,8 @@ public class MqttMessageProcessor {
         try {
             return objectMapper.readTree(payload);
         } catch (Exception e) {
-            // Прошивки шлют невалидный JSON (пустые значения, ';' вместо ','), обычно normalize() это чинит —
-            // предупреждаем только если не помогло.
+            // Firmware sends invalid JSON (empty values, ';' instead of ','); normalize() usually fixes it,
+            // so warn only if it does not.
             log.debug("Cannot parse MQTT payload ({} bytes), normalizing: {}", payload.length(), e.getMessage());
             String normalized = normalize(payload);
             try {

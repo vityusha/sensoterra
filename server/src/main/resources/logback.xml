@@ -5,8 +5,8 @@
         </encoder>
     </appender>
 
-    <!-- Уровень приложения: SENSOTERRA_LOG_LEVEL из окружения (в проде INFO, см. docker-compose.prod.yml).
-         logger.levels в application*.yml не работают — в проекте нет micronaut-management с LoggingSystem. -->
+    <!-- App log level: SENSOTERRA_LOG_LEVEL from the environment (INFO in prod, see docker-compose.prod.yml).
+         logger.levels in application*.yml has no effect: there is no micronaut-management LoggingSystem. -->
     <logger name="ru.sensoterra.server" level="${SENSOTERRA_LOG_LEVEL:-DEBUG}"/>
     <logger name="org.eclipse.paho" level="INFO"/>
 

@@ -2,7 +2,7 @@
 Description=Monthly Sensoterra backup restore check
 
 [Timer]
-# Первое число месяца, после ночного бэкапа.
+# 1st of the month, after the nightly backup.
 OnCalendar=*-*-01 05:00:00
 RandomizedDelaySec=30min
 Persistent=true

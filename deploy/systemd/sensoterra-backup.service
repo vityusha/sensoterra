@@ -1,6 +1,6 @@
-# Ежедневный бэкап БД (deploy/backup.sh). Установка — см. docs/INSTALL-prod.md, раздел «Database backups».
-# Путь /opt/sensoterra и пользователь deploy — значения по умолчанию оттуда же; если у вас
-# другие, поправьте их после копирования в /etc/systemd/system/.
+# Daily database backup (deploy/backup.sh). Installation: docs/INSTALL-prod.md, "Database backups".
+# /opt/sensoterra and the deploy user are the defaults from there; if yours differ,
+# adjust them after copying to /etc/systemd/system/.
 [Unit]
 Description=Sensoterra database backup (pg_dump + restic)
 Wants=network-online.target

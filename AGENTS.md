@@ -57,4 +57,4 @@ cd client && npm run build      # static output in client/dist/
 - MQTT broker endpoint and device/topic defaults live in `application.yml`; MQTT username/password and JWT signing secret must be provided through `SENSOTERRA_MQTT_USERNAME`, `SENSOTERRA_MQTT_PASSWORD`, and `JWT_SECRET` environment variables.
 - The service worker is hand-rolled (`client/public/sw.js` + `registerSW.js` loaded from `index.html`).
 - CORS (allowed origins incl. private-LAN regex) lives in `server/src/main/resources/application.yml` — keep `http://localhost:3000` allowed.
-- Code/config comments are in Russian — match the existing style.
+- Write code/config comments in English (older code still has Russian comments; don't mass-translate them unless asked).

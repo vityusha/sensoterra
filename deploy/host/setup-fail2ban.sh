@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Установка и настройка fail2ban на VPS. Запускать от root из каталога приложения:
+# Install and configure fail2ban on the VPS. Run as root from the app directory:
 #   sudo ./deploy/host/setup-fail2ban.sh
-#   sudo IGNOREIP="203.0.113.7" ./deploy/host/setup-fail2ban.sh    # свои адреса — не банить
-# Повторный запуск безопасен: конфиги перезаписываются из deploy/host/fail2ban/, fail2ban
-# перезагружается. Джейлы: sshd и sensoterra-auth (входы в приложение через host nginx).
+#   sudo IGNOREIP="203.0.113.7" ./deploy/host/setup-fail2ban.sh    # own addresses — never ban
+# Safe to re-run: configs are overwritten from deploy/host/fail2ban/ and fail2ban is reloaded.
+# Jails: sshd and sensoterra-auth (app logins through the host nginx).
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -22,7 +22,7 @@ if ! command -v fail2ban-client >/dev/null; then
     apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q fail2ban
 fi
 
-# Где sshd пишет логи: в /var/log/auth.log (rsyslog) или только в journald (Debian 12 без rsyslog).
+# Where sshd logs: /var/log/auth.log (rsyslog) or journald only (Debian 12 without rsyslog).
 if [ -s /var/log/auth.log ]; then
     SSH_BACKEND=auto
 else
@@ -40,7 +40,7 @@ sed -e "s/@SSH_PORT@/${SSH_PORT}/" -e "s/@SSH_BACKEND@/${SSH_BACKEND}/" -e "s#@I
 install -m 644 fail2ban/filter.d/sensoterra-auth.conf /etc/fail2ban/filter.d/sensoterra-auth.conf
 chmod 644 /etc/fail2ban/jail.d/sensoterra.local
 
-# Проверка конфигурации до перезапуска: битый конфиг не должен уронить работающий fail2ban.
+# Test the config before reloading: a broken config must not take down a running fail2ban.
 fail2ban-client -t >/dev/null || die "fail2ban config test failed: fail2ban-client -t"
 
 systemctl enable fail2ban >/dev/null 2>&1

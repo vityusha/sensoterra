@@ -4,7 +4,7 @@ Description=Daily Sensoterra database backup
 [Timer]
 OnCalendar=*-*-* 03:30:00
 RandomizedDelaySec=15min
-# Если VPS был выключен в 03:30 — бэкап запустится сразу после загрузки.
+# If the VPS was off at 03:30, the backup runs right after boot.
 Persistent=true
 
 [Install]

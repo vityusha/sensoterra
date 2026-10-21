@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Восстановление БД из бэкапа. Запускать из каталога приложения на VPS:
-#   ./deploy/restore.sh check [SOURCE]          # восстановить во временный контейнер и проверить
-#   ./deploy/restore.sh apply SOURCE [--yes]    # восстановить В РАБОЧУЮ БД (с подтверждением)
-#   ./deploy/restore.sh env [SOURCE]            # достать .env из снапшота в backups/restore/env
+# Restore the database from a backup. Run from the app directory on the VPS:
+#   ./deploy/restore.sh check [SOURCE]          # restore into a temporary container and verify
+#   ./deploy/restore.sh apply SOURCE [--yes]    # restore INTO THE PRODUCTION DB (asks for confirmation)
+#   ./deploy/restore.sh env [SOURCE]            # extract .env from a snapshot to backups/restore/env
 #
-# SOURCE: latest (по умолчанию для check), ID снапшота restic (./deploy/backup.sh restic snapshots)
-# или путь к локальному дампу (backups/daily/*.dump, backups/pre-deploy-*.dump).
+# SOURCE: latest (default for check), a restic snapshot ID (./deploy/backup.sh restic snapshots)
+# or a path to a local dump (backups/daily/*.dump, backups/pre-deploy-*.dump).
 #
-# check запускается и systemd-таймером раз в месяц (sensoterra-restore-check.timer): это
-# единственный способ убедиться, что бэкапы на самом деле восстанавливаются.
-# apply перед восстановлением делает дамп текущей БД в backups/pre-restore-*.dump.
+# check also runs monthly from a systemd timer (sensoterra-restore-check.timer): it is the
+# only way to know the backups actually restore.
+# apply dumps the current database to backups/pre-restore-*.dump before restoring.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 MODE="${1:-}"
-# env нужен и на новом VPS, где .env ещё нет — ему хватает .env.backup.
+# env is also needed on a new VPS that has no .env yet — .env.backup is enough for it.
 [ -f .env ] || [ "$MODE" = env ] || { echo "ERROR: .env not found in $(pwd)" >&2; exit 1; }
 
 # shellcheck source=deploy/restic-lib.sh
@@ -26,7 +26,7 @@ ASSUME_YES=""
 
 DB_NAME="$(env_value POSTGRES_DB)"
 DB_USER="$(env_value POSTGRES_USER)"
-# Тот же образ, что в compose: расширение timescaledb в дампе должно совпасть по версии.
+# Same image as in compose: the timescaledb extension version must match the dump.
 DB_IMAGE="$(grep -m1 -oE 'timescale/timescaledb:[^[:space:]"]+' docker-compose.yml || true)"
 HEALTHCHECK_URL=""
 [ -f .env.backup ] && HEALTHCHECK_URL="$(backup_value HEALTHCHECK_RESTORE_URL)"
@@ -56,8 +56,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Скачивает файл из снапшота restic во временный backups/restore/<время>/ (удаляется
-# при выходе), путь — в FETCHED. Без $(...): WORK должен остаться в этом процессе для cleanup.
+# Fetches a file from a restic snapshot into a temporary backups/restore/<time>/ (removed
+# on exit); the path goes to FETCHED. No $(...): WORK must stay in this process for cleanup.
 FETCHED=""
 fetch_from_restic() {
     local snapshot="$1" file="$2"
@@ -72,7 +72,7 @@ fetch_from_restic() {
     FETCHED="$WORK/backup/$file"
 }
 
-# Путь к дампу — в DUMP.
+# The dump path goes to DUMP.
 DUMP=""
 resolve_dump() {
     local source="${1:-latest}"
@@ -89,8 +89,8 @@ psql_in() {
     docker exec -i "$ct" psql -X -q -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$db" "$@"
 }
 
-# Процедура TimescaleDB: pre_restore отключает фоновые задачи и триггеры расширения,
-# иначе чанки и continuous aggregates восстанавливаются с ошибками.
+# TimescaleDB procedure: pre_restore stops background jobs and the extension's triggers,
+# otherwise chunks and continuous aggregates restore with errors.
 restore_into() {
     local ct="$1" dump="$2"
     psql_in "$ct" "$DB_NAME" -c 'CREATE EXTENSION IF NOT EXISTS timescaledb' \
@@ -103,7 +103,7 @@ restore_into() {
     psql_in "$ct" "$DB_NAME" -c 'SELECT timescaledb_post_restore()' >/dev/null
 }
 
-# Проверки восстановленной базы. Падает, если база явно неполная.
+# Checks on the restored database. Fails if it is clearly incomplete.
 verify() {
     local ct="$1" out
     out="$(psql_in "$ct" "$DB_NAME" -At -F ' ' <<'SQL'
@@ -129,7 +129,7 @@ SQL
 
 wait_ready() {
     local ct="$1" deadline=$((SECONDS + 120))
-    # По TCP: во время initdb сервер слушает только unix-сокет и pg_isready по нему врёт.
+    # Over TCP: during initdb the server listens on the unix socket only, so pg_isready there lies.
     until docker exec "$ct" pg_isready -q -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME"; do
         [ "$SECONDS" -lt "$deadline" ] || die "temporary database did not start"
         sleep 2
@@ -142,7 +142,7 @@ cmd_check() {
     local dump="$DUMP"
     CHECK_CT="sensoterra-restore-check-$$"
     log "starting temporary $DB_IMAGE ($CHECK_CT)"
-    # Лимиты — чтобы проверка не задавила рабочую БД на том же VPS.
+    # Limits, so the check does not starve the production DB on the same VPS.
     docker run -d --name "$CHECK_CT" \
         --memory 768m --shm-size 256m \
         -e POSTGRES_DB="$DB_NAME" \
@@ -174,7 +174,7 @@ cmd_apply() {
     mkdir -p backups
     safety="backups/pre-restore-$(date +%Y%m%d-%H%M%S).dump"
     log "dumping current database -> $safety"
-    # shellcheck disable=SC2016 # переменные раскрываются внутри контейнера БД
+    # shellcheck disable=SC2016 # variables expand inside the DB container
     compose exec -T timescaledb sh -c 'pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$safety"
 
     log "stopping server"

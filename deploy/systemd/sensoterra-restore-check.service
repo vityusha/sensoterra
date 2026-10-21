@@ -1,5 +1,5 @@
-# Ежемесячная проверка: последний снапшот restic восстанавливается во временный контейнер
-# TimescaleDB и проходит проверки (deploy/restore.sh check). Рабочую БД не трогает.
+# Monthly check: the latest restic snapshot is restored into a temporary TimescaleDB
+# container and verified (deploy/restore.sh check). The production DB is not touched.
 [Unit]
 Description=Sensoterra backup restore check
 Wants=network-online.target

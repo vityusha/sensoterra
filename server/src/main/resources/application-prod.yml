@@ -1,7 +1,7 @@
 # Профиль production: включается MICRONAUT_ENVIRONMENTS=prod (см. docker-compose.prod.yml).
 # Накладывается поверх application.yml.
 
-# Уровень логов задаётся не здесь, а через SENSOTERRA_LOG_LEVEL (logback.xml, docker-compose.prod.yml).
+# Log levels are not set here but via SENSOTERRA_LOG_LEVEL (logback.xml, docker-compose.prod.yml).
 
 micronaut:
   server:

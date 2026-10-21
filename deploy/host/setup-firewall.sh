@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Firewall VPS на ufw: входящие только SSH, 80, 443. Запускать от root на VPS:
-#   sudo ./deploy/host/setup-firewall.sh            # показать, что будет сделано
-#   sudo ./deploy/host/setup-firewall.sh --apply    # применить
-# Порт SSH берётся из `sshd -T` (то есть фактический, включая Port в sshd_config.d);
-# переопределить: SSH_PORT=2222 sudo -E ./deploy/host/setup-firewall.sh --apply
+# VPS firewall with ufw: incoming only SSH, 80, 443. Run as root on the VPS:
+#   sudo ./deploy/host/setup-firewall.sh            # show what would be done
+#   sudo ./deploy/host/setup-firewall.sh --apply    # apply it
+# The SSH port comes from `sshd -T` (the effective one, including Port in sshd_config.d);
+# override: SSH_PORT=2222 sudo -E ./deploy/host/setup-firewall.sh --apply
 #
-# Docker публикует порты в обход ufw (свои цепочки iptables). Поэтому в docker-compose.prod.yml
-# клиент слушает только 127.0.0.1, а БД не публикуется — скрипт проверяет, что так и осталось.
+# Docker publishes ports around ufw (its own iptables chains). That is why docker-compose.prod.yml
+# binds the client to 127.0.0.1 only and does not publish the DB — the script checks it stays so.
 set -euo pipefail
 
 APPLY=""
@@ -30,7 +30,7 @@ if ! command -v ufw >/dev/null; then
     fi
 fi
 
-# Порты, опубликованные Docker наружу (не на loopback) — ufw их не закрывает.
+# Ports Docker publishes beyond loopback — ufw does not block them.
 if command -v docker >/dev/null; then
     exposed="$(docker ps --format '{{.Names}} {{.Ports}}' \
         | grep -E '(0\.0\.0\.0|\[::\]|:::)[0-9]+->' || true)"
@@ -46,14 +46,14 @@ if [ -z "$APPLY" ]; then
     exit 0
 fi
 
-# Порядок важен: SSH разрешаем до включения, иначе текущая сессия оборвётся.
-# limit: не больше 6 новых соединений за 30 с с одного IP (деплою из GitHub Actions нужно 2).
+# Order matters: allow SSH before enabling, otherwise the current session drops.
+# limit: at most 6 new connections per 30 s per IP (the GitHub Actions deploy needs 2).
 ufw default deny incoming
 ufw default allow outgoing
 ufw limit "${SSH_PORT}/tcp" comment 'SSH'
 ufw allow 80/tcp comment 'HTTP (redirect to HTTPS, certbot)'
 ufw allow 443/tcp comment 'HTTPS'
-# Старый 22/tcp, если SSH переехал на другой порт и правило осталось от провайдера.
+# Old 22/tcp, if SSH moved to another port and the provider's rule is still there.
 if [ "$SSH_PORT" != 22 ]; then
     ufw delete allow 22/tcp >/dev/null 2>&1 || true
     ufw delete allow OpenSSH >/dev/null 2>&1 || true
