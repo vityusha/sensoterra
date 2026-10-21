@@ -47,6 +47,7 @@ cd client && npm run build      # static output in client/dist/
 - WebSocket auth: browser can't send headers on WS, so the JWT goes as `?token=` query param; validated in `ws/DeviceStatusWebSocket.java`.
 - Micronaut's built-in `/login` is disabled; login only via `POST /api/auth/login`.
 - Google OAuth is off by default: requires `GOOGLE_OAUTH_ENABLED=true` + `GOOGLE_CLIENT_ID` (button hidden otherwise, exposed through `/api/auth/status`).
+- Placeholder defaults containing `:` (URLs, JDBC) must be backtick-quoted: ``${VAR:`https://...`}`` — otherwise Micronaut treats the part before `:` as another placeholder and silently drops it (this broke Google JWKS with a 503). Same for `@Value` defaults.
 - MQTT broker endpoint and device/topic defaults live in `application.yml`; MQTT username/password and JWT signing secret must be provided through `SENSOTERRA_MQTT_USERNAME`, `SENSOTERRA_MQTT_PASSWORD`, and `JWT_SECRET` environment variables.
 - The service worker is hand-rolled (`client/public/sw.js` + `registerSW.js` loaded from `index.html`).
 - CORS (allowed origins incl. private-LAN regex) lives in `server/src/main/resources/application.yml` — keep `http://localhost:3000` allowed.

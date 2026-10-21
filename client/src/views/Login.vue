@@ -1,6 +1,7 @@
 <template>
   <div class="login-container">
     <div class="login-card">
+      <img class="logo" src="/favicon.svg" alt="" width="72" height="72" />
       <h1>Sens-O-Terra</h1>
       <p class="subtitle">{{ isBootstrap ? 'Первый запуск — создайте админа' : 'Вход' }}</p>
 
@@ -117,6 +118,7 @@ async function submit() {
 <style scoped>
 .login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
 .login-card { background: var(--bg-card); padding: 2rem; border-radius: 16px; width: min(320px, 100%); text-align: center; }
+.logo { display: block; width: 72px; height: 72px; margin: 0 auto 0.75rem; border-radius: 16px; }
 h1 { color: var(--text-strong); font-size: 1.6rem; margin-bottom: 0.5rem; }
 .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1.5rem; }
 label { display: block; text-align: left; margin-bottom: 1rem; }
@@ -139,6 +141,7 @@ button:disabled { opacity: 0.6; }
 @media (max-width: 360px) {
   .login-container { padding: 0.75rem; }
   .login-card { padding: 1.25rem 1rem; border-radius: 12px; }
+  .logo { width: 56px; height: 56px; margin-bottom: 0.5rem; }
   h1 { font-size: 1.35rem; }
   .subtitle { margin-bottom: 1rem; }
 }
