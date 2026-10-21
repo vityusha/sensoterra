@@ -61,96 +61,7 @@ The app is available at `http://localhost:3000` (change with `APP_PORT`). The co
 
 ### Production
 
-`docker-compose.prod.yml` is an overlay for a VPS behind nginx on the host. It runs prebuilt images from GHCR (`ghcr.io/vityusha/sensoterra-server|client:${IMAGE_TAG}`) instead of building on the VPS. It also:
-
-- binds the client to `127.0.0.1:${APP_PORT}` only and stops publishing the database port (Docker-published ports bypass ufw); terminate TLS in the host nginx and proxy to `http://127.0.0.1:3000` (template: [`deploy/nginx-host.conf`](deploy/nginx-host.conf));
-- enables the `prod` Micronaut profile (`server/src/main/resources/application-prod.yml`): CORS disabled, since the browser only talks to one origin;
-- sets `SENSOTERRA_LOG_LEVEL=INFO` (the app logger level in `logback.xml`; DEBUG by default);
-- sets memory limits for a 2 vCPU / 4 GB VPS, `JAVA_OPTS`, TimescaleDB auto-tuning (applied only when the volume is first created), and Docker log rotation.
-
-Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with the same ID keep disconnecting each other on the broker.
-
-### Continuous deployment
-
-`.github/workflows/deploy.yml` runs on every push to `main` (i.e. after a PR is merged):
-
-1. **CI** — the same server build/tests and client build as `ci.yml` (reused via `workflow_call`).
-2. **Images** — builds `server` and `client` and pushes them to GHCR tagged with the commit SHA and `latest`.
-3. **Deploy** — copies `docker-compose.yml`, `docker-compose.prod.yml` and `deploy/` to the VPS over SSH and runs `deploy/deploy.sh <sha>`, which:
-   - dumps the database to `backups/pre-deploy-*.dump` (keeps the last 10) — Flyway migrates on startup;
-   - pulls the images and runs `docker compose up -d`;
-   - waits for the server healthcheck and `GET /api/auth/status` through the client (3 minutes);
-   - on success writes `IMAGE_TAG=<sha>` to `.env` and removes old app images (keeps current and previous);
-   - on failure rolls the containers back to the previous tag and fails the job. The database is **not** restored automatically; the log prints the dump path.
-
-**Rollback / redeploy:** Actions → Deploy → Run workflow, with `image_tag` set to an earlier commit SHA. That skips CI and the build.
-
-#### One-time VPS setup
-
-1. Install Docker Engine with the compose plugin, and `curl`.
-2. Create a deploy user in the `docker` group and the app directory:
-   ```bash
-   sudo useradd -m -s /bin/bash -G docker deploy
-   sudo install -d -o deploy -g deploy /opt/sensoterra
-   ```
-3. Put the production `.env` into `/opt/sensoterra/.env` (`chmod 600`). Use a unique `SENSOTERRA_MQTT_CLIENT_ID`, a strong `JWT_SECRET` and `POSTGRES_PASSWORD`.
-4. Generate a key pair for GitHub Actions: `ssh-keygen -t ed25519 -f sensoterra-deploy -N ""`. Append `sensoterra-deploy.pub` to `/home/deploy/.ssh/authorized_keys`.
-5. Configure host nginx from the template [`deploy/nginx-host.conf`](deploy/nginx-host.conf): TLS via certbot, proxy to `http://127.0.0.1:3000`, WebSocket headers for `/ws/`, rate limiting on login, and no access log for `/ws/` (the JWT is in its query string). Installation steps are at the top of the file.
-
-#### GitHub settings
-
-- Settings → Environments → create `production` (optionally add required reviewers to approve each deploy). Add the environment secrets:
-  - `VPS_HOST` — server address;
-  - `VPS_USER` — `deploy`;
-  - `VPS_SSH_KEY` — contents of the private key `sensoterra-deploy`;
-  - `VPS_KNOWN_HOSTS` — output of `ssh-keyscan -p <port> <host>` (verify the fingerprint against the server).
-- Optional environment variables: `VPS_PORT` (default `22`), `VPS_APP_DIR` (default `/opt/sensoterra`).
-- Settings → Branches → protect `main`: require a PR and the CI checks to pass before merging.
-- The first push creates the GHCR packages, linked to the repository. Deploys pull them with the workflow's own token, so they can stay private.
-
-### Database backups
-
-The pre-deploy dump only protects migrations, and it stays on the VPS. Daily backups go off the VPS with [restic](https://restic.net/) (run from the `restic/restic` image, nothing to install on the host):
-
-- `deploy/backup.sh` (systemd timer, 03:30 daily): `pg_dump -Fc` → checks that the dump's table of contents is readable and contains `app_user` → `restic backup` of the dump **and `.env`** (the repository is encrypted) → `restic forget --prune` (7 daily, 4 weekly, 12 monthly) → `restic check`. The last 3 dumps also stay in `backups/daily/`.
-- `deploy/restore.sh check` (systemd timer, 1st of the month): restores the latest snapshot into a temporary TimescaleDB container (same image as compose) using the TimescaleDB `pre_restore`/`post_restore` procedure, then checks Flyway history, hypertables and that `app_user` is not empty. The production database is not touched.
-- Optional [healthchecks.io](https://healthchecks.io/) pings (`HEALTHCHECK_URL`, `HEALTHCHECK_RESTORE_URL`) alert you when a run fails or does not happen.
-
-#### Setup (once, on the VPS, as `deploy` in `/opt/sensoterra`)
-
-1. Create a bucket in an S3-compatible storage (or any other restic backend) **outside this VPS provider**, with a key limited to that bucket.
-2. `cp deploy/env.backup.example .env.backup && chmod 600 .env.backup`, fill in `RESTIC_REPOSITORY`, `RESTIC_PASSWORD` and the storage keys. **Save `RESTIC_PASSWORD` and the storage keys in a password manager** — without them the backups cannot be restored.
-3. Create the repository and run the first backup and check by hand:
-   ```bash
-   ./deploy/backup.sh init
-   ./deploy/backup.sh
-   ./deploy/restore.sh check latest
-   ```
-4. Install the timers (as root):
-   ```bash
-   sudo cp /opt/sensoterra/deploy/systemd/sensoterra-*.{service,timer} /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now sensoterra-backup.timer sensoterra-restore-check.timer
-   ```
-   Logs: `journalctl -u sensoterra-backup -u sensoterra-restore-check`. Next runs: `systemctl list-timers 'sensoterra-*'`.
-
-#### Restore
-
-```bash
-./deploy/backup.sh restic snapshots           # list snapshots
-./deploy/restore.sh check <snapshot|latest>   # try it in a temporary container first
-./deploy/restore.sh apply <snapshot|latest|backups/...dump>
-```
-
-`apply` asks for confirmation, dumps the current database to `backups/pre-restore-*.dump`, stops the server, recreates the database, restores, verifies and starts the server again.
-
-**New VPS** (the old one is lost):
-
-1. Do the one-time VPS setup above except `.env` (Docker, `deploy` user, SSH key, host nginx).
-2. Copy `deploy/` and `docker-compose*.yml` from a checkout to `/opt/sensoterra`, and put `.env.backup` there (from the password manager).
-3. `./deploy/restore.sh env latest` extracts the backed-up `.env` to `backups/restore/env`; review it and move it to `.env` (`chmod 600`).
-4. Update `VPS_HOST` / `VPS_KNOWN_HOSTS` in GitHub and run the Deploy workflow: it starts an empty database and migrates it.
-5. `./deploy/restore.sh apply latest`, then install the timers again.
+The production VPS runs prebuilt images from GHCR with the `docker-compose.prod.yml` overlay behind nginx on the host; every push to `main` is deployed by `.github/workflows/deploy.yml`, and the database is backed up daily off the VPS. Setup, deployment, backups and operations are described in [docs/INSTALL-prod.md](docs/INSTALL-prod.md).
 
 ## Run locally
 
@@ -217,7 +128,7 @@ Retention drops whole 7-day chunks, so the oldest raw data is up to a week older
 
 ## Configuration
 
-Database settings use `DB_URL`, `DB_USER`, and `DB_PASSWORD`. MQTT settings can be overridden with `SENSOTERRA_MQTT_BROKER`, `SENSOTERRA_MQTT_CLIENT_ID`, `SENSOTERRA_MQTT_STATUS_TOPIC`, `SENSOTERRA_MQTT_USERNAME`, and `SENSOTERRA_MQTT_PASSWORD`. The server publishes a retained `online` to its status topic (default `sensoterra/server/status`) and registers `offline` there as its MQTT Last Will.
+Database settings use `DB_URL`, `DB_USER`, and `DB_PASSWORD`. MQTT settings can be overridden with `SENSOTERRA_MQTT_BROKER`, `SENSOTERRA_MQTT_CLIENT_ID`, `SENSOTERRA_MQTT_STATUS_TOPIC`, `SENSOTERRA_MQTT_USERNAME`, and `SENSOTERRA_MQTT_PASSWORD`. The server publishes a retained `online` to its status topic (default `sensoterra/server/status`) and registers `offline` there as its MQTT Last Will. Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with the same ID keep disconnecting each other on the broker.
 
 Google sign-in is disabled by default. Enable it with `GOOGLE_OAUTH_ENABLED=true` and set `GOOGLE_CLIENT_ID`.
 
@@ -225,9 +136,11 @@ Google sign-in is disabled by default. Enable it with `GOOGLE_OAUTH_ENABLED=true
 
 ```text
 .
-├── .github/workflows/ci.yml
+├── .github/workflows/      # ci.yml, deploy.yml (CD to the VPS)
 ├── client/                 # Vue application
 ├── server/                 # Micronaut application and database migrations
+├── deploy/                 # VPS scripts: deploy, backup, restore, systemd units, host nginx
+├── docs/INSTALL-prod.md    # Production setup and operations
 ├── .env.example            # Safe configuration template
 ├── docker-compose.yml      # TimescaleDB + server + client
 ├── docker-compose.prod.yml # Production overlay (VPS behind host nginx)

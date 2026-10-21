@@ -1,0 +1,31 @@
+# fail2ban для VPS Sensoterra. Ставится скриптом deploy/host/setup-fail2ban.sh:
+# он подставляет @SSH_PORT@, @SSH_BACKEND@ и @IGNOREIP@ и кладёт файл в /etc/fail2ban/jail.d/.
+# Правьте этот шаблон в репозитории, а не копию на сервере — скрипт её перезапишет.
+
+[DEFAULT]
+# Свои адреса никогда не баним (loopback + IGNOREIP из скрипта, например офис/дом).
+ignoreip = 127.0.0.1/8 ::1 @IGNOREIP@
+findtime = 10m
+bantime  = 1h
+# Повторные нарушители получают бан дольше: 1 ч, 2 ч, 4 ч ... до недели.
+bantime.increment = true
+bantime.maxtime   = 1w
+
+# Перебор паролей/ключей SSH. Деплой из GitHub Actions входит по ключу с первой попытки
+# и сюда не попадает.
+[sshd]
+enabled  = true
+port     = @SSH_PORT@
+backend  = @SSH_BACKEND@
+maxretry = 5
+
+# Перебор паролей в приложении: 401/403/429 на эндпоинтах входа в access log host nginx.
+# 429 — это уже сработавший limit_req (5/мин) из deploy/nginx-host.conf; fail2ban
+# закрывает такой IP целиком, а не только /api/auth/login.
+[sensoterra-auth]
+enabled  = true
+port     = http,https
+filter   = sensoterra-auth
+logpath  = /var/log/nginx/access.log
+backend  = auto
+maxretry = 10
