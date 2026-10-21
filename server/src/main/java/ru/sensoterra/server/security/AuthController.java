@@ -4,13 +4,19 @@ import ru.sensoterra.server.entity.AppUser;
 import ru.sensoterra.server.repository.AppUserRepository;
 import ru.sensoterra.server.service.DeviceAccessService;
 import ru.sensoterra.server.service.DeviceKeyService;
+import ru.sensoterra.server.service.ExternalAccountService;
+import ru.sensoterra.server.service.ExternalAccountService.ExternalIdentity;
+import ru.sensoterra.server.service.ExternalAccountService.SignIn;
 import ru.sensoterra.server.service.GoogleIdentityVerifier;
 import ru.sensoterra.server.service.GoogleIdentityVerifier.GoogleIdentity;
+import ru.sensoterra.server.service.YandexOAuthClient;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.*;
 import io.micronaut.http.exceptions.HttpStatusException;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.authentication.ServerAuthentication;
 import io.micronaut.security.rules.SecurityRule;
@@ -22,13 +28,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.security.Principal;
-import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Controller("/api/auth")
 @Secured(SecurityRule.IS_ANONYMOUS)
@@ -46,6 +49,8 @@ public class AuthController {
     private final DeviceAccessService access;
     private final DeviceKeyService deviceKeys;
     private final GoogleIdentityVerifier googleVerifier;
+    private final YandexOAuthClient yandexClient;
+    private final ExternalAccountService externalAccounts;
 
     public AuthController(AppUserRepository userRepository,
                           PasswordEncoder passwordEncoder,
@@ -53,6 +58,8 @@ public class AuthController {
                           DeviceAccessService access,
                           DeviceKeyService deviceKeys,
                           GoogleIdentityVerifier googleVerifier,
+                          YandexOAuthClient yandexClient,
+                          ExternalAccountService externalAccounts,
                           ru.sensoterra.server.service.UserPrefService prefs) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -60,6 +67,8 @@ public class AuthController {
         this.access = access;
         this.deviceKeys = deviceKeys;
         this.googleVerifier = googleVerifier;
+        this.yandexClient = yandexClient;
+        this.externalAccounts = externalAccounts;
         this.prefs = prefs;
     }
 
@@ -184,95 +193,32 @@ public class AuthController {
     /**
      * Вход и регистрация через Google. Фронт присылает id_token, который сам получил
      * от Google Identity Services; мы проверяем подпись и заводим (либо находим) аккаунт.
-     *
-     * Ключ устройства, если он есть, обрабатывается так же, как в /register: в той же
-     * транзакции, чтобы неверная пара не оставила полузаведённый аккаунт.
      */
     @Post("/oauth/google")
     @Secured(SecurityRule.IS_ANONYMOUS)
-    @Transactional
     public HttpResponse<?> loginWithGoogle(@Body GoogleLoginRequest request) {
         GoogleIdentity identity = googleVerifier.verify(request.idToken());
-        AppUser user = findOrCreateExternalUser(identity);
-
-        boolean claimsDevice = request.chipId() != null
-                || (request.key() != null && !request.key().isBlank());
-        if (claimsDevice) {
-            deviceKeys.claim(request.chipId(), request.key(), user.getId());
-        }
-        return HttpResponse.ok(RegisterResponse.of(user, generateToken(user), claimsDevice));
+        SignIn result = externalAccounts.signIn(
+                new ExternalIdentity(GoogleIdentityVerifier.provider(), identity.subject(),
+                        identity.email(), identity.email()),
+                request.chipId(), request.key());
+        return HttpResponse.ok(RegisterResponse.of(result.user(), generateToken(result.user()),
+                result.deviceBound()));
     }
 
     /**
-     * Аккаунт по паре (провайдер, sub). Если такой уже есть — просто вход.
-     *
-     * Совпадение email с чужим аккаунтом доказательством не считаем: адрес мог
-     * освободиться и достаться другому человеку, поэтому линковки по почте здесь нет
-     * вовсе. Админы тем более не трогаются — у них остаётся парольный вход как
-     * аварийный доступ, который нельзя потерять из-за внешней учётной записи.
+     * Sign-in and sign-up with Yandex ID. The browser comes back from Yandex with a
+     * one-time code (plus the PKCE verifier it generated); the server exchanges it itself.
+     * Runs on the blocking pool: the exchange is two HTTP calls to Yandex.
      */
-    private AppUser findOrCreateExternalUser(GoogleIdentity identity) {
-        Optional<AppUser> existing = userRepository.findByAuthProviderAndAuthSubject(
-                GoogleIdentityVerifier.provider(), identity.subject());
-        if (existing.isPresent()) {
-            AppUser user = existing.get();
-            if (Boolean.FALSE.equals(user.getEnabled())) {
-                throw new HttpStatusException(HttpStatus.FORBIDDEN, "Account is disabled");
-            }
-            return user;
-        }
-        if (userRepository.findByEmailIgnoreCase(identity.email()).isPresent()) {
-            // У Google один адрес — один аккаунт, так что сюда попадаем только при
-            // парольном аккаунте на тот же адрес: войти нужно им, а не Google.
-            throw new HttpStatusException(HttpStatus.CONFLICT,
-                    "This email is already used by a password account — sign in with it");
-        }
-        AppUser user = new AppUser();
-        user.setUsername(uniqueUsername(identity));
-        user.setEmail(identity.email());
-        // Пароля нет и не будет: хеш случайных байт делает парольный вход невозможным,
-        // а колонка остаётся NOT NULL — значит, и null-ветку в login() вводить не надо.
-        user.setPasswordHash(passwordEncoder.encode(randomSecret()));
-        user.setRole(DeviceAccessService.ROLE_USER);
-        user.setEnabled(Boolean.TRUE);
-        user.setCreatedAt(Instant.now());
-        user.setAuthProvider(GoogleIdentityVerifier.provider());
-        user.setAuthSubject(identity.subject());
-        AppUser saved = userRepository.save(user);
-        prefs.seedDefaults(saved.getId());
-        return saved;
-    }
-
-    /**
-     * Логин для внешнего аккаунта. Google отдаёт почту, а не логин, поэтому берём
-     * локальную часть адреса и на случай занятого имени добавляем номер.
-     */
-    private String uniqueUsername(GoogleIdentity identity) {
-        String base = identity.email();
-        int at = base.indexOf('@');
-        if (at > 0) {
-            base = base.substring(0, at);
-        }
-        base = base.replaceAll("[^A-Za-z0-9._-]", "");
-        if (base.isEmpty()) {
-            base = "user";
-        }
-        if (base.length() > 40) {
-            base = base.substring(0, 40);
-        }
-        String candidate = base;
-        int suffix = 1;
-        while (userRepository.findByUsername(candidate).isPresent()) {
-            suffix++;
-            candidate = base + suffix;
-        }
-        return candidate;
-    }
-
-    private static String randomSecret() {
-        byte[] bytes = new byte[32];
-        new SecureRandom().nextBytes(bytes);
-        return Base64.getEncoder().encodeToString(bytes);
+    @Post("/oauth/yandex")
+    @Secured(SecurityRule.IS_ANONYMOUS)
+    @ExecuteOn(TaskExecutors.BLOCKING)
+    public HttpResponse<?> loginWithYandex(@Body YandexLoginRequest request) {
+        ExternalIdentity identity = yandexClient.identify(request.code(), request.codeVerifier());
+        SignIn result = externalAccounts.signIn(identity, request.chipId(), request.key());
+        return HttpResponse.ok(RegisterResponse.of(result.user(), generateToken(result.user()),
+                result.deviceBound()));
     }
 
     @Get("/status")
@@ -282,7 +228,9 @@ public class AuthController {
         // вместе с флагом: фронту не нужно знать про Vite-переменные и .env.
         return Map.of("bootstrapNeeded", userRepository.count() == 0,
                 "googleEnabled", googleVerifier.isEnabled(),
-                "googleClientId", googleVerifier.clientId());
+                "googleClientId", googleVerifier.clientId(),
+                "yandexEnabled", yandexClient.isEnabled(),
+                "yandexClientId", yandexClient.clientId());
     }
 
     /**
@@ -339,6 +287,10 @@ public class AuthController {
     @Serdeable
     public record GoogleLoginRequest(String idToken, Long chipId, String key) {}
 
+    /** Yandex ID: one-time code, optional PKCE verifier and, optionally, the buyer's device pair. */
+    @Serdeable
+    public record YandexLoginRequest(String code, String codeVerifier, Long chipId, String key) {}
+
     @Serdeable
     public record BootstrapRequest(String username, String password) {}
 
@@ -349,7 +301,7 @@ public class AuthController {
      * Профиль аккаунта. Платных полей нет: срок относится к блоку, а не к клиенту, и
      * приходит вместе с данными устройства.
      *
-     * authProvider непустой у внешнего входа (google) — по нему фронт прячет форму смены
+     * authProvider непустой у внешнего входа (google, yandex) — по нему фронт прячет форму смены
      * пароля и объясняет, где пароль на самом деле.
      */
     @Serdeable

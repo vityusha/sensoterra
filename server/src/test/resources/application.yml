@@ -55,6 +55,13 @@ sensoterra:
     google:
       client-id: "test-client.apps.googleusercontent.com"
       jwks-url: "http://127.0.0.1:18443/certs"
+    # Yandex is replaced by FakeYandex on a fixed port, same reasoning as above.
+    yandex:
+      enabled: true
+      client-id: "test-yandex-client"
+      client-secret: "test-yandex-secret"
+      token-url: "http://127.0.0.1:18444/token"
+      info-url: "http://127.0.0.1:18444/info"
   mqtt:
     broker: "tcp://localhost:1883"
     client-id: "test-client"

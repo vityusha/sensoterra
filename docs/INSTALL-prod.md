@@ -66,7 +66,7 @@ Only SSH, 80 and 443 are open to the internet. Everything else listens on loopba
 fail2ban jails ([`deploy/host/fail2ban/`](../deploy/host/fail2ban/)):
 
 - **`sshd`**: 5 failed SSH logins in 10 minutes. Reads `/var/log/auth.log`, or journald where there is no rsyslog (Debian 12). The deploy key logs in on the first try, so GitHub Actions is never banned.
-- **`sensoterra-auth`**: 10 failed app logins in 10 minutes. It matches `401`/`403`/`429` on `/api/auth/login`, `/oauth/google`, `/password` and `/bootstrap` in the host nginx access log. `429` means the nginx `limit_req` (5/min) already fired; fail2ban then blocks the whole IP, not just the login endpoint.
+- **`sensoterra-auth`**: 10 failed app logins in 10 minutes. It matches `401`/`403`/`429` on `/api/auth/login`, `/oauth/google`, `/oauth/yandex`, `/password` and `/bootstrap` in the host nginx access log. `429` means the nginx `limit_req` (5/min) already fired; fail2ban then blocks the whole IP, not just the login endpoint.
 - **Ban length**: 1 hour, doubling for repeat offenders up to 1 week (`bantime.increment`). Loopback is never banned; add your own addresses with `IGNOREIP`.
 
 The bans use the client address nginx sees (`$remote_addr`). That is correct while host nginx faces the internet directly. Behind a CDN or proxy (e.g. Cloudflare), nginx needs `real_ip` set up first, otherwise fail2ban would ban the proxy.
@@ -158,6 +158,13 @@ All commands run on the VPS as `deploy` in `/opt/sensoterra`; `COMPOSE` below me
 - Anonymous callers get only `status`. With an `Authorization: Bearer <JWT>` header the response also lists the components (`jdbc`, `diskSpace`, `mqtt` with the broker address) — open it in the browser devtools or use `curl -H "Authorization: Bearer $TOKEN" https://<domain>/health`.
 - The same endpoint drives the server's Docker healthcheck and the `deploy.sh` check. `DEGRADED` stays HTTP 200 on purpose: an unreachable broker must not roll a deploy back.
 - **External monitoring:** add an HTTP monitor in UptimeRobot, Better Stack, healthchecks.io or similar for `https://<domain>/health`, alerting on non-200. To be told about MQTT outages too, add a keyword check for `"UP"`. Without one, nobody notices an outage: the Docker healthcheck alerts no one, and `restart: unless-stopped` does not restart an unhealthy container.
+
+### Sign-in with Google and Yandex ID
+
+Both are off until enabled in `/opt/sensoterra/.env` (variables in the [README](../README.md)); apply with `COMPOSE up -d --no-build server`.
+
+- **Google:** add `https://<domain>` to the client's Authorized JavaScript origins.
+- **Yandex ID:** add `https://<domain>/oauth/yandex` to the app's Redirect URIs. `YANDEX_CLIENT_SECRET` lives only in `.env` on the VPS. A wrong secret or client id shows up as `503` on `/api/auth/oauth/yandex` and `Yandex token exchange failed ... invalid_client` in the server log.
 
 ### Logs and log level
 

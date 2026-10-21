@@ -41,9 +41,10 @@
               {{ busy ? '...' : 'Зарегистрироваться и получить доступ' }}
             </button>
           </form>
-          <template v-if="googleEnabled">
+          <template v-if="googleEnabled || yandexEnabled">
             <div class="divider"><span>или</span></div>
-            <GoogleAuthButton :disabled="busy" @credential="onGoogle" />
+            <GoogleAuthButton v-if="googleEnabled" :disabled="busy" @credential="onGoogle" />
+            <YandexAuthButton v-if="yandexEnabled" :disabled="busy" :prepare="yandexContext" />
           </template>
           <p class="muted small">
             Уже есть аккаунт? <router-link to="/login">Войти</router-link>, затем откройте эту ссылку снова.
@@ -67,6 +68,7 @@ import { getInvite, acceptInvite, authStatus, loginWithGoogle, registerByInvite 
 import { getToken, setToken } from '../api/auth'
 import { auth, enterSession } from '../store/auth'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
+import YandexAuthButton from '../components/YandexAuthButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -82,6 +84,7 @@ const password = ref('')
 const password2 = ref('')
 const showPassword = ref(false)
 const googleEnabled = ref(false)
+const yandexEnabled = ref(false)
 
 const token = computed(() => String(route.params.token || ''))
 const isLoggedIn = computed(() => !!getToken() && !!auth.user)
@@ -114,9 +117,12 @@ async function load() {
   try {
     invite.value = await getInvite(token.value)
     try {
-      googleEnabled.value = (await authStatus()).googleEnabled === true
+      const status = await authStatus()
+      googleEnabled.value = status.googleEnabled === true
+      yandexEnabled.value = status.yandexEnabled === true
     } catch {
       googleEnabled.value = false
+      yandexEnabled.value = false
     }
   } catch (e) {
     invite.value = null
@@ -189,6 +195,12 @@ async function onGoogle(idToken) {
   } finally {
     busy.value = false
   }
+}
+
+/** After the Yandex redirect the callback view accepts this invite. */
+function yandexContext() {
+  actionError.value = ''
+  return { intent: 'invite', returnTo: `/invite/${token.value}`, inviteToken: token.value }
 }
 
 function goHome() {

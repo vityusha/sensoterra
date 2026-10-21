@@ -80,6 +80,15 @@ export async function loginWithGoogle(idToken, chipId = null, key = null) {
   return data
 }
 
+/**
+ * Yandex ID: one-time code from the redirect plus the PKCE verifier; the server exchanges
+ * it with its own secret. The device pair works as in loginWithGoogle.
+ */
+export async function loginWithYandex(code, codeVerifier = null, chipId = null, key = null) {
+  const { data } = await axios.post('/api/auth/oauth/yandex', { code, codeVerifier, chipId, key })
+  return data
+}
+
 /** Ключ устройства для комплектного листа (только админ). */
 export async function getDeviceKey(chipId) {
   const { data } = await api.get(`/devices/${chipId}/key`)

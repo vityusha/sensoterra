@@ -42,7 +42,7 @@ cd client && npm run build      # static output in client/dist/
 
 - Self-contained: H2 in PostgreSQL mode, Flyway disabled, `hbm2ddl=create` (see `server/src/test/resources/application.yml`). No Docker, MQTT broker, or network needed.
 - **Tests never run Flyway migrations** — a broken migration passes `./gradlew test`. Verify migration SQL against the real docker DB when touching `db/migration/`.
-- `GoogleOAuthTest` and `PasswordChangeTest` start `FakeGoogle`, an HTTPS server on fixed port **18443** — port must be free; don't run two test JVMs at once.
+- `GoogleOAuthTest` and `PasswordChangeTest` start `FakeGoogle` on fixed port **18443**, `YandexOAuthTest` starts `FakeYandex` on **18444** — ports must be free; don't run two test JVMs at once.
 
 ## Schema changes
 
@@ -54,6 +54,7 @@ cd client && npm run build      # static output in client/dist/
 - WebSocket auth: browser can't send headers on WS, so the JWT goes as `?token=` query param; validated in `ws/DeviceStatusWebSocket.java`.
 - Micronaut's built-in `/login` is disabled; login only via `POST /api/auth/login`.
 - Google OAuth is off by default: requires `GOOGLE_OAUTH_ENABLED=true` + `GOOGLE_CLIENT_ID` (button hidden otherwise, exposed through `/api/auth/status`).
+- Yandex ID is off by default: `YANDEX_OAUTH_ENABLED=true` + `YANDEX_CLIENT_ID` + `YANDEX_CLIENT_SECRET`. Code flow with redirect: the SPA keeps state/PKCE/context in sessionStorage (`utils/yandexOAuth.js`), Yandex returns to the `/oauth/yandex` route, the server exchanges the code (`YandexOAuthClient`). External accounts of both providers are created in `ExternalAccountService`, outside the provider round trip.
 - Placeholder defaults containing `:` (URLs, JDBC) must be backtick-quoted: ``${VAR:`https://...`}`` — otherwise Micronaut treats the part before `:` as another placeholder and silently drops it (this broke Google JWKS with a 503). Same for `@Value` defaults.
 - MQTT broker endpoint and device/topic defaults live in `application.yml`; MQTT username/password and JWT signing secret must be provided through `SENSOTERRA_MQTT_USERNAME`, `SENSOTERRA_MQTT_PASSWORD`, and `JWT_SECRET` environment variables.
 - The service worker is hand-rolled (`client/public/sw.js` + `registerSW.js` loaded from `index.html`).

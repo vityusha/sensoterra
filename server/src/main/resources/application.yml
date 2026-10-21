@@ -97,6 +97,13 @@ sensoterra:
       # Дефолт в обратных кавычках: иначе Micronaut читает "https" как ещё один
       # плейсхолдер и отдаёт "//www.googleapis.com/..." без протокола.
       jwks-url: ${GOOGLE_JWKS_URL:`https://www.googleapis.com/oauth2/v3/certs`}
+    # Yandex ID sign-in, off by default. Needs both client id and secret (authorization
+    # code flow: the server exchanges the code itself). Redirect URI registered at
+    # oauth.yandex.ru must be <site origin>/oauth/yandex.
+    yandex:
+      enabled: ${YANDEX_OAUTH_ENABLED:false}
+      client-id: ${YANDEX_CLIENT_ID:}
+      client-secret: ${YANDEX_CLIENT_SECRET:}
   invite:
     # Срок жизни ссылки-приглашения на доступ к устройству, дней.
     ttl-days: 7
