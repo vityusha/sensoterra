@@ -64,7 +64,8 @@ The app is available at `http://localhost:3000` (change with `APP_PORT`). The co
 `docker-compose.prod.yml` is an overlay for a VPS behind nginx on the host. It runs prebuilt images from GHCR (`ghcr.io/vityusha/sensoterra-server|client:${IMAGE_TAG}`) instead of building on the VPS. It also:
 
 - binds the client to `127.0.0.1:${APP_PORT}` only and stops publishing the database port (Docker-published ports bypass ufw); terminate TLS in the host nginx and proxy to `http://127.0.0.1:3000` (template: [`deploy/nginx-host.conf`](deploy/nginx-host.conf));
-- enables the `prod` Micronaut profile (`server/src/main/resources/application-prod.yml`): INFO logging and CORS disabled, since the browser only talks to one origin;
+- enables the `prod` Micronaut profile (`server/src/main/resources/application-prod.yml`): CORS disabled, since the browser only talks to one origin;
+- sets `SENSOTERRA_LOG_LEVEL=INFO` (the app logger level in `logback.xml`; DEBUG by default);
 - sets memory limits for a 2 vCPU / 4 GB VPS, `JAVA_OPTS`, TimescaleDB auto-tuning (applied only when the volume is first created), and Docker log rotation.
 
 Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with the same ID keep disconnecting each other on the broker.
@@ -106,6 +107,50 @@ Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with 
 - Optional environment variables: `VPS_PORT` (default `22`), `VPS_APP_DIR` (default `/opt/sensoterra`).
 - Settings → Branches → protect `main`: require a PR and the CI checks to pass before merging.
 - The first push creates the GHCR packages, linked to the repository. Deploys pull them with the workflow's own token, so they can stay private.
+
+### Database backups
+
+The pre-deploy dump only protects migrations, and it stays on the VPS. Daily backups go off the VPS with [restic](https://restic.net/) (run from the `restic/restic` image, nothing to install on the host):
+
+- `deploy/backup.sh` (systemd timer, 03:30 daily): `pg_dump -Fc` → checks that the dump's table of contents is readable and contains `app_user` → `restic backup` of the dump **and `.env`** (the repository is encrypted) → `restic forget --prune` (7 daily, 4 weekly, 12 monthly) → `restic check`. The last 3 dumps also stay in `backups/daily/`.
+- `deploy/restore.sh check` (systemd timer, 1st of the month): restores the latest snapshot into a temporary TimescaleDB container (same image as compose) using the TimescaleDB `pre_restore`/`post_restore` procedure, then checks Flyway history, hypertables and that `app_user` is not empty. The production database is not touched.
+- Optional [healthchecks.io](https://healthchecks.io/) pings (`HEALTHCHECK_URL`, `HEALTHCHECK_RESTORE_URL`) alert you when a run fails or does not happen.
+
+#### Setup (once, on the VPS, as `deploy` in `/opt/sensoterra`)
+
+1. Create a bucket in an S3-compatible storage (or any other restic backend) **outside this VPS provider**, with a key limited to that bucket.
+2. `cp deploy/env.backup.example .env.backup && chmod 600 .env.backup`, fill in `RESTIC_REPOSITORY`, `RESTIC_PASSWORD` and the storage keys. **Save `RESTIC_PASSWORD` and the storage keys in a password manager** — without them the backups cannot be restored.
+3. Create the repository and run the first backup and check by hand:
+   ```bash
+   ./deploy/backup.sh init
+   ./deploy/backup.sh
+   ./deploy/restore.sh check latest
+   ```
+4. Install the timers (as root):
+   ```bash
+   sudo cp /opt/sensoterra/deploy/systemd/sensoterra-*.{service,timer} /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now sensoterra-backup.timer sensoterra-restore-check.timer
+   ```
+   Logs: `journalctl -u sensoterra-backup -u sensoterra-restore-check`. Next runs: `systemctl list-timers 'sensoterra-*'`.
+
+#### Restore
+
+```bash
+./deploy/backup.sh restic snapshots           # list snapshots
+./deploy/restore.sh check <snapshot|latest>   # try it in a temporary container first
+./deploy/restore.sh apply <snapshot|latest|backups/...dump>
+```
+
+`apply` asks for confirmation, dumps the current database to `backups/pre-restore-*.dump`, stops the server, recreates the database, restores, verifies and starts the server again.
+
+**New VPS** (the old one is lost):
+
+1. Do the one-time VPS setup above except `.env` (Docker, `deploy` user, SSH key, host nginx).
+2. Copy `deploy/` and `docker-compose*.yml` from a checkout to `/opt/sensoterra`, and put `.env.backup` there (from the password manager).
+3. `./deploy/restore.sh env latest` extracts the backed-up `.env` to `backups/restore/env`; review it and move it to `.env` (`chmod 600`).
+4. Update `VPS_HOST` / `VPS_KNOWN_HOSTS` in GitHub and run the Deploy workflow: it starts an empty database and migrates it.
+5. `./deploy/restore.sh apply latest`, then install the timers again.
 
 ## Run locally
 

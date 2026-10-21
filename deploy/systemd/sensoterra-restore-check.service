@@ -1,0 +1,16 @@
+# Ежемесячная проверка: последний снапшот restic восстанавливается во временный контейнер
+# TimescaleDB и проходит проверки (deploy/restore.sh check). Рабочую БД не трогает.
+[Unit]
+Description=Sensoterra backup restore check
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+WorkingDirectory=/opt/sensoterra
+ExecStart=/opt/sensoterra/deploy/restore.sh check latest
+Nice=10
+IOSchedulingClass=idle

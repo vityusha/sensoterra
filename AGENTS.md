@@ -13,6 +13,8 @@ Two independent apps, no monorepo tooling — each has its own build:
 docker compose up -d --build    # full stack: DB + server + client(nginx) on :3000 — from repo root
 docker compose up -d timescaledb   # DB only, for host-side dev
 ./deploy/deploy.sh <sha>        # on the VPS: backup, pull GHCR images, up, healthcheck, rollback on failure
+./deploy/backup.sh              # on the VPS: daily pg_dump -> restic (systemd timer, settings in .env.backup)
+./deploy/restore.sh check|apply|env [snapshot|latest|file.dump]   # restore test / restore into prod / extract .env
 cd server && ./gradlew build    # build + all tests
 cd server && ./gradlew run      # serves :8080
 cd client && npm install && npm run dev   # :3000

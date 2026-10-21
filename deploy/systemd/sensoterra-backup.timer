@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Sensoterra database backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15min
+# Если VPS был выключен в 03:30 — бэкап запустится сразу после загрузки.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
