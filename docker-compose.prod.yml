@@ -29,6 +29,8 @@ services:
     build: !reset null
     environment:
       MICRONAUT_ENVIRONMENTS: prod
+      # Уровень логов приложения (logback.xml); для разбора проблем можно временно поставить DEBUG.
+      SENSOTERRA_LOG_LEVEL: INFO
       JAVA_OPTS: -Xms256m -Xmx512m -XX:+UseSerialGC
     mem_limit: 768m
     logging: *logging

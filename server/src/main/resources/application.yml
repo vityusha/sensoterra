@@ -1,8 +1,3 @@
-logger:
-  levels:
-    # HTTP access log — видны реальные запросы браузера (метод, путь, статус).
-    io.micronaut.http.server.accesslog: DEBUG
-
 micronaut:
   application:
     name: sensoterra-server
