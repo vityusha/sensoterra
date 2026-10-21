@@ -349,7 +349,7 @@ public class MqttClientService {
         try {
             client.publish(topic, new byte[0], 1, true);
             boolean had = retainedSeen.remove(topic);
-            log.info("Cleared retained on {} (had message: {})", topic, had);
+            log.debug("Cleared retained on {} (had message: {})", topic, had);
             return had;
         } catch (MqttException e) {
             log.error("Failed to clear retained on {}", topic, e);

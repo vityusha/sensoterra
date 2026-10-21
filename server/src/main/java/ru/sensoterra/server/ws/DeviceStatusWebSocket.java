@@ -93,7 +93,7 @@ public class DeviceStatusWebSocket {
         info.refresh();
         infos.put(session.getId(), info);
         sessions.add(session);
-        log.info("WebSocket opened: {} user={} admin={} devices={}",
+        log.debug("WebSocket opened: {} user={} admin={} devices={}",
                 session.getId(), username, info.admin, info.visibleCount());
         broadcaster.broadcastCurrentStatus(session);
     }
@@ -107,7 +107,7 @@ public class DeviceStatusWebSocket {
     public void onClose(WebSocketSession session) {
         sessions.remove(session);
         infos.remove(session.getId());
-        log.info("WebSocket closed: {}", session.getId());
+        log.debug("WebSocket closed: {}", session.getId());
     }
 
     /**

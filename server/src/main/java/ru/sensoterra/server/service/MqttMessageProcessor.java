@@ -288,7 +288,7 @@ public class MqttMessageProcessor {
                 "type", "sensors",
                 "deviceId", deviceId,
                 "timestamp", System.currentTimeMillis()));
-        log.info("Device {} sensors registration updated: {} slots", deviceId, slots.size());
+        log.debug("Device {} sensors registration updated: {} slots", deviceId, slots.size());
     }
 
     private void handleValues(Long deviceId, String payload, boolean retained) {
