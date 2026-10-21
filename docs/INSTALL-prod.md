@@ -22,7 +22,7 @@ Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with 
 3. **Deploy** — copies `docker-compose.yml`, `docker-compose.prod.yml` and `deploy/` to the VPS over SSH and runs `deploy/deploy.sh <sha>`, which:
    - dumps the database to `backups/pre-deploy-*.dump` (keeps the last 10) — Flyway migrates on startup;
    - pulls the images and runs `docker compose up -d`;
-   - waits for the server healthcheck and `GET /api/auth/status` through the client (3 minutes);
+   - waits for the server healthcheck and `GET /health` through the client (3 minutes);
    - on success writes `IMAGE_TAG=<sha>` to `.env` and removes old app images (keeps current and previous);
    - on failure rolls the containers back to the previous tag and fails the job. The database is **not** restored automatically; the log prints the dump path.
 
@@ -143,10 +143,26 @@ The pre-deploy dump only protects migrations, and it stays on the VPS. Daily bac
 
 All commands run on the VPS as `deploy` in `/opt/sensoterra`; `COMPOSE` below means `docker compose -f docker-compose.yml -f docker-compose.prod.yml`.
 
+### Health check
+
+`GET https://<domain>/health` goes host nginx → client nginx → server → database, so one request checks the whole chain:
+
+| Response | Meaning |
+|---|---|
+| `200 {"status":"UP"}` | everything works, MQTT broker connected |
+| `200 {"status":"DEGRADED"}` | the app works, but the MQTT broker is not connected (no live data, relay commands fail) |
+| `503 {"status":"DOWN"}` | the server is up, the database is not (or the disk is almost full) |
+| `502` from nginx | the client container is up, the server is not |
+| no response / timeout | host nginx, the client container or the VPS is down |
+
+- Anonymous callers get only `status`. With an `Authorization: Bearer <JWT>` header the response also lists the components (`jdbc`, `diskSpace`, `mqtt` with the broker address) — open it in the browser devtools or use `curl -H "Authorization: Bearer $TOKEN" https://<domain>/health`.
+- The same endpoint drives the server's Docker healthcheck and the `deploy.sh` check. `DEGRADED` stays HTTP 200 on purpose: an unreachable broker must not roll a deploy back.
+- **External monitoring:** add an HTTP monitor in UptimeRobot, Better Stack, healthchecks.io or similar for `https://<domain>/health`, alerting on non-200. To be told about MQTT outages too, add a keyword check for `"UP"`. Without one, nobody notices an outage: the Docker healthcheck alerts no one, and `restart: unless-stopped` does not restart an unhealthy container.
+
 ### Logs and log level
 
 - Server log: `docker logs -f sensoterra-server` (Docker rotates it: 5 × 10 MB).
-- The app logger level comes from `SENSOTERRA_LOG_LEVEL` in `logback.xml` (DEBUG by default, `INFO` in `docker-compose.prod.yml`). `logger.levels` in `application*.yml` has no effect: the project has no Micronaut `LoggingSystem` on the classpath.
+- The app logger level comes from `SENSOTERRA_LOG_LEVEL` in `logback.xml` (DEBUG by default, `INFO` in `docker-compose.prod.yml`). Keep it the only place for levels; don't add `logger.levels` to `application*.yml`.
 - To get DEBUG temporarily, change `SENSOTERRA_LOG_LEVEL` in `docker-compose.prod.yml` on the VPS and recreate the server with `COMPOSE up -d --no-build server`. The next deploy overwrites the file, so the change is temporary.
 
 ### VPS address or SSH host key changed

@@ -6,7 +6,8 @@
     </appender>
 
     <!-- App log level: SENSOTERRA_LOG_LEVEL from the environment (INFO in prod, see docker-compose.prod.yml).
-         logger.levels in application*.yml has no effect: there is no micronaut-management LoggingSystem. -->
+         Keep it the single place for levels: logger.levels in application*.yml would also apply now
+         (micronaut-management brings a LoggingSystem), but two sources of truth get confusing. -->
     <logger name="ru.sensoterra.server" level="${SENSOTERRA_LOG_LEVEL:-DEBUG}"/>
     <logger name="org.eclipse.paho" level="INFO"/>
 

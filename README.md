@@ -57,7 +57,7 @@ Generate a JWT secret with `openssl rand -base64 32`. Keep `.env` private; it is
 docker compose up -d --build
 ```
 
-The app is available at `http://localhost:3000` (change with `APP_PORT`). The compose file sets the server's database connection itself, so `DB_URL`/`DB_USER`/`DB_PASSWORD` in `.env` are only used when running the server on the host. The database port (`POSTGRES_PORT`) stays published for local development. Follow logs with `docker compose logs -f server`.
+The app is available at `http://localhost:3000` (change with `APP_PORT`). The compose file sets the server's database connection itself, so `DB_URL`/`DB_USER`/`DB_PASSWORD` in `.env` are only used when running the server on the host. The database port (`POSTGRES_PORT`) stays published for local development. Follow logs with `docker compose logs -f server`. `http://localhost:3000/health` reports the service status (`UP`, `DEGRADED` without MQTT, `DOWN` without the database); the Vite dev server proxies it too.
 
 ### Production
 
