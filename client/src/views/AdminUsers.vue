@@ -1,8 +1,8 @@
 <template>
   <div class="admin">
     <div class="header-row">
+      <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>Пользователи</h2>
-      <button @click="$router.push('/')" class="btn small secondary">Назад</button>
     </div>
 
     <!-- Админ заводит только других админов. Покупатели регистрируются сами и подтверждают
@@ -32,7 +32,7 @@
         <label class="check">
           <input type="checkbox" v-model="defaults.unlimited" /> бессрочно
         </label>
-        <button class="btn small" @click="saveDefaults" :disabled="defaultsBusy">
+        <button class="btn small save" @click="saveDefaults" :disabled="defaultsBusy">
           {{ defaultsBusy ? '...' : 'Сохранить' }}
         </button>
       </div>
@@ -236,7 +236,8 @@ async function setAccessRole(u, chipId) {
 <style scoped>
 .admin { max-width: 620px; margin: 0 auto; padding: 1rem; }
 h2 { color: var(--text-strong); margin-bottom: 1rem; }
-.header-row { display: flex; justify-content: space-between; align-items: center; }
+.header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1rem; padding: 1rem; background: var(--bg); }
+.header-row h2 { color: var(--text-strong); flex: 1; margin: 0; }
 .create-form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 .create-form input, .create-form select { padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem; }
 .card { background: var(--bg-card); border-radius: 12px; padding: 1rem; }

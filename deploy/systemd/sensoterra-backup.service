@@ -1,0 +1,17 @@
+# Daily database backup (deploy/backup.sh). Installation: docs/INSTALL-prod.md, "Database backups".
+# /opt/sensoterra and the deploy user are the defaults from there; if yours differ,
+# adjust them after copying to /etc/systemd/system/.
+[Unit]
+Description=Sensoterra database backup (pg_dump + restic)
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+WorkingDirectory=/opt/sensoterra
+ExecStart=/opt/sensoterra/deploy/backup.sh
+Nice=10
+IOSchedulingClass=idle

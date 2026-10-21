@@ -13,6 +13,10 @@ Two independent apps, no monorepo tooling — each has its own build:
 docker compose up -d --build    # full stack: DB + server + client(nginx) on :3000 — from repo root
 docker compose up -d timescaledb   # DB only, for host-side dev
 ./deploy/deploy.sh <sha>        # on the VPS: backup, pull GHCR images, up, healthcheck, rollback on failure
+./deploy/backup.sh              # on the VPS: daily pg_dump -> restic (systemd timer, settings in .env.backup)
+./deploy/restore.sh check|apply|env [snapshot|latest|file.dump]   # restore test / restore into prod / extract .env
+sudo ./deploy/host/setup-firewall.sh [--apply]   # on the VPS: ufw (SSH, 80, 443); dry run without --apply
+sudo ./deploy/host/setup-fail2ban.sh             # on the VPS: fail2ban jails sshd + sensoterra-auth
 cd server && ./gradlew build    # build + all tests
 cd server && ./gradlew run      # serves :8080
 cd client && npm install && npm run dev   # :3000
@@ -26,8 +30,10 @@ cd client && npm run build      # static output in client/dist/
 - Root `.env` (gitignored) supplies `POSTGRES_*`, `JWT_SECRET`, MQTT and OAuth vars to compose. In compose the server's `DB_URL/DB_USER/DB_PASSWORD` are derived from `POSTGRES_*`; the `.env` `DB_*` values only matter for `./gradlew run` on the host.
 - `V2__retention.sql` runs non-transactionally (`.sql.conf`) and holds compression/retention policies plus continuous aggregates `sensor_telemetry_hourly`/`_daily` built on `sensor_telemetry` columns — dropping/altering those columns requires recreating the aggregates.
 - CD: push to `main` → `.github/workflows/deploy.yml` (reuses `ci.yml` via `workflow_call`; `ci.yml` skips direct pushes to main) → images to GHCR tagged with the SHA → SSH to the VPS → `deploy/deploy.sh`. The prod overlay has `build: !reset null` — the VPS never builds, it only pulls `${IMAGE_PREFIX}-server|client:${IMAGE_TAG}`. Validate workflow edits with actionlint and the script with shellcheck.
+- Docs: `README.md` holds only general info (local dev, build, tests, config). Everything about production — VPS setup, deploy, backups, operations — goes into `docs/INSTALL-prod.md`.
 - Prod profile `application-prod.yml` (`MICRONAUT_ENVIRONMENTS=prod`) disables CORS; dev CORS list stays in `application.yml`.
-- Log levels: `logger.levels` in `application*.yml` has no effect (no Micronaut `LoggingSystem` on the classpath). The app level comes from `SENSOTERRA_LOG_LEVEL` in `logback.xml` (default DEBUG, `INFO` in `docker-compose.prod.yml`).
+- Log levels: set only via `SENSOTERRA_LOG_LEVEL` in `logback.xml` (default DEBUG, `INFO` in `docker-compose.prod.yml`); don't add `logger.levels` to `application*.yml`.
+- Health: `micronaut-management` is on the classpath only for `GET /health` (DB, disk, MQTT via `health/MqttHealthIndicator`); `endpoints.all.enabled: false` keeps every other management endpoint off. MQTT lost = `DEGRADED` with HTTP 200 (must not fail docker healthcheck / deploy). Client nginx proxies `/health`; docker healthcheck and `deploy.sh` use it.
 - MQTT client ID must be unique per running server (`SENSOTERRA_MQTT_CLIENT_ID`), otherwise the broker keeps kicking both. The server's LWT goes to its own `status-topic` (`sensoterra/server/status`), never a device topic.
 - Timescale image is pinned (`2.30.2-pg16`); never downgrade it — the extension version in the existing volume must be loadable.
 - In compose, `client/nginx.conf` serves the SPA and proxies `/api` + `/ws` to `server:8080`, forwarding `Host` so Micronaut's CORS check passes.
@@ -52,4 +58,4 @@ cd client && npm run build      # static output in client/dist/
 - MQTT broker endpoint and device/topic defaults live in `application.yml`; MQTT username/password and JWT signing secret must be provided through `SENSOTERRA_MQTT_USERNAME`, `SENSOTERRA_MQTT_PASSWORD`, and `JWT_SECRET` environment variables.
 - The service worker is hand-rolled (`client/public/sw.js` + `registerSW.js` loaded from `index.html`).
 - CORS (allowed origins incl. private-LAN regex) lives in `server/src/main/resources/application.yml` — keep `http://localhost:3000` allowed.
-- Code/config comments are in Russian — match the existing style.
+- Write code/config comments in English (older code still has Russian comments; don't mass-translate them unless asked).

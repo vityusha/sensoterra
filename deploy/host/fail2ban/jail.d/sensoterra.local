@@ -1,0 +1,31 @@
+# fail2ban for the Sensoterra VPS. Installed by deploy/host/setup-fail2ban.sh:
+# it fills in @SSH_PORT@, @SSH_BACKEND@ and @IGNOREIP@ and writes the file to /etc/fail2ban/jail.d/.
+# Edit this template in the repository, not the copy on the server — the script overwrites it.
+
+[DEFAULT]
+# Never ban our own addresses (loopback + IGNOREIP from the script, e.g. office/home).
+ignoreip = 127.0.0.1/8 ::1 @IGNOREIP@
+findtime = 10m
+bantime  = 1h
+# Repeat offenders get longer bans: 1 h, 2 h, 4 h ... up to a week.
+bantime.increment = true
+bantime.maxtime   = 1w
+
+# SSH password/key brute force. The GitHub Actions deploy logs in with its key on the first
+# try and never shows up here.
+[sshd]
+enabled  = true
+port     = @SSH_PORT@
+backend  = @SSH_BACKEND@
+maxretry = 5
+
+# App login brute force: 401/403/429 on the login endpoints in the host nginx access log.
+# 429 means the limit_req (5/min) from deploy/nginx-host.conf already fired; fail2ban then
+# blocks the whole IP, not just /api/auth/login.
+[sensoterra-auth]
+enabled  = true
+port     = http,https
+filter   = sensoterra-auth
+logpath  = /var/log/nginx/access.log
+backend  = auto
+maxretry = 10

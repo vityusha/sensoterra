@@ -22,8 +22,7 @@ public class DeviceStatusWebSocketBroadcaster {
     }
 
     /**
-     * Рассылает событие только тем сессиям, которым доступны упомянутые в нём устройства.
-     * В сообщениях устройством считается deviceId и, если есть, chipId датчика.
+     * Рассылает событие только тем сессиям, которым доступно устройство из сообщения.
      */
     public void broadcast(Map<String, Object> message) {
         Set<Long> chips = chipsOf(message);
@@ -39,17 +38,27 @@ public class DeviceStatusWebSocketBroadcaster {
         }
     }
 
+    /**
+     * Устройство сообщения — это deviceId. Для данных датчика deviceId — блок-родитель,
+     * а chipId лишь уточняет датчик. Доступ выдан на устройство (блок), отдельной записи
+     * доступа для датчика в слоте нет, поэтому проверять надо именно deviceId: иначе
+     * пользователь с доступом к блоку не получал бы live-обновления его датчиков.
+     */
     private Set<Long> chipsOf(Map<String, Object> message) {
         Set<Long> chips = new HashSet<>();
-        addChip(chips, message.get("deviceId"));
+        if (addChip(chips, message.get("deviceId"))) {
+            return chips;
+        }
         addChip(chips, message.get("chipId"));
         return chips;
     }
 
-    private void addChip(Set<Long> chips, Object value) {
+    private boolean addChip(Set<Long> chips, Object value) {
         if (value instanceof Number n) {
             chips.add(n.longValue());
+            return true;
         }
+        return false;
     }
 
     /** Начальное уведомление о состоянии MQTT-подключения — без данных устройств. */

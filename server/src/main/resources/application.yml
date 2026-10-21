@@ -44,6 +44,22 @@ micronaut:
         claims:
           issuer: "sensoterra-server"
 
+endpoints:
+  # micronaut-management is here only for /health; /env, /beans, /loggers etc. stay off.
+  all:
+    enabled: false
+  health:
+    enabled: true
+    # Anonymous callers (uptime monitors, docker healthcheck) see only the overall status;
+    # component details (DB version, disk, MQTT broker) need a JWT.
+    sensitive: false
+    details-visible: AUTHENTICATED
+    status:
+      http-mapping:
+        # MQTT lost (see MqttHealthIndicator): still serving, must not fail healthchecks.
+        DEGRADED: 200
+        DOWN: 503
+
 datasources:
   default:
     url: ${DB_URL:`jdbc:postgresql://localhost:5432/sensoterra`}

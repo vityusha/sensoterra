@@ -61,7 +61,7 @@ healthy() {
     while [ "$SECONDS" -lt "$deadline" ]; do
         id="$(IMAGE_TAG="$1" "${COMPOSE[@]}" ps -q server)"
         status="$( [ -n "$id" ] && docker inspect -f '{{.State.Health.Status}}' "$id" 2>/dev/null || echo none)"
-        if [ "$status" = "healthy" ] && curl -fsS -o /dev/null "http://127.0.0.1:${APP_PORT}/api/auth/status"; then
+        if [ "$status" = "healthy" ] && curl -fsS -o /dev/null "http://127.0.0.1:${APP_PORT}/health"; then
             return 0
         fi
         sleep 3

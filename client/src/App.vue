@@ -20,6 +20,7 @@ onMounted(async () => {
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html {
   overflow-x: hidden;
+  overflow-x: clip;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -27,6 +28,7 @@ body {
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
+  overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   transition: background 0.2s, color 0.2s;
 }
@@ -70,6 +72,10 @@ body {
   --btn-disabled-bg: #33334a;
   --btn-disabled-border: #43435c;
   --btn-disabled-text: #8a8a9e;
+  --save-bg: #b7e4c7;
+  --save-bg-hover: #a3d9b5;
+  --save-text: #0b3d20;
+  --save-border: #7fc99a;
 }
 
 [data-theme="light"] {
@@ -111,10 +117,20 @@ body {
   --btn-disabled-bg: #eeeef2;
   --btn-disabled-border: #dcdce2;
   --btn-disabled-text: #999;
+  --save-bg: #d8f3dc;
+  --save-bg-hover: #c3ebca;
+  --save-text: #14532d;
+  --save-border: #8fd6a5;
 }
 
 canvas, img, svg { max-width: 100%; }
 .app-loading { color: var(--text-sub); text-align: center; padding: 3rem; }
+.btn.btn.save { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); }
+.btn.btn.save:hover:not(:disabled) { background: var(--save-bg-hover); border-color: var(--save-border); }
+.btn.btn.save:disabled { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); opacity: 0.55; cursor: not-allowed; }
+.back-arrow { display: inline-block; width: 1.5rem; height: 1.5rem; fill: currentColor; vertical-align: middle; }
+.btn.btn.back-btn { background: var(--btn-bg-hover); border: 1px solid var(--btn-border); color: var(--btn-text); }
+.btn.btn.back-btn:hover:not(:disabled) { background: var(--btn-bg); border-color: var(--btn-border); }
 
 /* Телефон: кнопки и поля крупнее, шрифт в полях 1rem — иначе iOS зумит при фокусе. */
 @media (hover: none) {

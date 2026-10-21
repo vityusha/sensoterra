@@ -1,0 +1,16 @@
+# Monthly check: the latest restic snapshot is restored into a temporary TimescaleDB
+# container and verified (deploy/restore.sh check). The production DB is not touched.
+[Unit]
+Description=Sensoterra backup restore check
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+WorkingDirectory=/opt/sensoterra
+ExecStart=/opt/sensoterra/deploy/restore.sh check latest
+Nice=10
+IOSchedulingClass=idle
