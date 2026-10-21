@@ -365,13 +365,15 @@ public class MqttMessageProcessor {
         try {
             return objectMapper.readTree(payload);
         } catch (Exception e) {
-            log.warn("Cannot parse MQTT payload ({} bytes): {}", payload.length(), e.getMessage());
-            log.debug("Raw payload: {}", payload);
+            // Прошивки шлют невалидный JSON (пустые значения, ';' вместо ','), обычно normalize() это чинит —
+            // предупреждаем только если не помогло.
+            log.debug("Cannot parse MQTT payload ({} bytes), normalizing: {}", payload.length(), e.getMessage());
             String normalized = normalize(payload);
             try {
                 return objectMapper.readTree(normalized);
             } catch (Exception e2) {
-                log.warn("Cannot parse normalized payload: {}", e2.getMessage());
+                log.warn("Cannot parse MQTT payload even after normalization: {}; raw: {}",
+                        e2.getMessage(), payload.replace("\n", " "));
                 return null;
             }
         }
