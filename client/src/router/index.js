@@ -21,6 +21,12 @@ const routes = [
     component: () => import('../views/InviteAccept.vue')
   },
   {
+    // Return point from Yandex ID; registered as Redirect URI in the Yandex app.
+    path: '/oauth/yandex',
+    name: 'oauth-yandex',
+    component: () => import('../views/YandexCallback.vue')
+  },
+  {
     path: '/',
     name: 'dashboard',
     component: () => import('../views/Dashboard.vue'),

@@ -49,9 +49,11 @@
         {{ busy ? 'Создаём...' : 'Создать аккаунт' }}
       </button>
 
-      <template v-if="googleEnabled">
+      <template v-if="googleEnabled || yandexEnabled">
         <div class="divider"><span>или</span></div>
-        <GoogleAuthButton text="signup_with" :disabled="busy" @credential="onGoogle" />
+        <GoogleAuthButton v-if="googleEnabled" text="signup_with" :disabled="busy" @credential="onGoogle" />
+        <YandexAuthButton v-if="yandexEnabled" label="Зарегистрироваться с Яндекс ID" :disabled="busy"
+          :prepare="yandexContext" />
         <p class="hint">
           Аккаунт создастся сам, а блок подтвердится по ID и ключу, если они заполнены выше.
         </p>
@@ -69,6 +71,7 @@ import { authStatus, loginWithGoogle, register, setToken } from '../api/auth'
 import { enterSession } from '../store/auth'
 import { pushNotification } from '../store/notifications'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
+import YandexAuthButton from '../components/YandexAuthButton.vue'
 
 const router = useRouter()
 const form = reactive({ username: '', password: '', repeat: '', chipId: '', key: '' })
@@ -76,12 +79,16 @@ const showPwd = ref(false)
 const busy = ref(false)
 const error = ref('')
 const googleEnabled = ref(false)
+const yandexEnabled = ref(false)
 
 onMounted(async () => {
   try {
-    googleEnabled.value = (await authStatus()).googleEnabled === true
+    const status = await authStatus()
+    googleEnabled.value = status.googleEnabled === true
+    yandexEnabled.value = status.yandexEnabled === true
   } catch {
     googleEnabled.value = false
+    yandexEnabled.value = false
   }
 })
 
@@ -98,6 +105,14 @@ function devicePair() {
     return null
   }
   return { chipId: chipId ? Number(chipId) : null, key: key || null }
+}
+
+/** The device pair rides along through the Yandex redirect and is checked by the server there. */
+function yandexContext() {
+  error.value = ''
+  const pair = devicePair()
+  if (!pair) return null
+  return { intent: 'register', returnTo: '/register', chipId: pair.chipId, key: pair.key }
 }
 
 async function onGoogle(idToken) {

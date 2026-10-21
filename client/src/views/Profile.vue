@@ -32,8 +32,8 @@
 
       <p class="note" v-if="isExternal">
         Аккаунт создан через {{ providerTitle }}: пароля у него нет, вместо него —
-        вход на стороне Google. Своего пароля здесь не существует, поэтому и менять нечего.
-        Если нужен вход без Google — заведите пароль администратору через «Пользователи».
+        вход на стороне {{ providerTitle }}. Своего пароля здесь не существует, поэтому и менять нечего.
+        Если нужен вход без {{ providerTitle }} — заведите пароль администратору через «Пользователи».
       </p>
 
       <template v-else>
@@ -146,7 +146,8 @@ const user = computed(() => auth.user)
 /** Внешний вход (Google): своего пароля у такого аккаунта нет вовсе. */
 const isExternal = computed(() => !!user.value?.authProvider)
 
-const providerTitle = computed(() => (user.value?.authProvider === 'google' ? 'Google' : 'внешнего провайдера'))
+const PROVIDER_TITLES = { google: 'Google', yandex: 'Яндекс ID' }
+const providerTitle = computed(() => PROVIDER_TITLES[user.value?.authProvider] || 'внешнего провайдера')
 
 const roleTitle = computed(() => (user.value?.role === 'ADMIN' ? 'администратор' : 'пользователь'))
 

@@ -107,7 +107,7 @@ cd server
 ./gradlew test
 ```
 
-`GoogleOAuthTest` and `PasswordChangeTest` use fixed HTTPS port 18443; do not run two test JVMs concurrently. Tests disable Flyway, so migration SQL still needs verification against a real PostgreSQL database when migrations change.
+`GoogleOAuthTest` and `PasswordChangeTest` use fixed port 18443 (fake Google), `YandexOAuthTest` uses 18444 (fake Yandex); do not run two test JVMs concurrently. Tests disable Flyway, so migration SQL still needs verification against a real PostgreSQL database when migrations change.
 
 ## Database migrations
 
@@ -131,6 +131,8 @@ Retention drops whole 7-day chunks, so the oldest raw data is up to a week older
 Database settings use `DB_URL`, `DB_USER`, and `DB_PASSWORD`. MQTT settings can be overridden with `SENSOTERRA_MQTT_BROKER`, `SENSOTERRA_MQTT_CLIENT_ID`, `SENSOTERRA_MQTT_STATUS_TOPIC`, `SENSOTERRA_MQTT_USERNAME`, and `SENSOTERRA_MQTT_PASSWORD`. The server publishes a retained `online` to its status topic (default `sensoterra/server/status`) and registers `offline` there as its MQTT Last Will. Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with the same ID keep disconnecting each other on the broker.
 
 Google sign-in is disabled by default. Enable it with `GOOGLE_OAUTH_ENABLED=true` and set `GOOGLE_CLIENT_ID`.
+
+Yandex ID sign-in is disabled by default too. Create an app at [oauth.yandex.ru](https://oauth.yandex.ru/) (platform "Web services"), grant it access to the login and the email address, and add `<site origin>/oauth/yandex` as a Redirect URI (e.g. `http://localhost:3000/oauth/yandex` for local development). Then set `YANDEX_OAUTH_ENABLED=true`, `YANDEX_CLIENT_ID` and `YANDEX_CLIENT_SECRET`. The server exchanges the code itself, so the secret stays on the server.
 
 ## Repository layout
 

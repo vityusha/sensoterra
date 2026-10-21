@@ -36,10 +36,11 @@
         </button>
       </form>
 
-      <template v-if="!isBootstrap && googleEnabled">
+      <template v-if="!isBootstrap && (googleEnabled || yandexEnabled)">
         <div class="divider"><span>или</span></div>
-        <GoogleAuthButton :disabled="loading" @credential="onGoogle" @error="onGoogleError" />
-        <p class="hint">Через Google аккаунт заводится сразу — пароль придумывать не нужно.</p>
+        <GoogleAuthButton v-if="googleEnabled" :disabled="loading" @credential="onGoogle" @error="onGoogleError" />
+        <YandexAuthButton v-if="yandexEnabled" :disabled="loading" :prepare="yandexContext" />
+        <p class="hint">Через {{ externalNames }} аккаунт заводится сразу — пароль придумывать не нужно.</p>
       </template>
 
       <p v-if="!isBootstrap" class="reg-link">
@@ -51,11 +52,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { login, bootstrap, authStatus, loginWithGoogle, setToken } from '../api/auth'
 import { enterSession } from '../store/auth'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
+import YandexAuthButton from '../components/YandexAuthButton.vue'
 
 const router = useRouter()
 const username = ref('')
@@ -65,12 +67,16 @@ const error = ref('')
 const isBootstrap = ref(false)
 const showPassword = ref(false)
 const googleEnabled = ref(false)
+const yandexEnabled = ref(false)
+const externalNames = computed(() => [googleEnabled.value && 'Google', yandexEnabled.value && 'Яндекс ID']
+  .filter(Boolean).join(' или '))
 
 onMounted(async () => {
   try {
     const res = await authStatus()
     isBootstrap.value = res.bootstrapNeeded === true
     googleEnabled.value = res.googleEnabled === true
+    yandexEnabled.value = res.yandexEnabled === true
   } catch {
     isBootstrap.value = false
   }
@@ -90,6 +96,10 @@ async function onGoogle(idToken) {
   } finally {
     loading.value = false
   }
+}
+
+function yandexContext() {
+  return { intent: 'login', returnTo: '/login' }
 }
 
 function onGoogleError() {
