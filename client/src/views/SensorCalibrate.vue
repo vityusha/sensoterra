@@ -1,7 +1,7 @@
 <template>
   <div class="sensor-calibrate">
     <div class="header-row">
-      <button @click="cancel" class="btn small secondary">&larr;</button>
+      <button @click="cancel" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>Калибровка 0% влажности</h2>
     </div>
 
@@ -24,7 +24,7 @@
       </div>
 
       <div class="cal-actions">
-        <button class="btn" :disabled="candidate == null || !candidateValid || busy" @click="save">
+        <button class="btn save" :disabled="candidate == null || !candidateValid || busy" @click="save">
           {{ busy ? 'Сохраняю...' : 'Сохранить' }}
         </button>
         <button class="btn secondary" :disabled="busy" @click="cancel">Отмена</button>

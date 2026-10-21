@@ -1,7 +1,7 @@
 <template>
   <div class="sensor-settings">
     <div class="header-row">
-      <button @click="$router.back()" class="btn small secondary">&larr;</button>
+      <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>{{ displayName }} · {{ sensorTitle }}</h2>
       <span v-if="device?.deviceType === 'BLOCK'" class="status-tag" :class="isOnline ? 'online' : 'offline'">
         {{ isOnline ? 'online' : 'offline' }}
@@ -92,7 +92,7 @@
           </div>
 
           <div class="form-actions">
-            <button type="submit" class="btn" :disabled="!settable || !formValid || sending">
+            <button type="submit" class="btn save" :disabled="!settable || !formValid || sending">
               {{ sending ? 'Отправка...' : 'Сохранить' }}
             </button>
             <!-- Настройки автономного датчика уходят на брокер retained: спящий датчик иначе
@@ -190,9 +190,12 @@ const lastMsgState = computed(() => {
   const limit = sendSec.value ? sendSec.value * 2 : 3600
   return ageSec <= limit + 60 ? 'alive' : 'stale'
 })
-const lastMsgText = computed(() => lastMsgMs.value
-  ? fmtEventTimeWithZone(sensor.value?.lastTime || sensor.value?.updatedAt, device.value?.tzOffsetMinutes)
-  : null)
+const lastMsgText = computed(() => {
+  if (!lastMsgMs.value) return null
+  const t = fmtEventTimeWithZone(sensor.value?.lastTime || sensor.value?.updatedAt, device.value?.tzOffsetMinutes)
+  const n = sensor.value?.numMessage
+  return n != null ? `${t} [${n}]` : t
+})
 const lastMsgVerdict = computed(() => {
   if (!lastMsgMs.value) return ''
   const ageSec = Math.round((nowTick.value - lastMsgMs.value) / 1000)
@@ -370,7 +373,7 @@ onUnmounted(() => {
 
 <style scoped>
 .sensor-settings { max-width: 600px; margin: 0 auto; padding: 1rem; }
-.header-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.header-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); flex-wrap: wrap; }
 h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.small { padding: 0.25rem 0.5rem; font-size: 0.7rem; }

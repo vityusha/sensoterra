@@ -123,7 +123,6 @@ public class TelemetryController {
 
     @Get("/sensor/start")
     @Transactional
-    @Nullable
     public SensorStartRow sensorStart(
             @Nullable @QueryValue Long deviceId,
             @Nullable @QueryValue Long sensorChipId) {
@@ -135,83 +134,56 @@ public class TelemetryController {
                 access.requireView(chip);
             });
         } else {
-            return null;
+            return new SensorStartRow(null);
         }
         if (sensorChipId == null) {
-            return null;
+            return new SensorStartRow(null);
         }
-        StringBuilder jpql = new StringBuilder(
-                "SELECT t.time, t.numMessage, t.battery FROM SensorTelemetry t WHERE t.sensorChipId = :chipId");
-        if (deviceId != null) {
-            jpql.append(" AND t.deviceId = :deviceId");
-        }
-        // Замена батареи в данных телеметрии выглядит так:
-        //   1) счётчик Num_message/Number ПАДАЕТ (сбрасывается при перезапуске);
-        //   2) у АВТОНОМНЫХ датчиков счётчик длительное время НЕ РАСТЁТ — у литий-ионной
-        //      батареи в разряде число перестаёт увеличиваться, а после установки свежей
-        //      батареи возобновляет рост в последующих сообщениях;
-        //   3) резкий скачок напряжения батареи до нормы (~3 В).
-        // Признак (2) применяется только к автономным датчикам (deviceId == sensorChipId):
-        // у датчиков на блоке залипшая серия бывает, когда блок забирают (датчик шлёт,
-        // приёма нет) — это не замена батареи и отслеживать его не надо.
-        // «Работает с» = начало ПОСЛЕДНЕГО цикла роста (сброс или возобновление роста).
-        // Разрывы во времени НЕ используем: сервис бывает выключен ночью/на выходных,
-        // а батарею можно заменить за минуту — это даёт ложные срабатывания.
-        jpql.append(" ORDER BY t.time ASC");
-        var q = em.createQuery(jpql.toString(), Object[].class);
-        q.setParameter("chipId", sensorChipId);
-        if (deviceId != null) {
-            q.setParameter("deviceId", deviceId);
-        }
-        q.setMaxResults(5000);
-        List<Object[]> rows = q.getResultList();
-        if (rows.isEmpty()) {
-            return null;
-        }
-        Instant start = null;
-        Instant voltageJump = null;
-        Integer prevNum = null;
-        Float lastBattery = null;
-        int same = 0;
-        boolean plateau = false;
-        boolean autonomous = deviceId != null && deviceId.equals(sensorChipId);
-        for (Object[] row : rows) {
-            Instant time = (Instant) row[0];
-            Integer curNum = (Integer) row[1];
-            Float curBattery = (Float) row[2];
-            if (prevNum != null && curNum != null) {
-                if (curNum.equals(prevNum)) {
-                    same++;
-                    if (same >= 4) {
-                        plateau = true;
-                    }
-                } else if (curNum > prevNum) {
-                    if (plateau && autonomous) {
-                        start = time;   // рост возобновился после залипшей серии — новый цикл
-                    }
-                    plateau = false;
-                    same = 0;
-                } else {
-                    start = time;       // счётчик упал — сброс после замены/перезапуска
-                    plateau = false;
-                    same = 0;
+        final int pageSize = 5000;
+        Instant before = null;
+        Integer newerNum = null;
+        Instant newerTime = null;
+        while (true) {
+            StringBuilder jpql = new StringBuilder(
+                    "SELECT t.time, t.numMessage FROM SensorTelemetry t WHERE t.sensorChipId = :chipId");
+            if (deviceId != null) {
+                jpql.append(" AND t.deviceId = :deviceId");
+            }
+            if (before != null) {
+                jpql.append(" AND t.time < :before");
+            }
+            jpql.append(" ORDER BY t.time DESC");
+            var q = em.createQuery(jpql.toString(), Object[].class);
+            q.setParameter("chipId", sensorChipId);
+            if (deviceId != null) {
+                q.setParameter("deviceId", deviceId);
+            }
+            if (before != null) {
+                q.setParameter("before", before);
+            }
+            q.setMaxResults(pageSize);
+            List<Object[]> rows = q.getResultList();
+            if (rows.isEmpty()) {
+                break;
+            }
+            for (Object[] row : rows) {
+                Instant time = (Instant) row[0];
+                Integer num = (Integer) row[1];
+                if (num == null) {
+                    continue;
                 }
+                if (newerNum != null && num - newerNum >= 2) {
+                    return new SensorStartRow(newerTime);
+                }
+                newerNum = num;
+                newerTime = time;
             }
-            if (lastBattery != null && curBattery != null
-                    && curBattery >= 2.9f && lastBattery <= 2.6f) {
-                voltageJump = time;
+            if (rows.size() < pageSize) {
+                break;
             }
-            prevNum = curNum;
-            lastBattery = curBattery;
+            before = (Instant) rows.get(rows.size() - 1)[0];
         }
-        // Скачок напряжения — главный признак, у него приоритет; счётчик — дополнительный.
-        if (voltageJump != null) {
-            return new SensorStartRow(voltageJump);
-        }
-        if (start != null) {
-            return new SensorStartRow(start);
-        }
-        return new SensorStartRow((Instant) rows.get(0)[0]);
+        return new SensorStartRow(null);
     }
 
     @Get("/relay")
@@ -334,7 +306,7 @@ public class TelemetryController {
     }
 
     @Serdeable
-    public record SensorStartRow(Instant time) {
+    public record SensorStartRow(@Nullable Instant time) {
     }
 
     @Serdeable

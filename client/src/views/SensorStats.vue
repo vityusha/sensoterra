@@ -1,7 +1,7 @@
 <template>
   <div class="sensor">
     <div class="header-row">
-      <button @click="$router.back()" class="btn small secondary">&larr;</button>
+      <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>{{ displayName }} <span class="chip-id">({{ chipId }})</span></h2>
       <span class="type-tag">{{ isIndividual ? 'автономный' : `${blockLabel} &nbsp;S${blockRole?.slot ?? ''}` }}</span>
       <button class="btn small calibrate-btn" v-if="canEditPrefs && isIndividual" @click="openSettings">Настройка</button>
@@ -12,6 +12,7 @@
       <h3>Последние данные</h3>
       <div class="last-received" v-if="latest.time">
         Получено: <b>{{ fmtEventTimeWithZone(latest.time, tzOffset) }}</b>
+        <span v-if="latest.numMessage != null" class="msg-num">[{{ latest.numMessage }}]</span>
         <span class="ago">({{ agoText }})</span>
       </div>
       <div class="immersion-warning" v-if="immersionWarningShown">
@@ -24,6 +25,13 @@
         </div>
       </div>
     </section>
+
+    <div class="battery-runtime">
+      <span class="battery-label">Время работы батареи:</span>
+      <b v-if="batteryRuntimeText">{{ batteryRuntimeText }}</b>
+      <span v-else-if="!batteryStartLoaded" class="muted">…</span>
+      <span v-else class="muted">информация недоступна</span>
+    </div>
 
     <section class="section" v-if="canEditPrefs">
       <h3>Показ измерений</h3>
@@ -45,7 +53,7 @@
         <label>Воздух <input type="number" v-model.number="calibForm.value1" /></label>
         <label>Сухая почва (0%) <input type="number" v-model.number="calibForm.value2" /></label>
         <label>Вода (100%) <input type="number" v-model.number="calibForm.value3" /></label>
-        <button class="btn small" :disabled="calibForm.busy" @click="saveCalib">
+        <button class="btn small save" :disabled="calibForm.busy" @click="saveCalib">
           {{ calibForm.busy ? '...' : 'Сохранить' }}
         </button>
       </div>
@@ -90,7 +98,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSensorCatalog, getSensorTelemetry, getDevice, listDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales } from '../api/auth'
+import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales } from '../api/auth'
 import { auth, deviceAccess, rememberDeviceAccess } from '../store/auth'
 import { getIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
 import { pushNotification } from '../store/notifications'
@@ -268,6 +276,42 @@ const latest = computed(() => lastAny.value || (rows.value.length ? rows.value[r
 /** Текущее время для подписи «сколько назад» — обновляется вместе с таймером освежения. */
 const nowTick = ref(Date.now())
 const agoText = computed(() => fmtAgo(latest.value?.time, nowTick.value))
+
+const batteryStart = ref(null)
+const batteryStartLoaded = ref(false)
+const BATTERY_START_TTL_MS = 5 * 60 * 1000
+let batteryStartFetchedAt = 0
+
+async function loadBatteryStart(deviceId) {
+  if (Date.now() - batteryStartFetchedAt < BATTERY_START_TTL_MS) return
+  try {
+    const row = await getSensorFirstMessage(deviceId, chipId)
+    batteryStart.value = row?.time ?? null
+    batteryStartFetchedAt = Date.now()
+  } catch {
+    batteryStartFetchedAt = 0
+  } finally {
+    batteryStartLoaded.value = true
+  }
+}
+
+function fmtBatteryRuntime(ms) {
+  const totalMin = Math.max(0, Math.floor(ms / 60000))
+  const days = Math.floor(totalMin / 1440)
+  const hours = Math.floor((totalMin % 1440) / 60)
+  const minutes = totalMin % 60
+  if (days) return `${days} дн. ${hours} ч. ${minutes} мин.`
+  if (hours) return `${hours} ч. ${minutes} мин.`
+  return `${minutes} мин.`
+}
+
+const batteryRuntimeText = computed(() => {
+  if (!batteryStart.value) return null
+  const startMs = new Date(batteryStart.value).getTime()
+  if (!Number.isFinite(startMs)) return null
+  const ms = nowTick.value - startMs
+  return ms >= 0 ? fmtBatteryRuntime(ms) : null
+})
 
 const moistureCal = computed(() => {
   if (sensorType.value !== 0) return null
@@ -517,11 +561,13 @@ async function loadData(silent = false) {
     }
     const since = currentSince()
     const to = currentTo()
+    const batteryPromise = loadBatteryStart(deviceId)
     const [periodRows, fresh] = await Promise.all([
       getSensorTelemetry(deviceId, chipId, since || undefined, to || undefined),
       // Последняя запись без привязки к периоду; ошибка не обнуляет прежнее значение.
       getSensorTelemetry(deviceId, chipId, undefined, undefined, 1).catch(() => null),
     ])
+    await batteryPromise
     rows.value = periodRows
     rows.value.reverse()
     if (Array.isArray(fresh)) lastAny.value = fresh.length ? fresh[0] : null
@@ -555,11 +601,16 @@ onUnmounted(() => clearInterval(refreshTimer))
 
 <style scoped>
 .sensor { max-width: 600px; margin: 0 auto; padding: 1rem; }
-.header-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+.header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; }
 .header-row h2 .chip-id { color: var(--text-dim); font-weight: 400; font-size: 0.85em; }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg); color: var(--tag-text); }
 .ago { color: var(--text-dim); font-size: 0.85em; margin-left: 0.35rem; }
+.msg-num { color: var(--text-dim); font-size: 0.85em; margin-left: 0.25rem; }
+.battery-runtime { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.4rem; background: var(--bg); border-left: 3px solid var(--accent); border-radius: 10px; padding: 0.7rem 1rem; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+.battery-runtime b { color: var(--text-strong); }
+.battery-label { color: var(--text-dim); }
+.battery-runtime .muted { color: var(--text-dim); }
 .gradient-btn {
   width: 16px; height: 16px; flex: none; padding: 0; cursor: pointer;
   border: 2px solid #fff; border-radius: 50%;
@@ -580,10 +631,10 @@ onUnmounted(() => clearInterval(refreshTimer))
 .immersion-warning { color: var(--danger); background: #3a1518; font-weight: 600; font-size: 0.85rem; padding: 0.5rem 0.7rem; border-radius: 8px; margin-bottom: 0.7rem; }
 .latest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; }
 .latest-cell { background: var(--bg-card); border-radius: 10px; padding: 0.7rem 0.9rem; }
-.l-label { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; color: var(--text-dim); font-size: 0.7rem; margin-bottom: 0.25rem; }
+.l-label { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; color: var(--text-sub); font-size: 0.8rem; margin-bottom: 0.25rem; }
 .l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: inline-flex; align-items: center; }
 .pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin: 0.2em 0 0 0.4rem; flex: none; border: 1px solid #fff; border-radius: 2px; }
-.l-unit { color: var(--text-dim); font-size: 0.75rem; font-weight: 400; }
+.l-unit { color: var(--text); font-size: 1rem; font-weight: 500; }
 .chart-section { margin-bottom: 1.5rem; }
 .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
 .chart-section h4 { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 0; }

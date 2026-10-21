@@ -1,7 +1,7 @@
 <template>
   <div class="relay-settings">
     <div class="header-row">
-      <button @click="$router.back()" class="btn small secondary">&larr;</button>
+      <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>{{ displayName }} · {{ relayTitle }}</h2>
       <span v-if="device?.deviceType === 'BLOCK'" class="status-tag" :class="isOnline ? 'online' : 'offline'">
         {{ isOnline ? 'online' : 'offline' }}
@@ -194,7 +194,7 @@
           </template>
 
           <div class="form-actions">
-            <button type="submit" class="btn" :disabled="!isOnline || !formValid || sending">
+            <button type="submit" class="btn save" :disabled="!isOnline || !formValid || sending">
               {{ sending ? 'Отправка...' : 'Сохранить' }}
             </button>
           </div>
@@ -820,7 +820,7 @@ onMounted(async () => {
 
 <style scoped>
 .relay-settings { max-width: 600px; margin: 0 auto; padding: 1rem; }
-.header-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.header-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); flex-wrap: wrap; }
 h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.small { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
