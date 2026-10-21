@@ -98,6 +98,9 @@
               <div class="device-type" v-if="s.conflict">
                 Ошибка: зарегистрирован на {{ s.blockRoles.length }} блока. Выберите блок, где оставить регистрацию.
               </div>
+              <div class="sensor-config" v-if="sensorConfigText(s)">
+                <span class="config-text">{{ sensorConfigText(s) }}</span>
+              </div>
             </div>
             <div class="device-chip">{{ s.chipId }}</div>
           </div>
@@ -122,8 +125,8 @@
               <div class="device-tags">
                 <span class="tag">автономный</span>
               </div>
-              <div class="sensor-config" v-if="individualConfigText(s)">
-                <span class="config-text">{{ individualConfigText(s) }}</span>
+              <div class="sensor-config" v-if="sensorConfigText(s)">
+                <span class="config-text">{{ sensorConfigText(s) }}</span>
               </div>
             </div>
             <div class="device-chip">{{ s.chipId }}</div>
@@ -145,9 +148,9 @@
           После этого нажмите «Открыть страницу настройки» — откроется страница устройства
           по адресу 192.168.4.1.
         </p>
-        <div class="modal-actions">
+        <div class="modal-actions ap-actions">
           <button class="btn small secondary" @click="apDialog = false">Отмена</button>
-          <button class="btn small" @click="openApPage">Открыть страницу настройки</button>
+          <button class="btn small save" @click="openApPage">Открыть страницу настройки</button>
         </div>
       </div>
     </div>
@@ -182,7 +185,7 @@ import { listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolve
 import { auth, logout, devicePayment, rememberPayment } from '../store/auth'
 import { paymentLabel } from '../utils/payment'
 import { getBlockName, setBlockName, getIndividualName, setIndividualName } from '../store/settings'
-import { connection, pushNotification, onWsMessage } from '../store/notifications'
+import { connection, pushNotification, onWsMessage, connectWs } from '../store/notifications'
 import { initMissedTimings, prefetchRelayNames } from '../store/notifications'
 
 const router = useRouter()
@@ -272,6 +275,9 @@ const dialogBlocks = computed(() => {
 })
 
 let wsUnsub = null
+let liveTimer = null
+let liveBusy = false
+let catalogRefreshTimer = null
 /**
  * Полное перечитывание списка. Вынесено из onMounted, потому что нужно и после привязки
  * блока по ключу: новый блок появляется только с сервера, локально его неоткуда взять.
@@ -307,14 +313,24 @@ onMounted(async () => {
       cur.timestamp = msg.timestamp
       statusMap.value[wid] = { ...cur }
     }
+    if (msg.type === 'sensor') scheduleCatalogRefresh()
     if (msg.type === 'sensors') {
       refreshCatalog()
       refreshStatuses()
     }
   })
+  liveTimer = setInterval(refreshLive, 10000)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('online', onOnline)
 })
 
-onBeforeUnmount(() => { if (wsUnsub) wsUnsub() })
+onBeforeUnmount(() => {
+  if (wsUnsub) wsUnsub()
+  if (liveTimer) clearInterval(liveTimer)
+  if (catalogRefreshTimer) clearTimeout(catalogRefreshTimer)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  window.removeEventListener('online', onOnline)
+})
 
 function isOnline(chipId) {
   return statusMap.value[chipId]?.status === 'online'
@@ -379,7 +395,7 @@ function fmtSend(seconds) {
   return `${seconds} с`
 }
 
-function individualConfigText(s) {
+function sensorConfigText(s) {
   const parts = []
   if (s.sleep != null) parts.push(`сон ${s.sleep < 60 ? s.sleep + ' с' : roundHalf(s.sleep / 60) + ' мин'}`)
   if (s.send != null) parts.push(`отпр. ${fmtSend(s.send)}`)
@@ -409,8 +425,18 @@ function handleLogout() {
   router.push('/login')
 }
 
+function scheduleCatalogRefresh() {
+  if (catalogRefreshTimer) return
+  catalogRefreshTimer = setTimeout(() => {
+    catalogRefreshTimer = null
+    refreshCatalog().catch(() => {})
+  }, 500)
+}
+
 async function refreshCatalog() {
-  catalog.value = await getSensorCatalog()
+  const cats = await getSensorCatalog()
+  catalog.value = cats
+  initMissedTimings(cats)
 }
 
 async function refreshStatuses() {
@@ -418,6 +444,28 @@ async function refreshStatuses() {
   const map = {}
   for (const s of statuses) map[s.chipId] = s
   statusMap.value = map
+}
+
+async function refreshLive() {
+  if (document.visibilityState === 'hidden' || liveBusy) return
+  liveBusy = true
+  try {
+    await Promise.all([refreshCatalog(), refreshStatuses()])
+  } catch {
+  } finally {
+    liveBusy = false
+  }
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState !== 'visible') return
+  connectWs()
+  refreshAll().catch(() => {})
+}
+
+function onOnline() {
+  connectWs()
+  refreshAll().catch(() => {})
 }
 
 function deleteErrorMessage(e, fallback) {
@@ -479,7 +527,7 @@ async function removeBlock(d) {
 
 <style scoped>
 .dashboard { max-width: 600px; margin: 0 auto; padding: 1rem; }
-.header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.5rem; }
+.header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 h2 { color: var(--text-strong); }
 .header-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .connection-status { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
@@ -536,6 +584,7 @@ h2 { color: var(--text-strong); }
 .opt-label { color: var(--text); font-size: 0.85rem; }
 .opt-warn { color: var(--danger); font-size: 0.7rem; margin-left: auto; text-align: right; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+.ap-actions .btn { min-height: 2.5rem; padding: 0.45rem 0.9rem; }
 .activation-banner { background: var(--banner-bg); border: 1px solid var(--banner-border); border-radius: 12px; padding: 0.9rem 1rem; margin-bottom: 1rem; }
 .activation-text { color: var(--banner-text); font-size: 0.85rem; line-height: 1.4; margin-bottom: 0.6rem; }
 .activation-form { display: flex; gap: 0.5rem; flex-wrap: wrap; }

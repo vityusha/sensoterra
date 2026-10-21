@@ -1,7 +1,7 @@
 <template>
   <div class="device">
     <div class="header-row">
-      <button @click="$router.push('/')" class="btn small secondary">&larr;</button>
+      <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>
         <template v-if="editingName && canControl">
           <input class="name-input" v-model="editNameVal" @click.stop @keyup.enter="saveName" @keyup.esc="editingName=false" />
@@ -194,7 +194,7 @@
             <button v-if="canControl && device?.deviceType === 'INDIVIDUAL_SENSOR'" @click.stop="openIndividualSensorSettings(s)" class="btn small ghost">Настройки</button>
           </div>
           <div class="sensor-readings">
-            <span v-if="s.lastTime" class="reading muted">Получено: {{ fmtEventTimeWithZone(s.lastTime, device?.tzOffsetMinutes) }} <span class="ago">({{ fmtAgo(s.lastTime, nowTick) }})</span></span>
+            <span v-if="s.lastTime" class="reading muted">Получено: {{ fmtEventTimeWithZone(s.lastTime, device?.tzOffsetMinutes) }} <span v-if="s.numMessage != null" class="msg-num">[{{ s.numMessage }}]</span> <span class="ago">({{ fmtAgo(s.lastTime, nowTick) }})</span></span>
             <span v-if="showField(s, 'v0')" class="reading">{{ getLabel(s, 'v0') }}: <template v-if="moisturePct(s) != null">{{ moisturePct(s) }}% ({{ s.moistureAdc }}<span v-if="getUnit(s, 'v0') && getUnit(s, 'v0') !== '%'"> {{ getUnit(s, 'v0') }}</span>)</template><template v-else>{{ s.moistureAdc }}<span v-if="getUnit(s, 'v0')"> {{ getUnit(s, 'v0') }}</span></template><span v-if="moistureColor(s)" class="pct-color" :style="{ background: moistureColor(s) }"></span></span>
             <span v-if="moistureImmersion(s)" class="reading immersion-warning">Проверьте уровень погружения датчика в почву</span>
             <span v-if="showField(s, 'v1')" class="reading">{{ getLabel(s, 'v1') }}: {{ s.temperature }}<span v-if="getUnit(s, 'v1')"> {{ getUnit(s, 'v1') }}</span><span v-if="fieldColor(s, 'v1', s.temperature)" class="pct-color" :style="{ background: fieldColor(s, 'v1', s.temperature) }"></span></span>
@@ -205,12 +205,8 @@
             <span v-if="s.power != null" class="reading">Power: {{ s.power }}</span>
             <span v-if="!hasAnyData(s)" class="reading muted">нет данных</span>
           </div>
-          <div class="sensor-config" v-if="s.sleep || s.send || s.minVoltage">
-            <span class="reading muted">
-              <template v-if="s.sleep != null">sleep {{ s.sleep }}s<template v-if="s.send != null || s.minVoltage != null"> · </template></template>
-              <template v-if="s.send != null">send {{ s.send }}s<template v-if="s.minVoltage != null"> · </template></template>
-              <template v-if="s.minVoltage != null">minV {{ s.minVoltage }}</template>
-            </span>
+          <div class="sensor-config" v-if="sensorConfigText(s)">
+            <span class="reading muted">{{ sensorConfigText(s) }}</span>
           </div>
         </div>
       </div>
@@ -312,7 +308,7 @@ import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensor
 import { getBlockName, setBlockName, getFieldName, getFieldUnit, isFieldHidden, isVaccHidden, setVaccVisible } from '../store/settings'
 import { fmtEventTimeWithZone, fmtAgo } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
-import { onWsMessage, pushNotification } from '../store/notifications'
+import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
 import { auth, rememberDeviceAccess, rememberPayment, isDevicePaid } from '../store/auth'
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
@@ -689,6 +685,30 @@ function fmtDate(value) {
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+function roundHalf(v) {
+  return Math.round(v * 2) / 2
+}
+
+function fmtSend(seconds) {
+  if (seconds == null) return null
+  if (seconds >= 3600) {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.round((seconds % 3600) / 60)
+    return m ? `${h} ч ${m} мин` : `${h} ч`
+  }
+  if (seconds >= 60) return `${Math.round(seconds / 60)} мин`
+  return `${seconds} с`
+}
+
+function sensorConfigText(s) {
+  const parts = []
+  if (s.sleep != null) parts.push(`сон ${s.sleep < 60 ? s.sleep + ' с' : roundHalf(s.sleep / 60) + ' мин'}`)
+  if (s.send != null) parts.push(`отпр. ${fmtSend(s.send)}`)
+  if (s.percentN != null || s.percentS != null) parts.push(`пределы ${s.percentN ?? 0}/${s.percentS ?? 0} %`)
+  if (s.minVoltage != null) parts.push(`мин. напр. ${Math.round(s.minVoltage) / 1000} В`)
+  return parts.join(' · ')
+}
+
 function inviteUrl(token) {
   return `${location.origin}/invite/${token}`
 }
@@ -799,14 +819,69 @@ onMounted(async () => {
 
 let wsUnsub = null
 let refreshTimer = null
+let liveTimer = null
+let liveBusy = false
 /** Текущее время для подписей «сколько назад» рядом с «Получено». */
 const nowTick = ref(Date.now())
 let agoTimer = null
 
+function isThisDevice(value) {
+  return value !== undefined && value !== null && String(value) === String(chipId)
+}
+
+/**
+ * Точечное обновление без полного load(): WS может умереть при уходе телефона
+ * в фон, а спящий датчик reconnect не инициирует. Опрос страховит live-обновления.
+ */
+async function refreshLive() {
+  if (liveBusy || blockClosed.value) return
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+  liveBusy = true
+  try {
+    const before = sensors.value.map(s => String(s.sensorChipId ?? s.chipId)).sort().join(',')
+    const [list, relayList, statuses] = await Promise.all([
+      getDeviceSensors(Number(chipId)),
+      getDeviceRelays(Number(chipId)),
+      getDeviceStatuses(),
+    ])
+    const after = list.map(s => String(s.sensorChipId ?? s.chipId)).sort().join(',')
+    sensors.value = list
+    relays.value = relayList
+    const map = {}
+    for (const s of statuses) map[s.chipId] = s
+    statusesMap.value = map
+    if (isBlock.value) {
+      const bt = await getBlockTelemetry(Number(chipId))
+      blockTelemetry.value = bt[0] || null
+    }
+    nowTick.value = Date.now()
+    // Появился или пропал датчик — догружаем калибровки и шкалы полным load().
+    if (before !== after) await load()
+  } catch { /* оплата/закрытый блок/сеть — молча ждём следующий тик */ } finally {
+    liveBusy = false
+  }
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState !== 'visible') return
+  connectWs()
+  refreshLive()
+}
+
+function onOnline() {
+  connectWs()
+  refreshLive()
+}
+
 onMounted(() => {
   agoTimer = setInterval(() => { nowTick.value = Date.now() }, 30000)
+  liveTimer = setInterval(refreshLive, 15000)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('online', onOnline)
   wsUnsub = onWsMessage((msg) => {
-    if (typeof msg.deviceId !== 'undefined' && String(msg.deviceId) !== String(chipId)) return
+    if ((msg.deviceId != null || msg.chipId != null) && !isThisDevice(msg.deviceId) && !isThisDevice(msg.chipId)) return
+    // Служебный статус MQTT-подключения (без deviceId) — не состояние этого устройства.
+    if (msg.type === 'status' && msg.deviceId == null && msg.chipId == null) return
     if (msg.type === 'status' && typeof msg.status !== 'undefined') {
       statusesMap.value = {
         ...statusesMap.value,
@@ -832,7 +907,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null }
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null }
   if (agoTimer) { clearInterval(agoTimer); agoTimer = null }
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  window.removeEventListener('online', onOnline)
   if (wsUnsub) wsUnsub()
 })
 
@@ -1128,7 +1206,7 @@ function applyCustom() {
 .paywall-text { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; margin: 0.25rem 0 0; }
 .pay-admin-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .pay-admin-row input[type='number'] { width: 90px; }
-.header-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+.header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; }
 .editable { cursor: pointer; border-bottom: 1px dashed var(--border); }
 .editable:hover { color: var(--accent); }
@@ -1203,6 +1281,7 @@ function applyCustom() {
 .pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin-top: 0.2em; flex: none; border: 1px solid #fff; border-radius: 2px; }
 .reading.muted { color: var(--text-faint); }
 .ago { color: var(--text-faint); font-size: 0.92em; margin-left: 0.3rem; }
+.msg-num { color: var(--text-faint); font-size: 0.92em; }
 .reading .pct-color { margin: 0 0 0 0.4rem; vertical-align: baseline; }
 .reading.immersion-warning { color: var(--danger); background: #3a1518; font-weight: 600; }
 .sensor-config { margin-top: 0.5rem; }

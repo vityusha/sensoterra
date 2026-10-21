@@ -1,7 +1,7 @@
 <template>
   <div class="profile">
     <div class="header-row">
-      <button @click="$router.push('/')" class="btn small secondary">&larr;</button>
+      <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>Профиль</h2>
     </div>
 
@@ -211,7 +211,7 @@ async function submit() {
 /* Ширина как у остальных страниц (Settings, RelaySettings, AdminUsers): без неё форма
    растягивается на весь монитор и поля превращаются в узкую полосу текста. */
 .profile { max-width: 600px; margin: 0 auto; padding: 1rem; }
-.header-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+.header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; }
 .section { margin-bottom: 2rem; }
 .section h3 { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }

@@ -1,7 +1,7 @@
 <template>
   <div class="settings">
     <div class="header-row">
-      <button @click="$router.push('/')" class="btn small secondary">&larr;</button>
+      <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>Настройки</h2>
     </div>
 
@@ -130,7 +130,7 @@
                 <label>Воздух <input type="number" v-model.number="calibDefaults[String(type)].value1" /></label>
                 <label>Сухая почва (0%) <input type="number" v-model.number="calibDefaults[String(type)].value2" /></label>
                 <label>Вода (100%) <input type="number" v-model.number="calibDefaults[String(type)].value3" /></label>
-                <button class="btn small secondary" :disabled="calibBusy" @click="saveCalibDefaults(type)">
+                <button class="btn small save" :disabled="calibBusy" @click="saveCalibDefaults(type)">
                   {{ calibBusy ? '...' : 'Сохранить' }}
                 </button>
               </div>
@@ -400,7 +400,7 @@ function onTooltipMode(v) {
 
 <style scoped>
 .settings { max-width: 600px; margin: 0 auto; padding: 1rem; }
-.header-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+.header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.secondary { background: var(--bg-accent); }
