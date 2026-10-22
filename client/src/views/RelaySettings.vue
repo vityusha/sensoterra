@@ -6,6 +6,17 @@
       <span v-if="device?.deviceType === 'BLOCK'" class="status-tag" :class="isOnline ? 'online' : 'offline'">
         {{ isOnline ? 'online' : 'offline' }}
       </span>
+      <button
+        v-if="relay"
+        type="button"
+        class="btn small back-btn save-icon-btn"
+        :disabled="!isOnline || !formValid || sending"
+        :title="sending ? 'Отправка...' : 'Сохранить'"
+        :aria-label="sending ? 'Отправка...' : 'Сохранить'"
+        @click="save"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      </button>
     </div>
 
     <div v-if="loading" class="loading">Загрузка...</div>
@@ -193,11 +204,6 @@
             </div>
           </template>
 
-          <div class="form-actions">
-            <button type="submit" class="btn save" :disabled="!isOnline || !formValid || sending">
-              {{ sending ? 'Отправка...' : 'Сохранить' }}
-            </button>
-          </div>
         </form>
       </section>
     </template>
@@ -829,6 +835,9 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .status-tag { font-size: 0.72rem; padding: 0.15rem 0.6rem; border-radius: 999px; white-space: nowrap; }
 .status-tag.online { background: var(--tag-bg-ok); color: var(--success); }
 .status-tag.offline { background: var(--bg-accent); color: var(--danger); }
+.save-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: currentColor; }
+.save-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .loading, .empty { color: var(--text-dim); text-align: center; padding: 2rem; }
 .empty.small { padding: 1rem; font-size: 0.85rem; }
 .offline-banner { background: var(--bg-accent); color: var(--on-accent); border: 1px solid #8a2a2a; border-radius: 10px; padding: 0.7rem 1rem; font-size: 0.85rem; margin-bottom: 1.5rem; }
@@ -884,7 +893,6 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .toggle-dot { position: absolute; top: 2px; left: 2px; width: calc(1.5rem - 6px); height: calc(1.5rem - 6px); border-radius: 50%; background: var(--text-dim); transition: left 0.2s, background 0.2s; }
 .toggle.on .toggle-dot { left: calc(3rem - 1.5rem + 2px); background: var(--success); }
 .checkbox { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text); font-size: 0.9rem; }
-.form-actions { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
 
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
 .modal { background: var(--bg-card); border-radius: 12px; padding: 1.25rem; max-width: 420px; width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }

@@ -578,8 +578,8 @@ h2 { color: var(--text-strong); }
 .connection-status.offline { background: var(--bg-accent); color: var(--danger); }
 .user-info { color: var(--text-dim); font-size: 0.8rem; }
 .menu-wrap { position: relative; margin-left: auto; }
-.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-muted); cursor: pointer; }
-.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text); }
+.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
+.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text-strong); }
 .menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 220px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
 .menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
 .menu-dropdown button:hover { background: var(--bg-primary); }

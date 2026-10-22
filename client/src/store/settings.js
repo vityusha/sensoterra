@@ -18,11 +18,16 @@ function load() {
  * привязанное к блокам и датчикам живёт в БД (см. prefs ниже), чтобы настройка
  * не приходилось повторять на каждом браузере и телефоне.
  */
+function normalizeBgColor(v) {
+  return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : null
+}
+
 function saveLocal(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     alertsEnabled: state.alertsEnabled,
     chartTooltips: state.chartTooltips,
     theme: state.theme,
+    bgColors: state.bgColors,
   }))
 }
 
@@ -33,6 +38,10 @@ export const settings = reactive({
   alertsEnabled: persisted.alertsEnabled !== false,
   chartTooltips: ['auto', 'always', 'off'].includes(persisted.chartTooltips) ? persisted.chartTooltips : 'auto',
   theme: (persisted.theme === 'light' || persisted.theme === 'dark') ? persisted.theme : 'dark',
+  bgColors: {
+    dark: normalizeBgColor(persisted.bgColors?.dark ?? persisted.bgColor),
+    light: normalizeBgColor(persisted.bgColors?.light),
+  },
   moistureScales: persisted.moistureScales || {},
   // серверная часть: devices[chipId], sensors[chipId], fields[type][field],
   // defaults[type][field] — значения по умолчанию из кода сервера, не чьи-то настройки
@@ -43,7 +52,7 @@ export const settings = reactive({
   loaded: false,
 })
 
-watch(() => [settings.alertsEnabled, settings.chartTooltips, settings.theme, settings.moistureScales], () => saveLocal(settings), { deep: true })
+watch(() => [settings.alertsEnabled, settings.chartTooltips, settings.theme, settings.bgColors, settings.moistureScales], () => saveLocal(settings), { deep: true })
 
 const fieldKeys = ['v0', 'v1', 'v2', 'v3']
 
@@ -357,6 +366,15 @@ export function getTheme() {
   return settings.theme === 'light' ? 'light' : 'dark'
 }
 
+export function getBgColor() {
+  return settings.bgColors[getTheme()] || null
+}
+
+export function setBgColor(v) {
+  settings.bgColors[getTheme()] = normalizeBgColor(v)
+  applyTheme()
+}
+
 export function setTheme(v) {
   settings.theme = (v === 'light' || v === 'dark') ? v : 'dark'
   applyTheme()
@@ -368,8 +386,12 @@ export function toggleTheme() {
 
 export function applyTheme() {
   try {
-    document.documentElement.setAttribute('data-theme', settings.theme)
-    const themeColor = settings.theme === 'light' ? '#f7f7f7' : '#1a1a2e'
+    const root = document.documentElement
+    root.setAttribute('data-theme', settings.theme)
+    const bgColor = getBgColor()
+    if (bgColor) root.style.setProperty('--bg', bgColor)
+    else root.style.removeProperty('--bg')
+    const themeColor = bgColor || (settings.theme === 'light' ? '#f7f7f7' : '#1a1a2e')
     let meta = document.querySelector('meta[name="theme-color"]')
     if (!meta) {
       meta = document.createElement('meta')

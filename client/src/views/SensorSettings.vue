@@ -2,10 +2,21 @@
   <div class="sensor-settings">
     <div class="header-row">
       <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-      <h2>{{ displayName }} · {{ sensorTitle }}</h2>
+      <h2>{{ headerTitle }}</h2>
       <span v-if="device?.deviceType === 'BLOCK'" class="status-tag" :class="isOnline ? 'online' : 'offline'">
         {{ isOnline ? 'online' : 'offline' }}
       </span>
+      <button
+        v-if="sensor"
+        type="button"
+        class="btn small back-btn save-icon-btn"
+        :disabled="!settable || !formValid || sending"
+        :title="sending ? 'Отправка...' : 'Сохранить'"
+        :aria-label="sending ? 'Отправка...' : 'Сохранить'"
+        @click="save"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      </button>
     </div>
 
     <div v-if="loading" class="loading">Загрузка...</div>
@@ -91,15 +102,12 @@
             </span>
           </div>
 
-          <div class="form-actions">
-            <button type="submit" class="btn save" :disabled="!settable || !formValid || sending">
-              {{ sending ? 'Отправка...' : 'Сохранить' }}
-            </button>
-            <!-- Настройки автономного датчика уходят на брокер retained: спящий датчик иначе
-                 их пропустит. Если датчик уже применил настройки, сообщение снимается само,
-                 но после правки «руками» старые значения могут вернуться — тогда снять
-                 нужно вручную. -->
-            <button v-if="!isBlock" type="button" class="btn secondary" :disabled="clearing" @click="dropRetained">
+          <!-- Настройки автономного датчика уходят на брокер retained: спящий датчик иначе
+               их пропустит. Если датчик уже применил настройки, сообщение снимается само,
+               но после правки «руками» старые значения могут вернуться — тогда снять
+               нужно вручную. -->
+          <div v-if="!isBlock" class="form-actions">
+            <button type="button" class="btn secondary" :disabled="clearing" @click="dropRetained">
               {{ clearing ? 'Снятие...' : 'Снять сохранённые настройки' }}
             </button>
           </div>
@@ -113,7 +121,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getDevice, getDeviceSensors, getDeviceStatuses, sendSensorParams, clearRetainedSettings } from '../api/auth'
-import { getBlockName, getIndividualName } from '../store/settings'
+import { getIndividualName } from '../store/settings'
 import { fmtEventTimeWithZone } from '../utils/datetime'
 import { pushNotification } from '../store/notifications'
 import { canControlDevice, isAdmin } from '../store/auth'
@@ -167,8 +175,15 @@ function roundHalf(v) {
   return Math.round(v * 2) / 2
 }
 
-const displayName = computed(() => getBlockName(chipId) || getIndividualName(chipId) || String(chipId))
-const sensorTitle = computed(() => isBlock ? `Датчик S${slot}` : `Датчик ${chipId}`)
+const displayName = computed(() =>
+  getIndividualName(chipId) || device.value?.name || sensor.value?.name || 'Датчик')
+const sensorTitle = computed(() => {
+  if (!isBlock) return `Датчик ${chipId}`
+  const s = sensor.value
+  const base = s?.name || `S${slot}`
+  return s?.sensorChipId ? `${base} (${s.sensorChipId})` : base
+})
+const headerTitle = computed(() => isBlock ? sensorTitle.value : `${displayName.value} (${chipId})`)
 const isOnline = computed(() => statusMap.value[chipId]?.status === 'online')
 const settable = computed(() => !isBlock || isOnline.value)
 
@@ -382,6 +397,9 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .status-tag { font-size: 0.72rem; padding: 0.15rem 0.6rem; border-radius: 999px; white-space: nowrap; }
 .status-tag.online { background: var(--tag-bg-ok); color: var(--success); }
 .status-tag.offline { background: var(--bg-accent); color: var(--danger); }
+.save-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: currentColor; }
+.save-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .loading, .empty { color: var(--text-dim); text-align: center; padding: 2rem; }
 .empty.small { padding: 1rem; font-size: 0.85rem; }
 .offline-banner { background: var(--bg-accent); color: var(--on-accent); border: 1px solid #8a2a2a; border-radius: 10px; padding: 0.7rem 1rem; font-size: 0.85rem; margin-bottom: 1rem; }
@@ -412,7 +430,7 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .field-row { display: flex; align-items: center; gap: 0.4rem; }
 .field-unit { color: var(--text-faint); font-size: 0.8rem; }
 .field-row input.half { width: 5rem; }
-.form-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.5rem; }
+.form-actions { display: flex; justify-content: center; gap: 0.6rem; margin-top: 0.5rem; }
 
 /* Телефон: поля в ряд не влезают — переносим. */
 @media (hover: none) {
