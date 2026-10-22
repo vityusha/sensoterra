@@ -83,15 +83,15 @@
       </div>
     </section>
 
-    <!-- Ключ для комплектного листа: его копирует админ и отдаёт покупателю вместе с блоком. -->
-    <section v-if="auth.user?.role === 'ADMIN' && device?.deviceType !== 'INDIVIDUAL_SENSOR'" class="section">
+    <!-- Ключ для комплектного листа: его копирует админ и отдаёт покупателю вместе с устройством. -->
+    <section v-if="auth.user?.role === 'ADMIN'" class="section">
       <div class="section-head">
         <h3>Ключ для комплектного листа</h3>
-        <button class="btn small" @click="loadKey" :disabled="keyBusy">{{ keyBusy ? '...' : 'Показать' }}</button>
+        <button class="btn small" @click="toggleKey" :disabled="keyBusy">{{ keyBusy ? '...' : (deviceKey ? 'Скрыть' : 'Показать') }}</button>
       </div>
       <div v-if="deviceKey" class="invite-box">
         <div class="invite-link">ID {{ device.chipId }} · ключ {{ deviceKey }}</div>
-        <div class="invite-note">Распечатайте на листе, который едет в комплекте с блоком.
+        <div class="invite-note">Распечатайте на листе, который едет в комплекте с {{ device?.deviceType === 'INDIVIDUAL_SENSOR' ? 'датчиком' : 'блоком' }}.
           Покупатель введёт эту пару при регистрации.</div>
         <div class="invite-actions">
           <button class="btn small" @click="copyKey">Скопировать</button>
@@ -140,7 +140,7 @@
       <div class="relay-list">
         <div class="relay-card" v-for="r in relays" :key="r.id" @click="openRelaySettings(r)" title="Открыть настройки канала">
           <div class="relay-top">
-            <span class="dot" :class="!r.activity ? 'inactive' : (r.state ? 'on' : 'off')"></span>
+            <span class="dot" :class="relayDotClass(r)">{{ isRelayQuestion(r) ? '?' : '' }}</span>
             <span class="relay-num">R{{ r.relayNumber }}</span>
             <div class="relay-id">
               <span class="relay-name">{{ r.name || '—' }}</span>
@@ -153,8 +153,8 @@
             <span class="relay-last-time" v-else-if="relayLastText(r)">{{ relayLastText(r) }}</span>
           </div>
           <div class="relay-actions">
-            <button v-if="canControl" @click.stop="toggle(r, 1)" class="btn small" :disabled="busy===r.id || !r.activity">Вкл</button>
-            <button v-if="canControl" @click.stop="toggle(r, 0)" class="btn small danger" :disabled="busy===r.id || !r.activity">Выкл</button>
+            <button v-if="canControl" @click.stop="toggle(r, 1)" class="btn small" :disabled="busy===r.id || !r.activity || !isOnline">Вкл</button>
+            <button v-if="canControl" @click.stop="toggle(r, 0)" class="btn small danger" :disabled="busy===r.id || !r.activity || !isOnline">Выкл</button>
             <button v-if="canControl" @click.stop="openRelaySettings(r)" class="btn small ghost" :disabled="!isOnline">Настройки</button>
           </div>
           <div class="relay-stats" v-if="r.activity">
@@ -261,7 +261,7 @@
 
     <section class="section" v-if="device?.deviceType === 'BLOCK' && !blockClosed">
       <h3>
-        <span class="editable" @click="showStats = !showStats">Статистика {{ showStats ? '▾' : '▸' }}</span>
+        <span class="editable" @click="toggleStats">Статистика {{ showStats ? '▾' : '▸' }}</span>
       </h3>
       <template v-if="showStats">
         <div class="range-select">
@@ -284,12 +284,12 @@
           <LineChart :labels="timeLabels" :datasets="[{ label: 'RSSI_R', data: blockStatsData.map(d => d.rssiR), color: '#3498db' }]" unit="dBm" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :x-min="statsXMin" :x-max="statsXMax" />
         </div>
         <div class="chart-section" v-if="blockStatsData.length">
-          <h4>Vbat</h4>
-          <LineChart :labels="vbatStatsData.map(d => d.time)" :datasets="[{ label: 'Vbat', data: vbatStatsData.map(d => d.vbat), color: '#2ecc71' }]" unit="V" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="3.5" :y-step="0.5" :x-min="statsXMin" :x-max="statsXMax" />
+          <h4>Батарея, В</h4>
+          <LineChart :labels="vbatStatsData.map(d => d.time)" :datasets="[{ label: 'Батарея', data: vbatStatsData.map(d => d.vbat), color: '#2ecc71' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="3.5" :y-step="0.5" :x-min="statsXMin" :x-max="statsXMax" />
         </div>
         <div class="chart-section" v-if="showVacc && blockStatsData.length">
-          <h4>Vacc</h4>
-          <LineChart :labels="timeLabels" :datasets="[{ label: 'Vacc', data: blockStatsData.map(d => d.vacc), color: '#f39c12' }]" unit="V" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="25" :y-step="5" :x-min="statsXMin" :x-max="statsXMax" />
+          <h4>Аккумулятор, В</h4>
+          <LineChart :labels="timeLabels" :datasets="[{ label: 'Аккумулятор', data: blockStatsData.map(d => d.vacc), color: '#f39c12' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="25" :y-step="5" :x-min="statsXMin" :x-max="statsXMax" />
         </div>
         <div class="chart-section" v-if="statusStatsData.length">
           <h4>Статус</h4>
@@ -329,6 +329,7 @@ const moistureScales = ref({})
 const fieldScales = ref({})
 const registeredSensors = ref([])
 const busy = ref(null)
+const pendingRelays = ref({})
 const editingName = ref(false)
 const editNameVal = ref('')
 const showStats = ref(false)
@@ -405,6 +406,22 @@ function lastEvent(r) {
 
 function relayLastState(r) {
   return lastEvent(r)?.state != null ? (lastEvent(r).state ? 'Вкл' : 'Выкл') : (r.state ? 'Вкл' : 'Выкл')
+}
+
+function isRelayPending(r) {
+  return pendingRelays.value[String(r.relayNumber)] != null
+}
+
+function isRelayQuestion(r) {
+  return r.activity && (isRelayPending(r) || !isOnline.value)
+}
+
+function relayDotClass(r) {
+  if (!r.activity) return 'inactive'
+  const pending = pendingRelays.value[String(r.relayNumber)]
+  if (pending) return pending.state ? 'pending pending-on' : 'pending pending-off'
+  if (!isOnline.value) return r.state ? 'pending pending-on' : 'pending pending-off'
+  return r.state ? 'on' : 'off'
 }
 
 function relayLastText(r) {
@@ -633,6 +650,14 @@ async function loadAccess() {
   }
 }
 
+async function toggleKey() {
+  if (deviceKey.value) {
+    deviceKey.value = null
+    return
+  }
+  await loadKey()
+}
+
 async function loadKey() {
   keyBusy.value = true
   try {
@@ -806,7 +831,7 @@ async function dropInvite(invite) {
 const displayName = computed(() => {
   if (device.value?.deviceType === 'BLOCK') {
     const base = getBlockName(chipId) || device.value?.name
-    return base ? `${base} (${chipId})` : chipId
+    return base ? `${base} (${chipId})` : `Блок (${chipId})`
   }
   return device.value?.name || chipId
 })
@@ -894,6 +919,7 @@ onMounted(() => {
     if (msg.type === 'relayEvent' && typeof msg.relay !== 'undefined' && typeof msg.state !== 'undefined') {
       const relay = relays.value.find(r => Number(r.relayNumber) === Number(msg.relay))
       if (relay) relay.state = msg.state
+      delete pendingRelays.value[String(msg.relay)]
     }
     const liveTypes = ['status', 'sensor', 'sensors', 'relayState']
     if (!liveTypes.includes(msg.type)) return
@@ -1003,11 +1029,14 @@ function openIndividualSensorSettings(s) {
 }
 
 async function toggle(r, state) {
-  if (!canControl.value) return
+  if (!canControl.value || !isOnline.value) return
+  pendingRelays.value[String(r.relayNumber)] = { state: r.state ? 1 : 0 }
   busy.value = r.id
   try {
     await api.post(`/relays/${r.id}/command`, { state })
-    await load()
+  } catch (e) {
+    delete pendingRelays.value[String(r.relayNumber)]
+    pushNotification(e?.response?.data?.message || 'Не удалось переключить канал', 'error')
   } finally {
     busy.value = null
   }
@@ -1180,6 +1209,11 @@ async function loadStats() {
   statusIntervals.value = classifyIntervals(rows)
 }
 
+async function toggleStats() {
+  showStats.value = !showStats.value
+  if (showStats.value) await loadStats()
+}
+
 async function setRange(r) {
   range.value = r
   showStats.value = true
@@ -1266,6 +1300,9 @@ function applyCustom() {
 .dot.on { background: var(--success); box-shadow: 0 0 6px rgba(46,204,113,0.5); }
   .dot.off { background: var(--danger); box-shadow: 0 0 6px rgba(231,76,60,0.5); }
   .dot.inactive { background: var(--text-muted); box-shadow: none; }
+  .dot.pending { background: none; box-shadow: none; border-radius: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700; line-height: 1; }
+  .dot.pending-on { color: var(--success); }
+  .dot.pending-off { color: var(--danger); }
 .relay-type { font-size: 0.72rem; color: var(--banner-text); background: var(--banner-bg); border: 1px solid var(--banner-border); padding: 0.15rem 0.45rem; border-radius: 999px; align-self: flex-start; white-space: nowrap; }
 .relay-type-comment { display: block; font-weight: 400; color: var(--banner-text); margin-top: 0.15rem; white-space: normal; }
 .relay-type.unk { background: var(--banner-bg); border-color: var(--banner-border); color: var(--warn); }

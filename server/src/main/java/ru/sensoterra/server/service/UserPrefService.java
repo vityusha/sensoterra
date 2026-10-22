@@ -319,7 +319,15 @@ public class UserPrefService {
             pref.setHiddenFields(joinHidden(patch.hiddenFields()));
         }
         if (patch.yRange() != null) {
-            pref.setYRange(writeYRange(patch.yRange()));
+            Map<String, YRange> yRange = parseYRange(pref.getYRange());
+            patch.yRange().forEach((field, range) -> {
+                if (range == null || (range.min() == null && range.max() == null)) {
+                    yRange.remove(field);
+                } else {
+                    yRange.put(field, range);
+                }
+            });
+            pref.setYRange(writeYRange(yRange));
         }
         sensorPrefs.save(pref);
     }
@@ -454,15 +462,17 @@ public class UserPrefService {
             first = false;
             sb.append('"').append(e.getKey()).append("\":");
             YRange r = e.getValue();
-            sb.append('{');
+            sb.append('{').append("\"min\":");
             if (r != null && r.min() != null) {
-                sb.append("\"min\":").append(r.min());
+                sb.append(r.min());
+            } else {
+                sb.append("null");
             }
+            sb.append(",\"max\":");
             if (r != null && r.max() != null) {
-                if (r.min() != null) {
-                    sb.append(',');
-                }
-                sb.append("\"max\":").append(r.max());
+                sb.append(r.max());
+            } else {
+                sb.append("null");
             }
             sb.append('}');
         }
@@ -475,7 +485,7 @@ public class UserPrefService {
             return out;
         }
         java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"(v\\d+)\"\\s*:\\s*\\{\\s*\"?min\"?\\s*:\\s*(-?[\\d.]+)?\\s*,?\\s*\"?max\"?\\s*:\\s*(-?[\\d.]+)?")
+                .compile("\"(v\\d+)\"\\s*:\\s*\\{\\s*(?:\"min\"\\s*:\\s*(null|-?[\\d.]+)?)?\\s*,?\\s*(?:\"max\"\\s*:\\s*(null|-?[\\d.]+)?)?\\s*\\}")
                 .matcher(raw);
         while (m.find()) {
             out.put(m.group(1), new YRange(num(m.group(2)), num(m.group(3))));

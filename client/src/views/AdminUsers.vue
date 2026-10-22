@@ -248,7 +248,6 @@ h2 { color: var(--text-strong); margin-bottom: 1rem; }
 .defaults-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 .defaults-row label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.8rem; }
 .defaults-row input[type='number'] { width: 5rem; padding: 0.3rem 0.4rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.8rem; }
-.defaults-row input[type='checkbox'] { accent-color: var(--accent); }
 .note { color: var(--text-dim); font-size: 0.75rem; line-height: 1.45; margin: 0.7rem 0 0; }
 .user-list { display: flex; flex-direction: column; gap: 0.75rem; }
 .user-card { background: var(--bg-card); border-radius: 12px; padding: 1rem; }

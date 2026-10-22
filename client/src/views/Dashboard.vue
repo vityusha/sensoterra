@@ -8,11 +8,29 @@
         </span>
         <span class="user-info" v-if="auth.user">{{ auth.user.username }} ({{ auth.user.role }})</span>
         <button v-if="showClaimButton" @click="claimOpen = !claimOpen" class="btn small">+ Устройство</button>
-        <button @click="$router.push('/settings')" class="btn small">Настройки</button>
-        <button @click="$router.push('/profile')" class="btn small">Профиль</button>
-        <button @click="apDialog = true" class="btn small">Настройка в AP режиме</button>
-        <button v-if="auth.user?.role === 'ADMIN'" @click="$router.push('/admin/users')" class="btn small">Пользователи</button>
-        <button @click="handleLogout" class="btn small secondary">Выйти</button>
+        <div class="menu-wrap" ref="menuRef">
+          <button
+            class="menu-toggle"
+            :aria-expanded="menuOpen"
+            aria-haspopup="menu"
+            aria-label="Меню"
+            @click="menuOpen = !menuOpen"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
+          <div v-if="menuOpen" class="menu-dropdown" role="menu">
+            <button role="menuitem" @click="go('/settings')">Настройки</button>
+            <button role="menuitem" @click="go('/profile')">Профиль</button>
+            <button role="menuitem" @click="openApDialog">Настройка в AP режиме</button>
+            <button v-if="auth.user?.role === 'ADMIN'" role="menuitem" @click="go('/admin/users')">Пользователи</button>
+            <div class="menu-sep"></div>
+            <button role="menuitem" class="menu-danger" @click="handleLogout">Выйти</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -57,7 +75,7 @@
                   <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveBlockName(d.chipId)" @keyup.esc="editing=null" />
                 </template>
                 <template v-else>
-                  <span @click.stop="startEdit(d.chipId, 'block')">{{ getBlockName(d.chipId) || d.chipId }}</span>
+                  <span @click.stop="startEdit(d.chipId, 'block')">{{ getBlockName(d.chipId) || 'Имя блока' }}</span>
                 </template>
               </div>
               <div class="device-type block"></div>
@@ -253,6 +271,26 @@ const conflictDialog = ref(null)
 const keepBlockId = ref(null)
 const resolving = ref(false)
 const apDialog = ref(false)
+const menuOpen = ref(false)
+const menuRef = ref(null)
+
+function go(path) {
+  menuOpen.value = false
+  router.push(path)
+}
+
+function openApDialog() {
+  menuOpen.value = false
+  apDialog.value = true
+}
+
+function closeMenuOnOutsideClick(e) {
+  if (menuOpen.value && !menuRef.value?.contains(e.target)) menuOpen.value = false
+}
+
+function closeMenuOnEscape(e) {
+  if (e.key === 'Escape') menuOpen.value = false
+}
 
 function openApPage() {
   window.open('http://192.168.4.1', '_blank')
@@ -321,6 +359,8 @@ onMounted(async () => {
   })
   liveTimer = setInterval(refreshLive, 10000)
   document.addEventListener('visibilitychange', onVisibilityChange)
+  document.addEventListener('click', closeMenuOnOutsideClick)
+  document.addEventListener('keydown', closeMenuOnEscape)
   window.addEventListener('online', onOnline)
 })
 
@@ -329,6 +369,8 @@ onBeforeUnmount(() => {
   if (liveTimer) clearInterval(liveTimer)
   if (catalogRefreshTimer) clearTimeout(catalogRefreshTimer)
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  document.removeEventListener('click', closeMenuOnOutsideClick)
+  document.removeEventListener('keydown', closeMenuOnEscape)
   window.removeEventListener('online', onOnline)
 })
 
@@ -376,8 +418,8 @@ function blockSensorName(s) {
 function individualSensorName(s) {
   const custom = getIndividualName(s.chipId)
   if (custom) return custom
-  if (s.name && !/moisture sensor/i.test(s.name)) return s.name
-  return s.chipId ? 'Датчик' : s.chipId
+  if (s.name && !/^Sens\d*$/i.test(s.name) && !/moisture sensor/i.test(s.name)) return s.name
+  return 'Имя датчика'
 }
 
 function roundHalf(v) {
@@ -421,6 +463,7 @@ function saveIndividualName(chipId) {
 }
 
 function handleLogout() {
+  menuOpen.value = false
   logout()
   router.push('/login')
 }
@@ -534,6 +577,14 @@ h2 { color: var(--text-strong); }
 .connection-status.online { background: var(--tag-bg-ok); color: var(--success); }
 .connection-status.offline { background: var(--bg-accent); color: var(--danger); }
 .user-info { color: var(--text-dim); font-size: 0.8rem; }
+.menu-wrap { position: relative; margin-left: auto; }
+.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-muted); cursor: pointer; }
+.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text); }
+.menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 220px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
+.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
+.menu-dropdown button:hover { background: var(--bg-primary); }
+.menu-dropdown .menu-danger { color: var(--danger); }
+.menu-sep { height: 1px; margin: 0.3rem 0; background: var(--border-soft); }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.secondary { background: var(--bg-accent); }
 .btn.danger { background: var(--bg-accent); color: var(--on-accent); flex-shrink: 0; }
