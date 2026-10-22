@@ -1,6 +1,7 @@
 import { reactive } from 'vue'
 import { me, getToken } from '../api/auth'
 import { loadPrefs, settings } from './settings'
+import { disconnectWs } from './notifications'
 
 export const auth = reactive({
   user: null,
@@ -99,6 +100,7 @@ export function canControlDevice(chipId) {
 export function logout() {
   auth.user = null
   localStorage.removeItem('token')
+  disconnectWs()
   settings.devices = {}
   settings.sensors = {}
   settings.loaded = false

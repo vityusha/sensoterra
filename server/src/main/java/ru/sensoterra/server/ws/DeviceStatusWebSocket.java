@@ -66,7 +66,9 @@ public class DeviceStatusWebSocket {
     public void onOpen(HttpRequest<?> request, WebSocketSession session) {
         String token = extractToken(request, session);
         if (token == null) {
-            log.warn("WebSocket rejected (no token): {}", session.getId());
+            // Routine (an old client build or a stray reconnect without a login), not worth a WARN;
+            // a bad token below still is.
+            log.debug("WebSocket rejected (no token): {}", session.getId());
             session.close(CloseReason.POLICY_VIOLATION);
             return;
         }
