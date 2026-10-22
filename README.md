@@ -128,7 +128,7 @@ Retention drops whole 7-day chunks, so the oldest raw data is up to a week older
 
 ## Configuration
 
-Database settings use `DB_URL`, `DB_USER`, and `DB_PASSWORD`. MQTT settings can be overridden with `SENSOTERRA_MQTT_BROKER`, `SENSOTERRA_MQTT_CLIENT_ID`, `SENSOTERRA_MQTT_STATUS_TOPIC`, `SENSOTERRA_MQTT_USERNAME`, and `SENSOTERRA_MQTT_PASSWORD`. The server publishes a retained `online` to its status topic (default `sensoterra/server/status`) and registers `offline` there as its MQTT Last Will. Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with the same ID keep disconnecting each other on the broker.
+Database settings use `DB_URL`, `DB_USER`, and `DB_PASSWORD`. MQTT settings can be overridden with `SENSOTERRA_MQTT_BROKER`, `SENSOTERRA_MQTT_CLIENT_ID`, `SENSOTERRA_MQTT_USERNAME`, and `SENSOTERRA_MQTT_PASSWORD`. Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with the same ID keep disconnecting each other on the broker.
 
 Google sign-in is disabled by default. Enable it with `GOOGLE_OAUTH_ENABLED=true` and set `GOOGLE_CLIENT_ID`.
 
