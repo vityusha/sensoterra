@@ -298,6 +298,45 @@ class UserPrefTest {
     }
 
     @Test
+    @DisplayName("Границы оси по каналам обновляются независимо")
+    @SuppressWarnings("unchecked")
+    void yRangePatchesMergePerField() {
+        String sensor = String.valueOf(sensorChipId);
+        patch(ownerToken, Map.of("sensors", Map.of(sensor,
+                Map.of("yRange", Map.of("v0", Map.of("min", 10, "max", 90))))));
+        Map after = patch(ownerToken, Map.of("sensors", Map.of(sensor,
+                Map.of("yRange", Map.of("v1", Map.of("min", -5, "max", 5))))));
+        Map<String, Map> y = (Map<String, Map>) sensorPref(after, sensorChipId).get("yRange");
+        assertEquals(10, ((Number) y.get("v0").get("min")).intValue());
+        assertEquals(90, ((Number) y.get("v0").get("max")).intValue());
+        assertEquals(-5, ((Number) y.get("v1").get("min")).intValue());
+        assertEquals(5, ((Number) y.get("v1").get("max")).intValue());
+
+        // «Авто» для одного канала не должно стирать границы остальных.
+        Map cleared = patch(ownerToken, Map.of("sensors", Map.of(sensor,
+                Map.of("yRange", Map.of("v1", Map.of())))));
+        y = (Map<String, Map>) sensorPref(cleared, sensorChipId).get("yRange");
+        assertFalse(y.containsKey("v1"));
+        assertEquals(10, ((Number) y.get("v0").get("min")).intValue());
+        assertEquals(90, ((Number) y.get("v0").get("max")).intValue());
+
+        // Односторонняя граница должна переживать сохранение и повторное чтение.
+        patch(ownerToken, Map.of("sensors", Map.of(sensor,
+                Map.of("yRange", Map.of("v2", Map.of("min", 3))))));
+        y = (Map<String, Map>) sensorPref(prefs(ownerToken), sensorChipId).get("yRange");
+        assertEquals(3, ((Number) y.get("v2").get("min")).intValue());
+        assertNull(y.get("v2").get("max"));
+        assertEquals(10, ((Number) y.get("v0").get("min")).intValue());
+
+        patch(ownerToken, Map.of("sensors", Map.of(sensor,
+                Map.of("yRange", Map.of("v3", Map.of("max", 42))))));
+        y = (Map<String, Map>) sensorPref(prefs(ownerToken), sensorChipId).get("yRange");
+        assertNull(y.get("v3").get("min"));
+        assertEquals(42, ((Number) y.get("v3").get("max")).intValue());
+        assertEquals(10, ((Number) y.get("v0").get("min")).intValue());
+    }
+
+    @Test
     @DisplayName("Настройки чужого устройства недоступны")
     void cannotTouchForeignDevice() {
         long foreign = blockId + 7;

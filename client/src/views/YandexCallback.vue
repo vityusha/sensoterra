@@ -17,7 +17,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { acceptInvite, loginWithYandex, setToken } from '../api/auth'
-import { enterSession } from '../store/auth'
+import { enterSession, userFromAuthResponse } from '../store/auth'
 import { pushNotification } from '../store/notifications'
 import { takeYandexContext } from '../utils/yandexOAuth'
 
@@ -65,8 +65,7 @@ onMounted(async () => {
     return
   }
   setToken(data.token)
-  await enterSession({ id: data.id, username: data.username, email: data.email, role: data.role,
-    authProvider: 'yandex' })
+  await enterSession(userFromAuthResponse(data))
 
   if (context.inviteToken) {
     try {

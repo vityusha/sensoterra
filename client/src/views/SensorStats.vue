@@ -2,10 +2,29 @@
   <div class="sensor">
     <div class="header-row">
       <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-      <h2>{{ displayName }} <span class="chip-id">({{ chipId }})</span></h2>
+      <h2>{{ displayName }} ({{ chipId }})</h2>
       <span class="type-tag">{{ isIndividual ? 'автономный' : `${blockLabel} &nbsp;S${blockRole?.slot ?? ''}` }}</span>
-      <button class="btn small calibrate-btn" v-if="canEditPrefs && isIndividual" @click="openSettings">Настройка</button>
-      <button class="btn small calibrate-btn" v-if="canEditPrefs" @click="openCalibrate">Калибровка</button>
+      <div v-if="catalogEntry && canEditPrefs" class="menu-wrap" ref="menuRef">
+        <button
+          class="menu-toggle"
+          :aria-expanded="menuOpen"
+          aria-haspopup="menu"
+          aria-label="Меню"
+          @click="menuOpen = !menuOpen"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+            <circle cx="12" cy="5" r="2" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="12" cy="19" r="2" />
+          </svg>
+        </button>
+        <div v-if="menuOpen" class="menu-dropdown" role="menu">
+          <button v-if="isIndividual" role="menuitem" @click="openSettingsFromMenu">Настройка</button>
+          <button role="menuitem" @click="openCalibrateFromMenu">Калибровка</button>
+          <button v-if="calibSectionVisible" role="menuitem" @click="openCalibSettings">Калибровка влажности</button>
+          <button role="menuitem" @click="openDisplaySettings">Показ измерений</button>
+        </div>
+      </div>
     </div>
 
     <section class="section" v-if="latest">
@@ -33,34 +52,21 @@
       <span v-else class="muted">информация недоступна</span>
     </div>
 
-    <section class="section" v-if="canEditPrefs">
-      <h3>Показ измерений</h3>
-      <div class="field-toggles">
-        <label class="field-check" v-for="key in fieldKeys" :key="'tg' + key">
-          <input type="checkbox" :checked="!isFieldHidden(chipId, key)" @change="toggleField(chipId, key)" />
-          {{ key.toUpperCase() }} — {{ label(key) }}
-        </label>
+    <!-- Ключ для комплектного листа: его копирует админ и отдаёт покупателю вместе с датчиком. -->
+    <section v-if="isAdmin && isIndividual" class="section">
+      <div class="section-head">
+        <h3>Ключ для комплектного листа</h3>
+        <button class="btn small" @click="toggleKey" :disabled="keyBusy">{{ keyBusy ? '...' : (deviceKey ? 'Скрыть' : 'Показать') }}</button>
       </div>
-      <p class="hint">
-        Каналы этого датчика: скрытые не показываются ни в последних данных, ни на графиках.
-        Выбор хранится в вашем аккаунте и переносится на другие устройства.
-      </p>
-    </section>
-
-    <section class="section" v-if="calibSectionVisible">
-      <h3>Калибровка влажности (АЦП v0 → %)</h3>
-      <div class="calib-row">
-        <label>Воздух <input type="number" v-model.number="calibForm.value1" /></label>
-        <label>Сухая почва (0%) <input type="number" v-model.number="calibForm.value2" /></label>
-        <label>Вода (100%) <input type="number" v-model.number="calibForm.value3" /></label>
-        <button class="btn small save" :disabled="calibForm.busy" @click="saveCalib">
-          {{ calibForm.busy ? '...' : 'Сохранить' }}
-        </button>
+      <div v-if="deviceKey" class="invite-box">
+        <div class="invite-link">ID {{ chipId }} · ключ {{ deviceKey }}</div>
+        <div class="invite-note">Распечатайте на листе, который едет в комплекте с датчиком.
+          Покупатель введёт эту пару при регистрации.</div>
+        <div class="invite-actions">
+          <button class="btn small" @click="copyKey">Скопировать</button>
+          <button class="btn small danger" @click="regenKey">Перевыпустить</button>
+        </div>
       </div>
-      <p class="hint">
-        Опорные точки для этого датчика: текущие значения из БД, при их отсутствии —
-        дефолтные. Правка калибровки — только админом.
-      </p>
     </section>
 
     <section class="section">
@@ -92,13 +98,59 @@
       </template>
       <div v-else class="empty small">Нет данных за выбранный период</div>
     </section>
+
+    <div v-if="displaySettingsOpen" class="modal-overlay" @click.self="displaySettingsOpen = false">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="display-settings-title">
+        <div class="modal-head">
+          <h3 id="display-settings-title">Показ измерений</h3>
+          <button class="modal-close" aria-label="Закрыть" @click="displaySettingsOpen = false">✕</button>
+        </div>
+        <div class="field-toggles">
+          <label class="field-check" v-for="key in fieldKeys" :key="'modal-tg-' + key">
+            <input type="checkbox" :checked="!isFieldHidden(chipId, key)" @change="toggleField(chipId, key)" />
+            {{ key.toUpperCase() }} — {{ label(key) }}
+          </label>
+        </div>
+        <p class="hint">
+          Каналы этого датчика: скрытые не показываются ни в последних данных, ни на графиках.
+          Выбор хранится в вашем аккаунте и переносится на другие устройства.
+        </p>
+        <div class="modal-actions">
+          <button class="btn small save" @click="displaySettingsOpen = false">Готово</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="calibDialogOpen" class="modal-overlay" @click.self="calibDialogOpen = false">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="calib-dialog-title">
+        <div class="modal-head">
+          <h3 id="calib-dialog-title">Калибровка влажности</h3>
+          <button class="modal-close" aria-label="Закрыть" @click="calibDialogOpen = false">✕</button>
+        </div>
+        <div class="calib-row">
+          <label>Воздух <input type="number" v-model.number="calibForm.value1" /></label>
+          <label>Сухая почва (0%) <input type="number" v-model.number="calibForm.value2" /></label>
+          <label>Вода (100%) <input type="number" v-model.number="calibForm.value3" /></label>
+        </div>
+        <p class="hint">
+          Опорные точки для этого датчика: текущие значения из БД, при их отсутствии —
+          дефолтные. Правка калибровки — только админом.
+        </p>
+        <div class="modal-actions">
+          <button class="btn small" @click="calibDialogOpen = false">Закрыть</button>
+          <button class="btn small save" :disabled="calibForm.busy" @click="saveCalib">
+            {{ calibForm.busy ? '...' : 'Сохранить' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales } from '../api/auth'
+import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getDeviceKey, regenerateDeviceKey } from '../api/auth'
 import { auth, deviceAccess, rememberDeviceAccess } from '../store/auth'
 import { getIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
 import { pushNotification } from '../store/notifications'
@@ -196,6 +248,83 @@ async function loadAccess(deviceId) {
 // --- Калибровка влажности этого датчика (только админ; PUT /api/sensors/{id}/calibration) ---
 
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
+const menuOpen = ref(false)
+const menuRef = ref(null)
+const displaySettingsOpen = ref(false)
+const calibDialogOpen = ref(false)
+
+function closeMenuOnOutsideClick(e) {
+  if (menuOpen.value && !menuRef.value?.contains(e.target)) menuOpen.value = false
+}
+
+function closeMenuOnEscape(e) {
+  if (e.key === 'Escape') {
+    menuOpen.value = false
+    displaySettingsOpen.value = false
+    calibDialogOpen.value = false
+  }
+}
+
+function openSettingsFromMenu() {
+  menuOpen.value = false
+  openSettings()
+}
+
+function openCalibrateFromMenu() {
+  menuOpen.value = false
+  openCalibrate()
+}
+
+function openDisplaySettings() {
+  menuOpen.value = false
+  displaySettingsOpen.value = true
+}
+
+function openCalibSettings() {
+  menuOpen.value = false
+  initCalibForm()
+  calibDialogOpen.value = true
+}
+
+const deviceKey = ref(null)
+const keyBusy = ref(false)
+
+async function toggleKey() {
+  if (deviceKey.value) {
+    deviceKey.value = null
+    return
+  }
+  keyBusy.value = true
+  try {
+    deviceKey.value = (await getDeviceKey(chipId)).key
+  } catch (e) {
+    pushNotification(e?.response?.data?.message || 'Не удалось получить ключ', 'error')
+  } finally {
+    keyBusy.value = false
+  }
+}
+
+async function copyKey() {
+  try {
+    await navigator.clipboard.writeText(`ID ${chipId} · ключ ${deviceKey.value}`)
+    pushNotification('Ключ скопирован')
+  } catch {
+    pushNotification('Скопируйте вручную', 'error')
+  }
+}
+
+async function regenKey() {
+  if (!confirm('Перевыпустить ключ? Прежний комплектный лист перестанет подходить.')) return
+  keyBusy.value = true
+  try {
+    deviceKey.value = (await regenerateDeviceKey(chipId)).key
+    pushNotification('Ключ перевыпущен')
+  } catch (e) {
+    pushNotification(e?.response?.data?.message || 'Не удалось перевыпустить ключ', 'error')
+  } finally {
+    keyBusy.value = false
+  }
+}
 
 /** Секция только для админов и датчиков типа 0 (влажность). */
 const calibSectionVisible = computed(() =>
@@ -595,22 +724,41 @@ onMounted(() => {
     fieldScales.value = map
   }).catch(() => { fieldScales.value = {} })
   refreshTimer = setInterval(() => { nowTick.value = Date.now(); loadData(true) }, 30000)
+  document.addEventListener('click', closeMenuOnOutsideClick)
+  document.addEventListener('keydown', closeMenuOnEscape)
 })
-onUnmounted(() => clearInterval(refreshTimer))
+onUnmounted(() => {
+  clearInterval(refreshTimer)
+  document.removeEventListener('click', closeMenuOnOutsideClick)
+  document.removeEventListener('keydown', closeMenuOnEscape)
+})
 </script>
 
 <style scoped>
 .sensor { max-width: 600px; margin: 0 auto; padding: 1rem; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; }
-.header-row h2 .chip-id { color: var(--text-dim); font-weight: 400; font-size: 0.85em; }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg); color: var(--tag-text); }
+.menu-wrap { position: relative; flex: none; }
+.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-muted); cursor: pointer; }
+.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text); }
+.menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 200px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
+.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
+.menu-dropdown button:hover { background: var(--bg-primary); }
 .ago { color: var(--text-dim); font-size: 0.85em; margin-left: 0.35rem; }
 .msg-num { color: var(--text-dim); font-size: 0.85em; margin-left: 0.25rem; }
 .battery-runtime { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.4rem; background: var(--bg); border-left: 3px solid var(--accent); border-radius: 10px; padding: 0.7rem 1rem; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
 .battery-runtime b { color: var(--text-strong); }
 .battery-label { color: var(--text-dim); }
 .battery-runtime .muted { color: var(--text-dim); }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.section-head h3 { margin: 0; }
+.invite-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; margin-top: 0.6rem; }
+.invite-link { color: var(--accent); font-family: monospace; font-size: 0.75rem; word-break: break-all; margin-bottom: 0.4rem; }
+.invite-note { color: var(--text-dim); font-size: 0.75rem; line-height: 1.4; margin-bottom: 0.5rem; }
+.invite-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.2rem; }
+.btn.danger { background: #7a2626; border-color: #a84040; color: var(--on-accent); }
+.btn.danger:hover:not(:disabled) { background: #933030; border-color: #cb5654; }
 .gradient-btn {
   width: 16px; height: 16px; flex: none; padding: 0; cursor: pointer;
   border: 2px solid #fff; border-radius: 50%;
@@ -642,12 +790,19 @@ onUnmounted(() => clearInterval(refreshTimer))
 .y-edit label { display: flex; align-items: center; gap: 0.3rem; color: var(--text-dim); font-size: 0.7rem; }
 .y-edit input { width: 5.5rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.75rem; padding: 0.2rem 0.4rem; }
 .btn.ghost { background: transparent; border: 1px solid var(--border-soft); color: var(--text-muted); }
-.field-toggles { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; }
+.field-toggles { display: flex; flex-direction: column; gap: 0.5rem; }
 .field-check { display: flex; align-items: center; gap: 0.35rem; color: var(--text-sub); font-size: 0.8rem; cursor: pointer; }
 .hint { color: var(--text-dim); font-size: 0.75rem; margin-top: 0.5rem; }
 .calib-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
 .calib-row label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.78rem; background: var(--bg-card); border-radius: 8px; padding: 0.4rem 0.6rem; }
 .calib-row input { width: 4.5rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.85rem; padding: 0.3rem 0.5rem; }
 .unit { color: var(--text-faint); font-weight: 400; }
+.modal-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(0, 0, 0, 0.6); }
+.modal { width: 100%; max-width: 420px; max-height: 85vh; overflow-y: auto; padding: 1.25rem; background: var(--bg-card); border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.9rem; }
+.modal h3 { color: var(--text-strong); font-size: 1rem; text-transform: none; letter-spacing: 0; margin: 0; }
+.modal-close { width: 2rem; height: 2rem; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--text-dim); font-size: 1rem; cursor: pointer; }
+.modal-close:hover { background: var(--bg-primary); color: var(--text); }
+.modal-actions { display: flex; justify-content: flex-end; margin-top: 1rem; }
 .empty.small { color: var(--text-faint); text-align: center; padding: 1rem; font-size: 0.85rem; }
 </style>

@@ -124,6 +124,56 @@ body {
 }
 
 canvas, img, svg { max-width: 100%; }
+
+/* Все чекбоксы — переключатели того же вида, что «Активация» в настройках канала. */
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 3rem;
+  height: 1.5rem;
+  flex: none;
+  position: relative;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background 0.2s, border-color 0.2s;
+}
+input[type='checkbox']::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.5rem - 6px);
+  height: calc(1.5rem - 6px);
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: left 0.2s, background 0.2s;
+}
+input[type='checkbox']:checked {
+  background: var(--tag-bg-ok);
+  border-color: var(--success);
+}
+input[type='checkbox']:checked::before {
+  left: calc(3rem - 1.5rem + 2px);
+  background: var(--success);
+}
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+label:has(> input[type='checkbox']) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
 .app-loading { color: var(--text-sub); text-align: center; padding: 3rem; }
 .btn.btn.save { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); }
 .btn.btn.save:hover:not(:disabled) { background: var(--save-bg-hover); border-color: var(--save-border); }
@@ -135,7 +185,7 @@ canvas, img, svg { max-width: 100%; }
 /* Телефон: кнопки и поля крупнее, шрифт в полях 1rem — иначе iOS зумит при фокусе. */
 @media (hover: none) {
   button { min-height: 2.4rem; min-width: 2.4rem; }
-  input:not([type='checkbox']):not([type='radio']), select, textarea {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea {
     min-height: 2.4rem;
     font-size: 1rem;
   }

@@ -68,7 +68,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authStatus, loginWithGoogle, register, setToken } from '../api/auth'
-import { enterSession } from '../store/auth'
+import { enterSession, userFromAuthResponse } from '../store/auth'
 import { pushNotification } from '../store/notifications'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
 import YandexAuthButton from '../components/YandexAuthButton.vue'
@@ -123,8 +123,7 @@ async function onGoogle(idToken) {
   try {
     const data = await loginWithGoogle(idToken, pair.chipId, pair.key)
     setToken(data.token)
-    await enterSession({ id: data.id, username: data.username, role: data.role,
-      })
+    await enterSession(userFromAuthResponse(data))
     pushNotification(data.deviceBound ? 'Аккаунт создан, блок привязан' : 'Аккаунт создан')
     router.push('/')
   } catch (e) {
@@ -159,8 +158,7 @@ async function submit() {
     const data = await register(form.username.trim(), form.password, chipId ? Number(chipId) : null,
       key || null)
     setToken(data.token)
-    await enterSession({ id: data.id, username: data.username, role: data.role,
-      })
+    await enterSession(userFromAuthResponse(data))
     pushNotification(data.deviceBound ? 'Аккаунт создан, блок привязан' : 'Аккаунт создан')
     router.push('/')
   } catch (e) {

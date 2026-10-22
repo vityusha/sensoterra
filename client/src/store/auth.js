@@ -39,6 +39,15 @@ export async function enterSession(user) {
   await loadPrefs()
 }
 
+/**
+ * Session user from a sign-in/sign-up response (/register, /oauth/*): same fields as /me,
+ * so Profile knows about an external account without a reload.
+ */
+export function userFromAuthResponse(data) {
+  return { id: data.id, username: data.username, email: data.email, role: data.role,
+    authProvider: data.authProvider ?? null }
+}
+
 export function isAdmin() {
   return auth.user?.role === 'ADMIN'
 }

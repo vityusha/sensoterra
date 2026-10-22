@@ -55,7 +55,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { login, bootstrap, authStatus, loginWithGoogle, setToken } from '../api/auth'
-import { enterSession } from '../store/auth'
+import { enterSession, userFromAuthResponse } from '../store/auth'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
 import YandexAuthButton from '../components/YandexAuthButton.vue'
 
@@ -88,8 +88,7 @@ async function onGoogle(idToken) {
   try {
     const data = await loginWithGoogle(idToken)
     setToken(data.token)
-    await enterSession({ id: data.id, username: data.username, role: data.role,
-      })
+    await enterSession(userFromAuthResponse(data))
     router.push('/')
   } catch (e) {
     error.value = e.response?.data?.message || 'Не удалось войти через Google'
