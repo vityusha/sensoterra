@@ -38,6 +38,14 @@ public class MqttClientService {
      */
     private static final List<String> STANDARD_SUFFIXES = buildStandardSuffixes();
 
+    /**
+     * Presence topic of older server versions (Last Will "offline" + retained "online").
+     * Nothing subscribes to it any more; the leftover retained message is cleared on every
+     * connect and ignored if it still arrives (e.g. a late LWT of an old instance).
+     * Remove once no old server version can run against the broker.
+     */
+    private static final String LEGACY_STATUS_TOPIC = "sensoterra/server/status";
+
     private static final int MAX_TRACKED_DEVICES = 2000;
     private static final int MAX_TOPICS_PER_DEVICE = 128;
 
@@ -177,15 +185,13 @@ public class MqttClientService {
             if (config.getPassword() != null && !config.getPassword().isEmpty()) {
                 options.setPassword(config.getPassword().toCharArray());
             }
-            if (hasStatusTopic()) {
-                options.setWill(config.getStatusTopic(), "offline".getBytes(), 1, true);
-            }
 
             client.setCallback(new MqttCallbackExtended() {
                 @Override
                 public void connectComplete(boolean reconnect, String serverURI) {
                     log.info("MQTT connected to {}", serverURI);
-                    publishServerOnline();
+                    // Before subscribing, so the leftover retained message is not delivered to us.
+                    clearRetained(LEGACY_STATUS_TOPIC);
                     subscribe();
                 }
 
@@ -196,7 +202,7 @@ public class MqttClientService {
 
                 @Override
                 public void messageArrived(String topic, MqttMessage message) {
-                    if (hasStatusTopic() && topic.equals(config.getStatusTopic())) {
+                    if (topic.equals(LEGACY_STATUS_TOPIC)) {
                         return;
                     }
                     boolean retained = message.isRetained();
@@ -217,22 +223,6 @@ public class MqttClientService {
             client.connect(options);
         } catch (MqttException e) {
             log.error("Failed to connect to MQTT broker {}", config.getBroker(), e);
-        }
-    }
-
-    private boolean hasStatusTopic() {
-        return config.getStatusTopic() != null && !config.getStatusTopic().isEmpty();
-    }
-
-    /** Retained online поверх LWT offline — по топику видно, жив ли сервер. */
-    private void publishServerOnline() {
-        if (!hasStatusTopic()) {
-            return;
-        }
-        try {
-            client.publish(config.getStatusTopic(), "online".getBytes(), 1, true);
-        } catch (MqttException e) {
-            log.warn("Failed to publish server status to {}: {}", config.getStatusTopic(), e.getMessage());
         }
     }
 

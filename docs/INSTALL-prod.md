@@ -36,7 +36,7 @@ Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with 
    sudo useradd -m -s /bin/bash -G docker deploy
    sudo install -d -o deploy -g deploy /opt/sensoterra
    ```
-3. Put the production `.env` into `/opt/sensoterra/.env` (`chmod 600`). Use a unique `SENSOTERRA_MQTT_CLIENT_ID`, a strong `JWT_SECRET` and `POSTGRES_PASSWORD`.
+3. Put the production `.env` into `/opt/sensoterra/.env` (`chmod 600`). Use a unique `SENSOTERRA_MQTT_CLIENT_ID` (e.g. `sensoterra-prod`), the broker in `SENSOTERRA_MQTT_BROKER` with `SENSOTERRA_MQTT_USERNAME`/`PASSWORD`, a strong `JWT_SECRET` and `POSTGRES_PASSWORD`.
 4. Generate a key pair for GitHub Actions: `ssh-keygen -t ed25519 -f sensoterra-deploy -N ""`. Append `sensoterra-deploy.pub` to `/home/deploy/.ssh/authorized_keys`.
 5. Configure host nginx from the template [`deploy/nginx-host.conf`](../deploy/nginx-host.conf): TLS via certbot, proxy to `http://127.0.0.1:3000`, WebSocket headers for `/ws/`, rate limiting on login, and no access log for `/ws/` (the JWT is in its query string). Installation steps are at the top of the file.
 6. Set up the firewall and fail2ban — see [Firewall and fail2ban](#firewall-and-fail2ban) (after the first deploy, so the scripts are in `/opt/sensoterra/deploy/host/`).

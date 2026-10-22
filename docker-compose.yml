@@ -34,6 +34,8 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       # Client ID должен быть уникален на брокере: два клиента с одним ID выбивают друг друга.
+      # Unset in .env = the same default broker as in application.yml.
+      SENSOTERRA_MQTT_BROKER: ${SENSOTERRA_MQTT_BROKER:-ssl://m6.wqtt.ru:19395}
       SENSOTERRA_MQTT_CLIENT_ID: ${SENSOTERRA_MQTT_CLIENT_ID:-sensoterra-server-1}
       SENSOTERRA_MQTT_USERNAME: ${SENSOTERRA_MQTT_USERNAME:-}
       SENSOTERRA_MQTT_PASSWORD: ${SENSOTERRA_MQTT_PASSWORD:-}

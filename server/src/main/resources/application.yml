@@ -108,9 +108,10 @@ sensoterra:
     # Срок жизни ссылки-приглашения на доступ к устройству, дней.
     ttl-days: 7
   mqtt:
-    broker: "ssl://m6.wqtt.ru:19395"
-    client-id: "sensoterra-server-1"
-    status-topic: "sensoterra/server/status"
+    # Defaults with ':' must stay backtick-quoted, otherwise Micronaut drops the part after it.
+    broker: "${SENSOTERRA_MQTT_BROKER:`ssl://m6.wqtt.ru:19395`}"
+    # Must be unique per running server: two clients with one ID keep kicking each other off.
+    client-id: "${SENSOTERRA_MQTT_CLIENT_ID:sensoterra-server-1}"
     username: "${SENSOTERRA_MQTT_USERNAME}"
     password: "${SENSOTERRA_MQTT_PASSWORD}"
     keep-alive-interval: 60

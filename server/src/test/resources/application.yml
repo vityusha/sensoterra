@@ -65,7 +65,6 @@ sensoterra:
   mqtt:
     broker: "tcp://localhost:1883"
     client-id: "test-client"
-    status-topic: "sensoterra/server/status"
     username: ""
     password: ""
     keep-alive-interval: 60

@@ -34,7 +34,7 @@ cd client && npm run build      # static output in client/dist/
 - Prod profile `application-prod.yml` (`MICRONAUT_ENVIRONMENTS=prod`) disables CORS; dev CORS list stays in `application.yml`.
 - Log levels: set only via `SENSOTERRA_LOG_LEVEL` in `logback.xml` (default DEBUG, `INFO` in `docker-compose.prod.yml`); don't add `logger.levels` to `application*.yml`.
 - Health: `micronaut-management` is on the classpath only for `GET /health` (DB, disk, MQTT via `health/MqttHealthIndicator`); `endpoints.all.enabled: false` keeps every other management endpoint off. MQTT lost = `DEGRADED` with HTTP 200 (must not fail docker healthcheck / deploy). Client nginx proxies `/health`; docker healthcheck and `deploy.sh` use it.
-- MQTT client ID must be unique per running server (`SENSOTERRA_MQTT_CLIENT_ID`), otherwise the broker keeps kicking both. The server's LWT goes to its own `status-topic` (`sensoterra/server/status`), never a device topic.
+- MQTT client ID must be unique per running server (`SENSOTERRA_MQTT_CLIENT_ID`), otherwise the broker keeps kicking both. The server sets no MQTT Last Will and publishes no presence topic (server health is `/health`); never put a Last Will on a device topic — the broker would publish `offline` on behalf of the device. `MqttClientService` still clears the retained leftover of the removed `sensoterra/server/status` topic on connect.
 - Timescale image is pinned (`2.30.2-pg16`); never downgrade it — the extension version in the existing volume must be loadable.
 - In compose, `client/nginx.conf` serves the SPA and proxies `/api` + `/ws` to `server:8080`, forwarding `Host` so Micronaut's CORS check passes.
 
@@ -56,7 +56,7 @@ cd client && npm run build      # static output in client/dist/
 - Google OAuth is off by default: requires `GOOGLE_OAUTH_ENABLED=true` + `GOOGLE_CLIENT_ID` (button hidden otherwise, exposed through `/api/auth/status`).
 - Yandex ID is off by default: `YANDEX_OAUTH_ENABLED=true` + `YANDEX_CLIENT_ID` + `YANDEX_CLIENT_SECRET`. Code flow with redirect: the SPA keeps state/PKCE/context in sessionStorage (`utils/yandexOAuth.js`), Yandex returns to the `/oauth/yandex` route, the server exchanges the code (`YandexOAuthClient`). External accounts of both providers are created in `ExternalAccountService`, outside the provider round trip.
 - Placeholder defaults containing `:` (URLs, JDBC) must be backtick-quoted: ``${VAR:`https://...`}`` — otherwise Micronaut treats the part before `:` as another placeholder and silently drops it (this broke Google JWKS with a 503). Same for `@Value` defaults.
-- MQTT broker endpoint and device/topic defaults live in `application.yml`; MQTT username/password and JWT signing secret must be provided through `SENSOTERRA_MQTT_USERNAME`, `SENSOTERRA_MQTT_PASSWORD`, and `JWT_SECRET` environment variables.
+- MQTT settings come from `.env` through compose: `SENSOTERRA_MQTT_BROKER`, `SENSOTERRA_MQTT_CLIENT_ID` (placeholders with defaults in `application.yml`), `SENSOTERRA_MQTT_USERNAME`/`PASSWORD` (required, like `JWT_SECRET`).
 - The service worker is hand-rolled (`client/public/sw.js` + `registerSW.js` loaded from `index.html`).
 - CORS (allowed origins incl. private-LAN regex) lives in `server/src/main/resources/application.yml` — keep `http://localhost:3000` allowed.
 - Write code/config comments in English (older code still has Russian comments; don't mass-translate them unless asked).
