@@ -66,7 +66,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getInvite, acceptInvite, authStatus, loginWithGoogle, registerByInvite } from '../api/auth'
 import { getToken, setToken } from '../api/auth'
-import { auth, enterSession } from '../store/auth'
+import { auth, enterSession, userFromAuthResponse } from '../store/auth'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
 import YandexAuthButton from '../components/YandexAuthButton.vue'
 
@@ -186,8 +186,7 @@ async function onGoogle(idToken) {
   try {
     const res = await loginWithGoogle(idToken)
     setToken(res.token)
-    await enterSession({ id: res.id, username: res.username, role: res.role,
-       })
+    await enterSession(userFromAuthResponse(res))
     await acceptInvite(token.value)
     done.value = true
   } catch (e) {

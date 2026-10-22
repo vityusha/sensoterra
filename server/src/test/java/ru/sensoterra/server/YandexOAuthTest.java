@@ -86,6 +86,7 @@ class YandexOAuthTest {
         assertEquals("USER", first.get("role"));
         assertEquals(profile.login(), first.get("username"));
         assertEquals(profile.email(), first.get("email"));
+        assertEquals("yandex", first.get("authProvider"));
         assertNotNull(first.get("token"));
 
         Map second = yandexLogin(yandex.issueCode(profile, null), null, null, null);

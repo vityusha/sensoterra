@@ -94,6 +94,7 @@ class GoogleOAuthTest {
         Map body = googleLogin(google.issueToken(id.get("sub"), id.get("email"), true), null, null);
 
         assertEquals("USER", body.get("role"));
+        assertEquals("google", body.get("authProvider"), "client shows the provider without a reload");
         assertNotNull(body.get("token"), "свой JWT, не гугловый");
         assertEquals(Boolean.FALSE, body.get("deviceBound"));
 
