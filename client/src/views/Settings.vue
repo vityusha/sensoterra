@@ -11,6 +11,21 @@
         <input type="checkbox" :checked="isLight" @change="onThemeChange($event.target.checked)" />
         Светлая тема
       </label>
+      <div class="theme-color-row">
+        <label for="theme-bg-color">Цвет фона</label>
+        <input
+          id="theme-bg-color"
+          class="theme-color"
+          type="color"
+          :value="bgColor"
+          @input="onBgColorChange($event.target.value)"
+        />
+        <button v-if="isCustomBg" class="btn small secondary" @click="resetBgColor">Сбросить</button>
+      </div>
+      <p class="hint">
+        Меняет только фон страницы. Карточки, поля и текст остаются как в выбранной теме.
+        Цвет запоминается отдельно для светлой и тёмной темы.
+      </p>
     </section>
 
     <section class="section">
@@ -149,7 +164,7 @@
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import { settings, getChartTooltipMode, setChartTooltipMode, getTheme, setTheme, isVaccHidden, setVaccVisible, isFieldHidden, toggleField, getBlockName, getIndividualName, fieldKeys, fieldLabel, fieldUnit, defaultLabel, defaultUnit, setFields, saveDefaults, applyDefaults } from '../store/settings'
+import { settings, getChartTooltipMode, setChartTooltipMode, getTheme, setTheme, getBgColor, setBgColor, isVaccHidden, setVaccVisible, isFieldHidden, toggleField, getBlockName, getIndividualName, fieldKeys, fieldLabel, fieldUnit, defaultLabel, defaultUnit, setFields, saveDefaults, applyDefaults } from '../store/settings'
 import { clearEventNotifications, refreshEventNotifications, pushNotification } from '../store/notifications'
 import { isAdmin, auth, deviceAccess, rememberDeviceAccess } from '../store/auth'
 import { getSensorTypes, listDevices, getSensorCatalog, getCalibrationDefaults, saveCalibrationDefaults, listDeviceAccess } from '../api/auth'
@@ -163,6 +178,8 @@ const sensors = ref([])
 const alertsEnabled = ref(true)
 const tooltipMode = ref('auto')
 const isLight = ref(false)
+const bgColor = ref('#1a1a2e')
+const isCustomBg = ref(false)
 
 function deviceLabel(d) {
   return `${getBlockName(d.chipId) || d.name || d.chipId} (${d.chipId})`
@@ -217,9 +234,11 @@ onMounted(async () => {
   alertsEnabled.value = settings.alertsEnabled !== false
   tooltipMode.value = getChartTooltipMode()
   isLight.value = getTheme() === 'light'
+  syncBgColor()
   // следим за сменой темы в другой вкладке
   window.addEventListener('storage', () => {
     isLight.value = getTheme() === 'light'
+    syncBgColor()
   })
   let list = [0]
   try {
@@ -387,9 +406,33 @@ function onAlertsChange(v) {
   else clearEventNotifications()
 }
 
+function defaultBgColor() {
+  return getTheme() === 'light' ? '#f7f7f7' : '#1a1a2e'
+}
+
+function syncBgColor() {
+  const custom = getBgColor()
+  isCustomBg.value = !!custom
+  bgColor.value = custom || defaultBgColor()
+}
+
 function onThemeChange(v) {
   isLight.value = !!v
   setTheme(v ? 'light' : 'dark')
+  syncBgColor()
+}
+
+function onBgColorChange(v) {
+  if (!/^#[0-9a-f]{6}$/i.test(v)) return
+  bgColor.value = v
+  isCustomBg.value = true
+  setBgColor(v)
+}
+
+function resetBgColor() {
+  isCustomBg.value = false
+  setBgColor(null)
+  bgColor.value = defaultBgColor()
 }
 
 function onTooltipMode(v) {
@@ -417,6 +460,9 @@ function onTooltipMode(v) {
 .field-unit-input:focus { border-color: var(--accent); outline: none; }
 .field-check { display: flex; align-items: center; gap: 0.3rem; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; white-space: nowrap; }
 .field-check input { cursor: pointer; }
+.theme-color-row { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-top: 0.8rem; }
+.theme-color-row label { color: var(--text-muted); font-size: 0.8rem; }
+.theme-color { width: 3rem; height: 2rem; padding: 0.15rem; border: 1px solid var(--border-soft); border-radius: 6px; background: var(--bg-card); cursor: pointer; }
 .field-input-text { flex: 1; color: var(--text-sub); font-size: 0.85rem; }
 .hint { color: var(--muted-fg); font-size: 0.78rem; line-height: 1.4; margin: 0.5rem 0 0; }
 .admin-defaults { margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px dashed var(--divider); }
