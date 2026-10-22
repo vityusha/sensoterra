@@ -115,9 +115,6 @@
           Каналы этого датчика: скрытые не показываются ни в последних данных, ни на графиках.
           Выбор хранится в вашем аккаунте и переносится на другие устройства.
         </p>
-        <div class="modal-actions">
-          <button class="btn small save" @click="displaySettingsOpen = false">Готово</button>
-        </div>
       </div>
     </div>
 
@@ -137,7 +134,7 @@
           дефолтные. Правка калибровки — только админом.
         </p>
         <div class="modal-actions">
-          <button class="btn small" @click="calibDialogOpen = false">Закрыть</button>
+          <button class="btn small secondary" @click="calibDialogOpen = false">Закрыть</button>
           <button class="btn small save" :disabled="calibForm.busy" @click="saveCalib">
             {{ calibForm.busy ? '...' : 'Сохранить' }}
           </button>
@@ -740,8 +737,8 @@ onUnmounted(() => {
 .header-row h2 { color: var(--text-strong); flex: 1; }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg); color: var(--tag-text); }
 .menu-wrap { position: relative; flex: none; }
-.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-muted); cursor: pointer; }
-.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text); }
+.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
+.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text-strong); }
 .menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 200px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
 .menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
 .menu-dropdown button:hover { background: var(--bg-primary); }
@@ -803,6 +800,7 @@ onUnmounted(() => {
 .modal h3 { color: var(--text-strong); font-size: 1rem; text-transform: none; letter-spacing: 0; margin: 0; }
 .modal-close { width: 2rem; height: 2rem; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--text-dim); font-size: 1rem; cursor: pointer; }
 .modal-close:hover { background: var(--bg-primary); color: var(--text); }
-.modal-actions { display: flex; justify-content: flex-end; margin-top: 1rem; }
+.modal-actions { display: flex; justify-content: center; gap: 0.6rem; margin-top: 1rem; }
+.modal-actions .btn { display: inline-flex; align-items: center; justify-content: center; width: 8rem; height: 2rem; padding: 0 0.6rem; }
 .empty.small { color: var(--text-faint); text-align: center; padding: 1rem; font-size: 0.85rem; }
 </style>

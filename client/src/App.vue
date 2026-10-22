@@ -42,10 +42,10 @@ body {
   --bg-active: #1a3b5c;
   --text: #eee;
   --text-strong: #e0e0e0;
-  --text-sub: #ccc;
-  --text-muted: #aaa;
-  --text-dim: #888;
-  --text-faint: #666;
+  --text-sub: #d4d4d4;
+  --text-muted: #b8b8b8;
+  --text-dim: #9a9a9a;
+  --text-faint: #808080;
   --on-accent: #ffdddd;
   --border: #555;
   --border-soft: #444;
@@ -62,7 +62,7 @@ body {
   --banner-text: #a8d8ff;
   --banner-border: #1f4d7a;
   --divider: #3a3a52;
-  --muted-fg: #7a7a92;
+  --muted-fg: #9090a8;
   --chart-grid: #2a2a3e;
   --card-shadow: none;
   --btn-bg: #3a3a50;

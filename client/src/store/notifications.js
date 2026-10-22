@@ -154,6 +154,9 @@ let relayNameCache = {}
 let blockStatusCache = {}
 let ws = null
 let reconnectTimer = null
+// Token the server refused (close code 1008): don't retry with it, wait for a new login.
+let rejectedToken = null
+const CLOSE_POLICY_VIOLATION = 1008
 
 export const connection = reactive({
   online: false,
@@ -163,36 +166,51 @@ function getToken() {
   return localStorage.getItem('token')
 }
 
-function wsUrl() {
+function wsUrl(token) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
   // Same-origin: /ws/status проксирует serve.py на :3000. Раньше жёстко был :8080 —
   // с телефона в локалке этот порт недоступен, live-обновления не работали.
   // Браузер не умеет слать Authorization в WebSocket, поэтому токен идёт query-параметром.
-  const token = getToken()
-  return `${proto}://${location.host}/ws/status${token ? `?token=${encodeURIComponent(token)}` : ''}`
+  return `${proto}://${location.host}/ws/status?token=${encodeURIComponent(token)}`
 }
 
+// Safe to call from any page: without a token (login page, after logout) it does nothing,
+// so the server never sees anonymous connection attempts. Views call it again on mount,
+// which connects right after a login.
 export function connectWs() {
+  const token = getToken()
+  if (!token || token === rejectedToken) return
   if (ws && ws.readyState <= WebSocket.OPEN) return
+  let socket
   try {
-    ws = new WebSocket(wsUrl())
+    socket = new WebSocket(wsUrl(token))
   } catch {
     connection.online = false
     scheduleReconnect()
     return
   }
-  ws.onopen = () => {
+  ws = socket
+  socket.onopen = () => {
     connection.online = true
   }
-  ws.onclose = () => {
+  socket.onclose = (event) => {
+    // Replaced or closed on purpose by disconnectWs().
+    if (ws !== socket) return
+    ws = null
     connection.online = false
+    // The server rejected the token (expired, invalid, account disabled): retrying every
+    // 5 s with the same token only floods its log. Reconnect after the token changes.
+    if (event.code === CLOSE_POLICY_VIOLATION) {
+      rejectedToken = token
+      return
+    }
     scheduleReconnect()
   }
-  ws.onerror = () => {
+  socket.onerror = () => {
     connection.online = false
-    ws.close()
+    socket.close()
   }
-  ws.onmessage = (event) => {
+  socket.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
       handleMessage(msg)
@@ -299,4 +317,14 @@ function scheduleReconnect() {
     reconnectTimer = null
     connectWs()
   }, 5000)
+}
+
+/** On logout: close the socket and stop reconnecting (connectWs() resumes after a new login). */
+export function disconnectWs() {
+  clearTimeout(reconnectTimer)
+  reconnectTimer = null
+  const socket = ws
+  ws = null
+  connection.online = false
+  if (socket) socket.close()
 }
