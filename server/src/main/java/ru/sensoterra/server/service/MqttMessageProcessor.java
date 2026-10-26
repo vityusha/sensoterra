@@ -437,8 +437,20 @@ public class MqttMessageProcessor {
         if (node == null || node.isNull() || node.isMissingNode() || node.asText("").isBlank()) {
             return null;
         }
+        String text = node.asText("").trim();
         try {
-            return LocalTime.parse(node.asText());
+            int minutes = Integer.parseInt(text);
+            if (minutes < 0 || minutes >= 1440) {
+                return null;
+            }
+            return LocalTime.of(minutes / 60, minutes % 60);
+        } catch (NumberFormatException ignored) {
+        }
+        if (text.startsWith("24:")) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(text);
         } catch (Exception e) {
             return null;
         }

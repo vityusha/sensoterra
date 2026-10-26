@@ -277,10 +277,12 @@ const form = reactive({
   limitHigh: 0,
 })
 
+const UNSET_TIME_MINUTES = 1441
+
 function toHm(v) {
   if (v == null) return ''
-  const s = String(v)
-  if (s.trim() === '1440') return ''
+  const s = String(v).trim()
+  if (s === '1440' || s === '1441' || s.startsWith('24:')) return ''
   return s.includes(':') ? s.slice(0, 5) : s
 }
 
@@ -669,9 +671,9 @@ function clearField(key) {
 }
 
 function timeToMinutes(v) {
-  if (!fm(v)) return 1440
+  if (!fm(v)) return UNSET_TIME_MINUTES
   const [h, m] = String(v).split(':').map(Number)
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return 1440
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return UNSET_TIME_MINUTES
   return h * 60 + m
 }
 
