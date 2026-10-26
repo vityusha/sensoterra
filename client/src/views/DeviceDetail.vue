@@ -106,11 +106,12 @@
       <div class="invite-list">
         <div class="invite-row" v-for="a in accessList" :key="a.userId">
           <code class="invite-token">{{ a.username }}</code>
-          <span class="invite-role">{{ a.accessRole === 'VIEWER' ? 'только чтение' : 'управление' }}</span>
-          <button v-if="canControl && a.userId !== auth.user?.id" class="btn small" @click="swapAccessRole(a)">
+          <span class="invite-role">{{ accessRoleLabel(a.accessRole) }}</span>
+          <!-- The owner's row has no actions: ownership moves only through the admin page. -->
+          <button v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="btn small" @click="swapAccessRole(a)">
             {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
           </button>
-          <button v-if="canControl && a.userId !== auth.user?.id" class="btn small danger"
+          <button v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="btn small danger"
             @click="revokeAccess(a)">Отозвать</button>
         </div>
       </div>
@@ -309,7 +310,7 @@ import { getBlockName, setBlockName, getFieldName, getFieldUnit, isFieldHidden, 
 import { fmtEventTimeWithZone, fmtAgo } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
 import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
-import { auth, rememberDeviceAccess, rememberPayment, isDevicePaid } from '../store/auth'
+import { auth, rememberDeviceAccess, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
@@ -628,11 +629,18 @@ async function doReset() {
 // на чужом — наблюдатель. Роль аккаунта (ADMIN/USER) тут ни при чём.
 const myAccessRole = computed(() => accessList.value.find(a => a.userId === auth.user?.id)?.accessRole)
 const canControl = computed(() =>
-  isAdmin.value || (myAccessRole.value === 'USER' && isDevicePaid(chipId)))
-// Поделиться устройством может обычный пользователь, который им управляет; оплата для
+  isAdmin.value || (canControlRole(myAccessRole.value) && isDevicePaid(chipId)))
+// Поделиться устройством может только владелец (OWNER); оплата для
 // этого не нужна — приглашение открывает доступ, а не возможность управлять. Админу
 // приглашение не показываем: у него другие механизмы (ключ комплектного листа, доступ).
-const canShare = computed(() => !isAdmin.value && myAccessRole.value === 'USER')
+const canShare = computed(() => !isAdmin.value && isOwnerRole(myAccessRole.value))
+// Changing or revoking other accounts' access: the owner or an admin (server enforces it too).
+const canManageAccess = computed(() => isAdmin.value || isOwnerRole(myAccessRole.value))
+
+function accessRoleLabel(role) {
+  if (role === 'OWNER') return 'владелец'
+  return role === 'VIEWER' ? 'только чтение' : 'управление'
+}
 
 const invites = ref([])
 const inviteAccessRole = ref('USER')

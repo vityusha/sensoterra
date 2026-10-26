@@ -90,11 +90,24 @@ export function isDevicePaid(chipId) {
   return info.paid !== false
 }
 
+/**
+ * Device rights from device_access: OWNER and USER control the device, VIEWER only reads.
+ * Compare through these helpers, not with 'USER': the owner has OWNER, not USER.
+ */
+export function canControlRole(accessRole) {
+  return accessRole === 'OWNER' || accessRole === 'USER'
+}
+
+/** Only the owner grants/revokes access and sends invites (admins use the admin pages). */
+export function isOwnerRole(accessRole) {
+  return accessRole === 'OWNER'
+}
+
 /** Права на конкретный блок: ADMIN — всегда, иначе роль из device_access. */
 export function canControlDevice(chipId) {
   if (!auth.user) return false
   if (auth.user.role === 'ADMIN') return true
-  return deviceAccess[chipId] === 'USER'
+  return canControlRole(deviceAccess[chipId])
 }
 
 export function logout() {

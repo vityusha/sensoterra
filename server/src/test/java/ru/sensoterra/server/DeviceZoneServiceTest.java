@@ -49,6 +49,17 @@ class DeviceZoneServiceTest {
     }
 
     @Test
+    @DisplayName("Out-of-range Zone from a device is ignored and does not break the device")
+    void outOfRangeZoneIgnored() {
+        deviceZoneService.updateZone(7777775L, -180);
+        // Unbounded before: 100000 minutes made ZoneOffset.ofTotalSeconds throw on every message.
+        deviceZoneService.updateZone(7777775L, 100000);
+        deviceZoneService.updateZone(7777775L, -100000);
+        assertEquals(180, deviceZoneService.offsetFor(7777775L));
+        assertEquals(ZoneOffset.ofHours(3), deviceZoneService.zoneFor(7777775L));
+    }
+
+    @Test
     @DisplayName("remove keeps persisted value readable")
     void removeDoesNotBreak() {
         deviceZoneService.updateZone(7777774L, -330);

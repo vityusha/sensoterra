@@ -72,6 +72,27 @@ class MqttMessageProcessorTest {
     }
 
     @Test
+    @DisplayName("Invalid JSON with a long run of spaces is handled in linear time")
+    void longWhitespaceIsFast() {
+        // Under the size cap, so it really goes through normalize(); quadratic regex took seconds.
+        String payload = "{\"Moisture\":" + " ".repeat(MAX_PAYLOAD_TEST_CHARS) + "x";
+        long start = System.nanoTime();
+        processor.process("9998/VALUES", payload, false);
+        long ms = (System.nanoTime() - start) / 1_000_000;
+        org.junit.jupiter.api.Assertions.assertTrue(ms < 1000, "took " + ms + " ms");
+    }
+
+    @Test
+    @DisplayName("Oversized payloads are dropped before parsing")
+    void oversizedPayloadDropped() {
+        String payload = "{\"S1\": 1, \"pad\": \"" + "a".repeat(20 * 1024) + "\"}";
+        processor.process("9997/SENSORS", payload, false);
+        verify(telemetryService, never()).updateRegisteredSensors(eq(9997L), any());
+    }
+
+    private static final int MAX_PAYLOAD_TEST_CHARS = 16 * 1024 - 64;
+
+    @Test
     @DisplayName("SENSORS with zero slots skips zeros")
     void sensorsZeroValues() {
         String payload = "{\"S1\": 6021076, \"S2\": 0}";

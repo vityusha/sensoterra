@@ -82,6 +82,14 @@ jobs:
             deploy
           sparse-checkout-cone-mode: false
 
+      # image_tag of a manual run goes into a remote shell command: allow only a SHA or latest.
+      - name: Validate image tag
+        run: |
+          if ! [[ "$TAG" =~ ^[0-9a-f]{7,40}$ || "$TAG" == latest ]]; then
+            echo "::error::invalid image_tag '$TAG' (expected a commit SHA or 'latest')"
+            exit 1
+          fi
+
       - name: Configure SSH
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}

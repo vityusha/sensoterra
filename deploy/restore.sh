@@ -11,6 +11,8 @@
 # only way to know the backups actually restore.
 # apply dumps the current database to backups/pre-restore-*.dump before restoring.
 set -euo pipefail
+# Dumps and restored files contain password hashes, device keys and invite tokens.
+umask 077
 
 cd "$(dirname "$0")/.."
 MODE="${1:-}"

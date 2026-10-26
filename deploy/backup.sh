@@ -10,6 +10,8 @@
 # The repository gets the dump (pg_dump -Fc) and .env: a restored database is useless without
 # its secrets. The repository is encrypted with RESTIC_PASSWORD — keep it OFF the VPS.
 set -euo pipefail
+# Dumps contain password hashes, device keys and invite tokens: owner-only files.
+umask 077
 
 cd "$(dirname "$0")/.."
 [ -f .env ] || { echo "ERROR: .env not found in $(pwd)" >&2; exit 1; }

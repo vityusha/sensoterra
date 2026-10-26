@@ -4,6 +4,9 @@ micronaut:
   security:
     enabled: true
     authentication: bearer
+    # Same as main application.yml (this file replaces it in tests).
+    basic-auth:
+      enabled: false
     endpoints:
       login:
         enabled: false

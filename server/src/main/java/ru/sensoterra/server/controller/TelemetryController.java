@@ -9,6 +9,8 @@ import ru.sensoterra.server.service.DeviceAccessService;
 import ru.sensoterra.server.service.TelemetryAggregateService;
 import ru.sensoterra.server.service.TelemetryAggregateService.Resolution;
 import io.micronaut.core.annotation.Nullable;
+import io.micronaut.http.HttpStatus;
+import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.QueryValue;
@@ -48,16 +50,10 @@ public class TelemetryController {
             @Nullable @QueryValue Instant since,
             @Nullable @QueryValue Instant to,
             @Nullable @QueryValue Integer limit) {
-        if (deviceId != null) {
-            access.requireView(deviceId);
-        } else if (sensorChipId != null) {
-            sensorRepository.findBySensorChipId(sensorChipId).ifPresent(s -> {
-                Long chip = s.getDeviceId() != null ? s.getDeviceId() : s.getSensorChipId();
-                access.requireView(chip);
-            });
-        } else {
+        if (deviceId == null && sensorChipId == null) {
             return List.of();
         }
+        deviceId = requireSensorTelemetryAccess(deviceId, sensorChipId);
         // Длинные окна (> 7 дней — по часу, > 90 дней — по суткам) и окна старше срока
         // хранения сырых данных отдаём из непрерывных агрегатов: те же поля, значения — средние.
         Resolution resolution = TelemetryAggregateService.choose(since, to, Instant.now());
@@ -100,6 +96,32 @@ public class TelemetryController {
     }
 
     /**
+     * Access check for sensor telemetry; returns the deviceId the query must be limited to
+     * (null = no limit, admins only).
+     * <p>
+     * With only sensorChipId the device comes from the current sensor record, and the query is
+     * then limited to that device: rows of the same chip from another block (a resold sensor)
+     * are someone else's history. Without a sensor record (sensor unregistered, telemetry kept)
+     * there is nothing to check against, so only admins get the data.
+     */
+    private Long requireSensorTelemetryAccess(@Nullable Long deviceId, Long sensorChipId) {
+        if (deviceId != null) {
+            access.requireView(deviceId);
+            return deviceId;
+        }
+        Sensor sensor = sensorRepository.findBySensorChipId(sensorChipId).orElse(null);
+        if (sensor == null) {
+            if (access.isAdmin()) {
+                return null;
+            }
+            throw new HttpStatusException(HttpStatus.NOT_FOUND, "Sensor not found");
+        }
+        Long chip = sensor.getDeviceId() != null ? sensor.getDeviceId() : sensor.getSensorChipId();
+        access.requireView(chip);
+        return access.isAdmin() ? null : chip;
+    }
+
+    /**
      * В агрегатах нет sensor_name / sensor_type, а клиент по типу выбирает подписи и графики —
      * берём их из карточки датчика.
      */
@@ -126,19 +148,13 @@ public class TelemetryController {
     public SensorStartRow sensorStart(
             @Nullable @QueryValue Long deviceId,
             @Nullable @QueryValue Long sensorChipId) {
-        if (deviceId != null) {
-            access.requireView(deviceId);
-        } else if (sensorChipId != null) {
-            sensorRepository.findBySensorChipId(sensorChipId).ifPresent(s -> {
-                Long chip = s.getDeviceId() != null ? s.getDeviceId() : s.getSensorChipId();
-                access.requireView(chip);
-            });
-        } else {
-            return new SensorStartRow(null);
-        }
         if (sensorChipId == null) {
+            if (deviceId != null) {
+                access.requireView(deviceId);
+            }
             return new SensorStartRow(null);
         }
+        deviceId = requireSensorTelemetryAccess(deviceId, sensorChipId);
         final int pageSize = 5000;
         Instant before = null;
         Integer newerNum = null;

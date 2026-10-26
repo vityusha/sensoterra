@@ -64,7 +64,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { listInvites, createInvite, revokeInvite, clearFinishedInvites, clearAllInvites, listDeviceAccess } from '../api/auth'
 import { pushNotification } from '../store/notifications'
-import { auth, isAdmin } from '../store/auth'
+import { auth, isAdmin, isOwnerRole } from '../store/auth'
 
 const props = defineProps({
   chipId: { type: Number, required: true },
@@ -82,7 +82,8 @@ const clearBusy = ref(false)
 
 const myAccessRole = computed(() => accessList.value.find(a => a.userId === auth.user?.id)?.accessRole)
 // Сервер запрещает админу выдавать ссылки (403) — доступ он раздаёт напрямую.
-const canShare = computed(() => !isAdmin() && myAccessRole.value === 'USER')
+// Invites are sent only by the owner.
+const canShare = computed(() => !isAdmin() && isOwnerRole(myAccessRole.value))
 
 async function loadAccess() {
   try {

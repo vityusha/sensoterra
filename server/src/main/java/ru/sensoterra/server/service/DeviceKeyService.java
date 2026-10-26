@@ -40,15 +40,18 @@ public class DeviceKeyService {
     private final AppUserRepository userRepository;
     private final DeviceAccessRepository accessRepository;
     private final BlockPaymentService payments;
+    private final DeviceAccessService accessService;
 
     public DeviceKeyService(DeviceRepository deviceRepository,
                             AppUserRepository userRepository,
                             DeviceAccessRepository accessRepository,
-                            BlockPaymentService payments) {
+                            BlockPaymentService payments,
+                            DeviceAccessService accessService) {
         this.deviceRepository = deviceRepository;
         this.userRepository = userRepository;
         this.accessRepository = accessRepository;
         this.payments = payments;
+        this.accessService = accessService;
     }
 
     /** Ключ устройства, при необходимости выпуская его при первом обращении. */
@@ -104,11 +107,17 @@ public class DeviceKeyService {
         Optional<DeviceAccess> existing = accessRepository.findByUserId(userId).stream()
                 .filter(a -> chipId.equals(a.getChipId()))
                 .findFirst();
-        if (existing.isPresent()) {
+        if (!accessService.hasOwner(chipId)) {
+            // The first account to confirm the sheet's key becomes the owner.
+            accessService.setOwner(userId, chipId);
+        } else if (existing.isPresent()) {
             // Уже привязано: подтверждаем ключом, но права не расширяем — привязка
             // с ключом даёт ровно те права, что и приглашение от владельца: USER.
-            existing.get().setAccessRole(DeviceAccessService.ACCESS_USER);
-            accessRepository.save(existing.get());
+            // The owner stays OWNER.
+            if (!DeviceAccessService.ACCESS_OWNER.equals(existing.get().getAccessRole())) {
+                existing.get().setAccessRole(DeviceAccessService.ACCESS_USER);
+                accessRepository.save(existing.get());
+            }
         } else {
             DeviceAccess access = new DeviceAccess();
             access.setUserId(userId);
