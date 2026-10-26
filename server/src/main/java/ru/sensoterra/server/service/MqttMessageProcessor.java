@@ -25,7 +25,11 @@ public class MqttMessageProcessor {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
     private static final DateTimeFormatter TIME_FORMAT_ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Pattern UNQUOTED_VALUE = Pattern.compile("(\"[^\"\\\\\r\n]+\"\\s*:\\s*)((?=[^{}\\[\\]\",;\\s])[^{}\\[\\]\",;\r\n]+)");
-    private static final Pattern EMPTY_VALUE = Pattern.compile("(\"[^\"\\\\\r\n]+\"\\s*:\\s*)(?=\\s*[,}])");
+    // Possessive \s*+ : with plain \s* both quantifiers overlap and a long run of spaces
+    // costs O(n^2) steps on the single Paho callback thread.
+    private static final Pattern EMPTY_VALUE = Pattern.compile("(\"[^\"\\\\\r\n]+\"\\s*+:\\s*+)(?=[,}])");
+    /** Device payloads are a few hundred bytes; anything far larger is junk or an attack. */
+    static final int MAX_PAYLOAD_CHARS = 16 * 1024;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final TelemetryService telemetryService;
@@ -47,6 +51,10 @@ public class MqttMessageProcessor {
     }
 
     public void process(String topic, String payload, boolean retained) {
+        if (payload != null && payload.length() > MAX_PAYLOAD_CHARS) {
+            log.warn("Dropping oversized MQTT payload on {} ({} chars)", topic, payload.length());
+            return;
+        }
         try {
             String[] parts = topic.split("/");
             if (parts.length < 2) {
@@ -429,8 +437,20 @@ public class MqttMessageProcessor {
         if (node == null || node.isNull() || node.isMissingNode() || node.asText("").isBlank()) {
             return null;
         }
+        String text = node.asText("").trim();
         try {
-            return LocalTime.parse(node.asText());
+            int minutes = Integer.parseInt(text);
+            if (minutes < 0 || minutes >= 1440) {
+                return null;
+            }
+            return LocalTime.of(minutes / 60, minutes % 60);
+        } catch (NumberFormatException ignored) {
+        }
+        if (text.startsWith("24:")) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(text);
         } catch (Exception e) {
             return null;
         }

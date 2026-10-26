@@ -171,8 +171,14 @@ public class AdminUserController {
             device.setDeviceType(request.deviceType() != null ? request.deviceType() : "BLOCK");
             deviceRepository.save(device);
         }
-        access.grant(user.getId(), device.getChipId(),
-                request.accessRole() != null ? request.accessRole() : DeviceAccessService.ACCESS_USER);
+        if (DeviceAccessService.ACCESS_OWNER.equalsIgnoreCase(String.valueOf(request.accessRole()).trim())) {
+            // Admin-only ownership transfer: the previous owner stays with USER rights.
+            access.setOwner(user.getId(), device.getChipId());
+        } else {
+            // Admin may also downgrade the owner (forceAccessRole); guests and invites can't.
+            access.forceAccessRole(user.getId(), device.getChipId(),
+                    request.accessRole() != null ? request.accessRole() : DeviceAccessService.ACCESS_USER);
+        }
         return HttpResponse.ok(device);
     }
 

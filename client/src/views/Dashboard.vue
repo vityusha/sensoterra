@@ -6,7 +6,7 @@
         <span class="connection-status" :class="connection.online ? 'online' : 'offline'">
           {{ connection.online ? 'Сервис OK' : 'Сервис недоступен' }}
         </span>
-        <span class="user-info" v-if="auth.user">{{ auth.user.username }} ({{ auth.user.role }})</span>
+        <span class="user-info" v-if="auth.user">{{ auth.user.role }}</span>
         <button v-if="showClaimButton" @click="claimOpen = !claimOpen" class="btn small">+ Устройство</button>
         <div class="menu-wrap" ref="menuRef">
           <button
@@ -23,12 +23,37 @@
             </svg>
           </button>
           <div v-if="menuOpen" class="menu-dropdown" role="menu">
-            <button role="menuitem" @click="go('/settings')">Настройки</button>
-            <button role="menuitem" @click="go('/profile')">Профиль</button>
-            <button role="menuitem" @click="openApDialog">Настройка в AP режиме</button>
-            <button v-if="auth.user?.role === 'ADMIN'" role="menuitem" @click="go('/admin/users')">Пользователи</button>
+            <button role="menuitem" @click="go('/settings')">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+              </svg>
+              Настройки
+            </button>
+            <button role="menuitem" @click="go('/profile')">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+              </svg>
+              Профиль
+            </button>
+            <button role="menuitem" @click="openApDialog">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
+              </svg>
+              Настройка в AP режиме
+            </button>
+            <button v-if="auth.user?.role === 'ADMIN'" role="menuitem" @click="go('/admin/users')">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+              </svg>
+              Пользователи
+            </button>
             <div class="menu-sep"></div>
-            <button role="menuitem" class="menu-danger" @click="handleLogout">Выйти</button>
+            <button role="menuitem" class="menu-danger" @click="handleLogout">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+              </svg>
+              Выйти
+            </button>
           </div>
         </div>
       </div>
@@ -337,6 +362,7 @@ async function refreshAll() {
 }
 
 onMounted(async () => {
+  connectWs()
   try {
     await refreshAll()
   } finally {
@@ -581,9 +607,10 @@ h2 { color: var(--text-strong); }
 .menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
 .menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text-strong); }
 .menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 220px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
-.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
+.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; display: flex; align-items: center; gap: 0.55rem; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
 .menu-dropdown button:hover { background: var(--bg-primary); }
 .menu-dropdown .menu-danger { color: var(--danger); }
+.menu-icon { width: 1rem; height: 1rem; flex: none; opacity: 0.9; }
 .menu-sep { height: 1px; margin: 0.3rem 0; background: var(--border-soft); }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.secondary { background: var(--bg-accent); }

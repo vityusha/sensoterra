@@ -8,8 +8,15 @@
 # Если новая версия не поднялась — контейнеры откатываются на предыдущий тег,
 # БД автоматически НЕ восстанавливается (путь к дампу печатается).
 set -euo pipefail
+# Database dumps contain password hashes, device keys and invite tokens: owner-only files.
+umask 077
 
 TAG="${1:?usage: deploy.sh <image-tag> [--login <user>]}"
+# The tag ends up in docker image names and in `sed` on .env: allow only a commit SHA or latest.
+if ! [[ "$TAG" =~ ^[0-9a-f]{7,40}$ || "$TAG" == latest ]]; then
+    echo "ERROR: invalid image tag '$TAG' (expected a commit SHA or 'latest')" >&2
+    exit 2
+fi
 LOGIN_USER=""
 if [ "${2:-}" = "--login" ]; then
     LOGIN_USER="${3:?--login requires a user}"

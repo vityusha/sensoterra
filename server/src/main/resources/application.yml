@@ -28,6 +28,10 @@ micronaut:
   security:
     enabled: true
     authentication: bearer
+    # On by default in Micronaut: with DbAuthenticationProvider an "Authorization: Basic"
+    # header would log in on every endpoint, bypassing the login rate limit and fail2ban.
+    basic-auth:
+      enabled: false
     endpoints:
       login:
         # Встроенный /login Micronaut отдаёт JWT мимо нашего AuthController — лишняя

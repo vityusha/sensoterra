@@ -106,17 +106,22 @@
       <div class="invite-list">
         <div class="invite-row" v-for="a in accessList" :key="a.userId">
           <code class="invite-token">{{ a.username }}</code>
-          <span class="invite-role">{{ a.accessRole === 'VIEWER' ? 'только чтение' : 'управление' }}</span>
-          <button v-if="canControl && a.userId !== auth.user?.id" class="btn small" @click="swapAccessRole(a)">
+          <span class="invite-role">{{ accessRoleLabel(a.accessRole) }}</span>
+          <!-- The owner's row has no actions: ownership moves only through the admin page. -->
+          <button v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="btn small" @click="swapAccessRole(a)">
             {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
           </button>
-          <button v-if="canControl && a.userId !== auth.user?.id" class="btn small danger"
+          <button v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="btn small danger"
             @click="revokeAccess(a)">Отозвать</button>
         </div>
       </div>
     </section>
 
     <template v-if="device?.deviceType === 'BLOCK'">
+      <label class="t-item vacc-toggle">
+        <input type="checkbox" :checked="!isVaccHidden(chipId)" @change="onVaccChange($event.target.checked)" />
+        показывать Vacc (напряжение аккумулятора)
+      </label>
       <section class="section">
         <h3>Телеметрия блока</h3>
         <div class="telemetry-row" v-if="blockTelemetry">
@@ -126,12 +131,6 @@
           <span class="t-item" v-if="blockTelemetry?.time">Время: <b>{{ fmtEventTimeWithZone(blockTelemetry.time, device?.tzOffsetMinutes) }}</b></span>
         </div>
         <div class="telemetry-row muted" v-else>нет данных</div>
-        <!-- Выбор «что показывать» живёт здесь, а не в общем списке настроек: у блока он
-             свой, и при сотнях блоков список на странице настроек был бы нечитаемым. -->
-        <label v-if="!isAdmin" class="t-item vacc-toggle">
-          <input type="checkbox" :checked="!isVaccHidden(chipId)" @change="onVaccChange($event.target.checked)" />
-          показывать Vacc (напряжение аккумулятора)
-        </label>
       </section>
     </template>
 
@@ -309,7 +308,7 @@ import { getBlockName, setBlockName, getFieldName, getFieldUnit, isFieldHidden, 
 import { fmtEventTimeWithZone, fmtAgo } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
 import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
-import { auth, rememberDeviceAccess, rememberPayment, isDevicePaid } from '../store/auth'
+import { auth, rememberDeviceAccess, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
@@ -628,11 +627,18 @@ async function doReset() {
 // на чужом — наблюдатель. Роль аккаунта (ADMIN/USER) тут ни при чём.
 const myAccessRole = computed(() => accessList.value.find(a => a.userId === auth.user?.id)?.accessRole)
 const canControl = computed(() =>
-  isAdmin.value || (myAccessRole.value === 'USER' && isDevicePaid(chipId)))
-// Поделиться устройством может обычный пользователь, который им управляет; оплата для
+  isAdmin.value || (canControlRole(myAccessRole.value) && isDevicePaid(chipId)))
+// Поделиться устройством может только владелец (OWNER); оплата для
 // этого не нужна — приглашение открывает доступ, а не возможность управлять. Админу
 // приглашение не показываем: у него другие механизмы (ключ комплектного листа, доступ).
-const canShare = computed(() => !isAdmin.value && myAccessRole.value === 'USER')
+const canShare = computed(() => !isAdmin.value && isOwnerRole(myAccessRole.value))
+// Changing or revoking other accounts' access: the owner or an admin (server enforces it too).
+const canManageAccess = computed(() => isAdmin.value || isOwnerRole(myAccessRole.value))
+
+function accessRoleLabel(role) {
+  if (role === 'OWNER') return 'владелец'
+  return role === 'VIEWER' ? 'только чтение' : 'управление'
+}
 
 const invites = ref([])
 const inviteAccessRole = ref('USER')
@@ -929,6 +935,7 @@ onMounted(() => {
       try { await load() } catch { /* ignore */ }
     }, 1500)
   })
+  connectWs()
 })
 
 onBeforeUnmount(() => {
@@ -1063,11 +1070,7 @@ function getUnit(sensor, field) {
   return getFieldUnit(sensor.sensorType, field)
 }
 
-/**
- * Админ не выбирает, что показывать (настройки отображения у него убраны), поэтому у него
- * Vacc всегда виден: иначе колонка пропала бы у него без возможности её вернуть.
- */
-const showVacc = computed(() => isAdmin.value || !isVaccHidden(chipId))
+const showVacc = computed(() => !isVaccHidden(chipId))
 
 function onVaccChange(visible) {
   setVaccVisible(chipId, visible)
@@ -1253,8 +1256,8 @@ function applyCustom() {
 .btn:hover:not(:disabled) { background: var(--btn-bg-hover); border-color: var(--btn-border); }
 .btn.small { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
 .btn.secondary { background: var(--btn-bg-hover); }
-.btn.danger { background: #7a2626; border-color: #a84040; color: var(--on-accent); }
-.btn.danger:hover:not(:disabled) { background: #933030; border-color: #cb5654; }
+.btn.danger { background: var(--bg-accent); border-color: var(--bg-accent); color: var(--on-accent); }
+.btn.danger:hover:not(:disabled) { background: #7a2222; border-color: #7a2222; color: #fff; }
 .btn.active { background: var(--bg-active); border-color: var(--accent); color: var(--on-accent); }
 /* Раньше при 0.5 opacity кнопки «Вкл/Выкл» на карточке канала (var(--bg-card))
    и в hover-режиме карточки (var(--bg-primary)) визуально совпадали с фоном. */
@@ -1327,6 +1330,8 @@ function applyCustom() {
 .telemetry-row.muted { color: var(--text-faint); }
 .t-item { font-size: 0.85rem; color: var(--text-muted); }
 .t-item b { color: var(--text); }
+.vacc-toggle { display: inline-flex; align-items: center; gap: 0.45rem; margin-bottom: 0.75rem; cursor: pointer; }
+.vacc-toggle input { margin: 0; }
 .empty.small { color: var(--text-faint); text-align: center; padding: 1rem; font-size: 0.85rem; }
 .range-select { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .custom-range { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: var(--bg-card); border-radius: 10px; }

@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { me, getToken } from '../api/auth'
 import { loadPrefs, settings } from './settings'
-import { disconnectWs } from './notifications'
+import { connectWs, disconnectWs } from './notifications'
 
 export const auth = reactive({
   user: null,
@@ -19,6 +19,7 @@ export async function loadUser() {
     // Настройки блоков и датчиков живут в БД — тянем сразу вместе с пользователем,
     // иначе до первого запроса графики успеют отрисоваться со старыми значениями.
     await loadPrefs()
+    connectWs()
   } catch {
     auth.user = null
   } finally {
@@ -38,6 +39,7 @@ export function setUser(user) {
 export async function enterSession(user) {
   setUser(user)
   await loadPrefs()
+  connectWs()
 }
 
 /**
@@ -90,11 +92,24 @@ export function isDevicePaid(chipId) {
   return info.paid !== false
 }
 
+/**
+ * Device rights from device_access: OWNER and USER control the device, VIEWER only reads.
+ * Compare through these helpers, not with 'USER': the owner has OWNER, not USER.
+ */
+export function canControlRole(accessRole) {
+  return accessRole === 'OWNER' || accessRole === 'USER'
+}
+
+/** Only the owner grants/revokes access and sends invites (admins use the admin pages). */
+export function isOwnerRole(accessRole) {
+  return accessRole === 'OWNER'
+}
+
 /** Права на конкретный блок: ADMIN — всегда, иначе роль из device_access. */
 export function canControlDevice(chipId) {
   if (!auth.user) return false
   if (auth.user.role === 'ADMIN') return true
-  return deviceAccess[chipId] === 'USER'
+  return canControlRole(deviceAccess[chipId])
 }
 
 export function logout() {

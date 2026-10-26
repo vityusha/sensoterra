@@ -179,3 +179,24 @@ The deploy job connects with `StrictHostKeyChecking yes`, so after a new IP, por
 1. `VPS_HOST` — the new address.
 2. `VPS_KNOWN_HOSTS` — output of `ssh-keyscan -p <port> -t ed25519 <host>`. Compare its fingerprint (`ssh-keyscan -p <port> -t ed25519 <host> | ssh-keygen -lf -`) with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` run on the server itself (provider console or an existing trusted session). If only the IP changed, the key is the same — the old line with the new address also works.
 3. Re-run the failed Deploy workflow.
+
+### After the 2026-10 security fixes
+
+Once the release with migration `V3__device_owner.sql` is deployed, do these on the VPS (as `deploy` in `/opt/sensoterra`):
+
+1. **Lock down existing dumps.** New dumps are created owner-only (`umask 077` in the scripts); older ones were world-readable:
+   ```bash
+   chmod 700 backups && find backups -type f -exec chmod 600 {} +
+   ```
+2. **Check who could have seen device keys.** Before the fix `GET /api/devices` returned `deviceKey` to everyone with access to a device, including read-only guests, and the key upgrades its holder to full control. List devices where accounts other than the owner have (or had) access:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T timescaledb \
+     sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+   SELECT a.chip_id, string_agg(u.username || ':' || a.access_role, ', ' ORDER BY a.access_role) AS accounts
+   FROM device_access a JOIN app_user u ON u.id = a.user_id
+   GROUP BY a.chip_id HAVING count(*) > 1 ORDER BY a.chip_id;
+   SQL
+   ```
+   For a device whose guests you don't trust, regenerate the key on the device page (admin → "Перевыпустить"). The printed sheet stops working, so hand the owner the new key. Guests removed in the past are not in this list; regenerate for any device where that matters.
+3. **Check owners.** The migration made the earliest account with full control the owner of each device. Fix exceptions on the admin users page ("владелец" in the access selector transfers ownership).
+4. **Broker ACLs (recommended).** The server subscribes to `#` and trusts every topic, so anyone with publish rights on the broker can impersonate any device (fake states, wipe a block's sensor list). If the broker supports it, give each device its own credentials limited to `<chipId>/#`, and keep the server's credentials separate.

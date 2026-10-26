@@ -82,13 +82,16 @@
             <select v-model="assignForm.accessRole">
               <option value="USER">управление</option>
               <option value="VIEWER">только чтение</option>
+              <!-- Ownership transfer: the previous owner keeps control as USER. -->
+              <option value="OWNER">владелец</option>
             </select>
             <button type="submit" class="btn small">Привязать</button>
           </form>
           <div class="assigned-list">
             <div class="assigned-row" v-for="d in devicesByUser[u.id] || []" :key="d.chipId">
               <span class="chip">{{ d.chipId }} (<span class="type">{{ d.deviceType }}</span>)</span>
-              <button @click="setAccessRole(u, d.chipId)" class="btn small">
+              <span v-if="accessRoles[u.id + ':' + d.chipId] === 'OWNER'" class="type">владелец</span>
+              <button v-else @click="setAccessRole(u, d.chipId)" class="btn small">
                 {{ accessRoles[u.id + ':' + d.chipId] === 'VIEWER' ? 'дать управление' : 'только чтение' }}
               </button>
               <button @click="unassign(u, d.chipId)" class="btn small danger">Отвязать</button>
@@ -140,7 +143,7 @@ function effectiveRole(u) {
   const devs = devicesByUser[u.id] || []
   if (!devs.length) return 'USER'
   const roles = new Set(devs.map(d => accessRoles[`${u.id}:${d.chipId}`]))
-  if (roles.has('VIEWER') && !roles.has('USER')) return 'VIEWER'
+  if (roles.has('VIEWER') && !roles.has('USER') && !roles.has('OWNER')) return 'VIEWER'
   return 'USER'
 }
 

@@ -1,5 +1,6 @@
 package ru.sensoterra.server.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import io.micronaut.serde.annotation.Serdeable;
 import lombok.Data;
@@ -27,6 +28,9 @@ public class Device {
      * чтобы отпечатать лист. Покупатель вводит пару «ID + ключ» и привязывает устройство
      * к своему аккаунту. NULL = ключ ещё не выпущен.
      */
+    // Never serialized: anyone who sees the device (incl. read-only guests) would get the key
+    // and could claim the device. Admins read it via GET /api/devices/{chipId}/key.
+    @JsonIgnore
     @Column(name = "device_key", length = 32)
     private String deviceKey;
 

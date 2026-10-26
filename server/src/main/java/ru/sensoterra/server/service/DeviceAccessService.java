@@ -22,7 +22,8 @@ import java.util.Set;
 
 /**
  * Единственная точка решения о правах. Роль аккаунта — ADMIN/USER, а права на конкретное
- * устройство живут в device_access: USER (управление) или VIEWER (только чтение).
+ * устройство живут в device_access: OWNER (owner: control + managing access and invites),
+ * USER (управление) или VIEWER (только чтение).
  *
  * ADMIN — видит и управляет всеми устройствами.
  * USER  — видит и управляет теми, к которым у него доступ с правом USER. Право «только
@@ -41,6 +42,17 @@ public class DeviceAccessService {
     /** Права на устройство: полные или только чтение. */
     public static final String ACCESS_USER = "USER";
     public static final String ACCESS_VIEWER = "VIEWER";
+    /**
+     * Owner: full control plus the only non-admin who may grant/revoke access and send invites.
+     * At most one per device (partial unique index, V3). Set by the first key claim or by an
+     * admin; never through grant() or invites, and cannot be revoked or downgraded by guests.
+     */
+    public static final String ACCESS_OWNER = "OWNER";
+
+    /** OWNER and USER both control the device; compare through this, not with ACCESS_USER. */
+    public static boolean canControlRole(String accessRole) {
+        return ACCESS_OWNER.equals(accessRole) || ACCESS_USER.equals(accessRole);
+    }
 
     /** Управление блоками — платная функция, автономные датчики не тарифицируются. */
     private static final String TYPE_BLOCK = "BLOCK";
@@ -190,7 +202,25 @@ public class DeviceAccessService {
 
     /** Управление каналами и изменение настроек устройства — право хранится на устройстве. */
     public boolean canControl(Long chipId) {
-        return isAdmin() || ACCESS_USER.equals(accessRoleOf(chipId));
+        return isAdmin() || canControlRole(accessRoleOf(chipId));
+    }
+
+    public boolean isOwner(Long chipId) {
+        return ACCESS_OWNER.equals(accessRoleOf(chipId));
+    }
+
+    /**
+     * Managing who has access (grant, revoke, change rights): the owner or an admin.
+     * Gated by payment like requireControl was before (invites are not: see requireShare).
+     */
+    public void requireManageAccess(Long chipId) {
+        if (isAdmin()) {
+            return;
+        }
+        requireView(chipId);
+        if (!isOwner(chipId)) {
+            throw new HttpStatusException(HttpStatus.FORBIDDEN, "Only the device owner can manage access");
+        }
     }
 
     public void requireView(Long chipId) {
@@ -261,8 +291,8 @@ public class DeviceAccessService {
         if (!canView(chipId)) {
             throw new HttpStatusException(HttpStatus.NOT_FOUND, "Device not found");
         }
-        if (!canControl(chipId)) {
-            throw new HttpStatusException(HttpStatus.FORBIDDEN, "Read-only access to this device");
+        if (!isOwner(chipId)) {
+            throw new HttpStatusException(HttpStatus.FORBIDDEN, "Only the device owner can share it");
         }
     }
 
@@ -337,12 +367,21 @@ public class DeviceAccessService {
     @Transactional
     public void grant(Long userId, Long chipId, String accessRole) {
         String role = normalizeAccessRole(accessRole);
+        if (ACCESS_USER.equals(role) && !hasOwner(chipId)) {
+            // Same rule as migration V3: a device without an owner gets the first account with
+            // full control (e.g. an admin assigning a block without a key claim) — otherwise
+            // nobody but admins could share it.
+            setOwner(userId, chipId);
+            return;
+        }
         DeviceAccess existing = accessRepository.findByUserId(userId).stream()
                 .filter(a -> chipId.equals(a.getChipId()))
                 .findFirst()
                 .orElse(null);
         if (existing != null) {
-            if (!role.equals(existing.getAccessRole())) {
+            // The owner keeps OWNER: e.g. accepting a VIEWER invite to one's own block must not
+            // downgrade it. Ownership moves only through setOwner().
+            if (!ACCESS_OWNER.equals(existing.getAccessRole()) && !role.equals(existing.getAccessRole())) {
                 existing.setAccessRole(role);
                 accessRepository.save(existing);
             }
@@ -353,6 +392,52 @@ public class DeviceAccessService {
         access.setChipId(chipId);
         access.setAccessRole(role);
         accessRepository.save(access);
+    }
+
+    /**
+     * Admin override: sets USER/VIEWER even on the owner's row (the device is left without an
+     * owner until the next account with full control gets it, see grant()).
+     */
+    @Transactional
+    public void forceAccessRole(Long userId, Long chipId, String accessRole) {
+        String role = normalizeAccessRole(accessRole);
+        DeviceAccess existing = accessRepository.findByUserId(userId).stream()
+                .filter(a -> chipId.equals(a.getChipId()))
+                .findFirst()
+                .orElse(null);
+        if (existing == null || !ACCESS_OWNER.equals(existing.getAccessRole())) {
+            grant(userId, chipId, role);
+            return;
+        }
+        existing.setAccessRole(role);
+        accessRepository.save(existing);
+    }
+
+    public boolean hasOwner(Long chipId) {
+        return accessRepository.findByChipId(chipId).stream()
+                .anyMatch(a -> ACCESS_OWNER.equals(a.getAccessRole()));
+    }
+
+    /** Makes userId the owner; the previous owner (if any) keeps full control as USER. */
+    @Transactional
+    public void setOwner(Long userId, Long chipId) {
+        DeviceAccess target = null;
+        for (DeviceAccess a : accessRepository.findByChipId(chipId)) {
+            if (userId.equals(a.getUserId())) {
+                target = a;
+            } else if (ACCESS_OWNER.equals(a.getAccessRole())) {
+                a.setAccessRole(ACCESS_USER);
+                // Flush the demotion first: the partial unique index allows one OWNER per device.
+                accessRepository.saveAndFlush(a);
+            }
+        }
+        if (target == null) {
+            target = new DeviceAccess();
+            target.setUserId(userId);
+            target.setChipId(chipId);
+        }
+        target.setAccessRole(ACCESS_OWNER);
+        accessRepository.save(target);
     }
 
     @Transactional
@@ -414,6 +499,10 @@ public class DeviceAccessService {
             return ACCESS_USER;
         }
         String value = role.trim().toUpperCase();
+        if (ACCESS_OWNER.equals(value)) {
+            // Ownership is not granted like a normal right: see setOwner().
+            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "OWNER can't be granted here");
+        }
         if (!ACCESS_USER.equals(value) && !ACCESS_VIEWER.equals(value)) {
             throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Unknown access role: " + role);
         }

@@ -21,6 +21,16 @@ public class DeviceZoneService {
 
     public static final int DEFAULT_OFFSET_MINUTES = 180;
 
+    /** Real-world UTC offsets: UTC-12:00 .. UTC+14:00. */
+    static final int MIN_OFFSET_MINUTES = -12 * 60;
+    static final int MAX_OFFSET_MINUTES = 14 * 60;
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeviceZoneService.class);
+
+    static boolean validOffset(int offsetMinutes) {
+        return offsetMinutes >= MIN_OFFSET_MINUTES && offsetMinutes <= MAX_OFFSET_MINUTES;
+    }
+
     private final DeviceRepository deviceRepository;
     private final Map<Long, Integer> cache = new ConcurrentHashMap<>();
 
@@ -37,9 +47,11 @@ public class DeviceZoneService {
         if (cached != null) {
             return cached;
         }
+        // An out-of-range value stored earlier would make ZoneOffset.ofTotalSeconds throw
+        // on every message of the device — fall back to the default instead.
         int offset = deviceRepository.findByChipId(deviceId)
                 .map(Device::getTzOffsetMinutes)
-                .filter(v -> v != null)
+                .filter(v -> v != null && validOffset(v))
                 .orElse(DEFAULT_OFFSET_MINUTES);
         cache.put(deviceId, offset);
         return offset;
@@ -52,6 +64,11 @@ public class DeviceZoneService {
     @Transactional
     public void updateZone(Long deviceId, int zoneMinutes) {
         int offset = -zoneMinutes;
+        if (!validOffset(offset)) {
+            // Device payloads are untrusted: an absurd Zone must not break the device's time handling.
+            log.warn("Ignoring out-of-range Zone {} from device {}", zoneMinutes, deviceId);
+            return;
+        }
         Device device = deviceRepository.findByChipId(deviceId)
                 .orElseGet(() -> {
                     Device d = new Device();

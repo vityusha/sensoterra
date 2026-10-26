@@ -198,9 +198,10 @@ public class DeviceController {
     @Post("/claim")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     public HttpResponse<ClaimResult> claim(@Body ClaimRequest request) {
-        Device device = deviceKeys.claim(request.chipId(), request.key(), access.currentUser().getId());
+        Long userId = access.currentUser().getId();
+        Device device = deviceKeys.claim(request.chipId(), request.key(), userId);
         return HttpResponse.ok(new ClaimResult(device.getChipId(), device.getDeviceType(),
-                DeviceAccessService.ACCESS_USER));
+                access.accessRoleOf(userId, device.getChipId())));
     }
 
     /** Аккаунты, которым выдан доступ к этому устройству, и их права на него. */
@@ -218,8 +219,11 @@ public class DeviceController {
     @Post("/{chipId}/access")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     public HttpResponse<AccessEntry> grantAccess(Long chipId, @Body AccessGrantRequest request) {
-        access.requireControl(chipId);
+        access.requireManageAccess(chipId);
         var user = access.byId(request.userId());
+        if (DeviceAccessService.ACCESS_OWNER.equals(access.accessRoleOf(user.getId(), chipId))) {
+            throw new HttpStatusException(HttpStatus.CONFLICT, "The owner's access can't be changed");
+        }
         access.grant(user.getId(), chipId, request.accessRole());
         return HttpResponse.ok(new AccessEntry(user.getId(), user.getUsername(), user.getRole(),
                 access.accessRoleOf(user.getId(), chipId)));
@@ -228,7 +232,18 @@ public class DeviceController {
     @Delete("/{chipId}/access/{userId}")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     public HttpResponse<?> revokeAccess(Long chipId, Long userId) {
-        access.requireControl(chipId);
+        boolean self = userId.equals(access.currentUser().getId());
+        if (self && access.canView(chipId)) {
+            // Any guest may leave a device; the owner can't (it would orphan the device).
+            if (access.isOwner(chipId)) {
+                throw new HttpStatusException(HttpStatus.CONFLICT, "The owner can't remove own access");
+            }
+        } else {
+            access.requireManageAccess(chipId);
+            if (DeviceAccessService.ACCESS_OWNER.equals(access.accessRoleOf(userId, chipId)) && !access.isAdmin()) {
+                throw new HttpStatusException(HttpStatus.FORBIDDEN, "Only an admin can remove the owner");
+            }
+        }
         access.revoke(userId, chipId);
         return HttpResponse.noContent();
     }
