@@ -15,10 +15,11 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -153,6 +154,23 @@ class MqttMessageProcessorTest {
                 "{\"Relay\":1,\"State\":0,\"Activity\":\"Yes\",\"Zone\":-180}", false);
         Device device = deviceRepository.findByChipId(7000001L).orElseThrow();
         assertEquals(180, device.getTzOffsetMinutes());
+    }
+
+    @Test
+    @DisplayName("STATE_R unset time sentinels 24:00, 24:01 and 1441 become null")
+    void relayStateUnsetTimeSentinels() {
+        processor.process("7000004/STATE_R1",
+                "{\"Relay\":1,\"Main_time\":\"23:59\",\"Extra_time\":\"24:01\","
+                        + "\"Start_time\":\"24:00\",\"Finish_time\":\"1441\"}", false);
+
+        ArgumentCaptor<TelemetryService.RelayData> captor =
+                ArgumentCaptor.forClass(TelemetryService.RelayData.class);
+        verify(telemetryService).upsertRelay(eq(7000004L), captor.capture());
+        TelemetryService.RelayData data = captor.getValue();
+        assertEquals(LocalTime.of(23, 59), data.mainTime);
+        assertNull(data.extraTime);
+        assertNull(data.startTime);
+        assertNull(data.finishTime);
     }
 
     @Test

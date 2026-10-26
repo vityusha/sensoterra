@@ -19,10 +19,30 @@
           </svg>
         </button>
         <div v-if="menuOpen" class="menu-dropdown" role="menu">
-          <button v-if="isIndividual" role="menuitem" @click="openSettingsFromMenu">Настройка</button>
-          <button role="menuitem" @click="openCalibrateFromMenu">Калибровка</button>
-          <button v-if="calibSectionVisible" role="menuitem" @click="openCalibSettings">Калибровка влажности</button>
-          <button role="menuitem" @click="openDisplaySettings">Показ измерений</button>
+          <button v-if="isIndividual" role="menuitem" @click="openSettingsFromMenu">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+            </svg>
+            Настройка
+          </button>
+          <button role="menuitem" @click="openCalibrateFromMenu">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
+            </svg>
+            Калибровка
+          </button>
+          <button v-if="calibSectionVisible" role="menuitem" @click="openCalibSettings">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
+            </svg>
+            Калибровка влажности
+          </button>
+          <button role="menuitem" @click="openDisplaySettings">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+            </svg>
+            Показ измерений
+          </button>
         </div>
       </div>
     </div>
@@ -740,8 +760,9 @@ onUnmounted(() => {
 .menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
 .menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text-strong); }
 .menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 200px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
-.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
+.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; display: flex; align-items: center; gap: 0.55rem; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
 .menu-dropdown button:hover { background: var(--bg-primary); }
+.menu-icon { width: 1rem; height: 1rem; flex: none; opacity: 0.9; }
 .ago { color: var(--text-dim); font-size: 0.85em; margin-left: 0.35rem; }
 .msg-num { color: var(--text-dim); font-size: 0.85em; margin-left: 0.25rem; }
 .battery-runtime { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.4rem; background: var(--bg); border-left: 3px solid var(--accent); border-radius: 10px; padding: 0.7rem 1rem; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
@@ -754,8 +775,8 @@ onUnmounted(() => {
 .invite-link { color: var(--accent); font-family: monospace; font-size: 0.75rem; word-break: break-all; margin-bottom: 0.4rem; }
 .invite-note { color: var(--text-dim); font-size: 0.75rem; line-height: 1.4; margin-bottom: 0.5rem; }
 .invite-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.2rem; }
-.btn.danger { background: #7a2626; border-color: #a84040; color: var(--on-accent); }
-.btn.danger:hover:not(:disabled) { background: #933030; border-color: #cb5654; }
+.btn.danger { background: var(--bg-accent); border-color: var(--bg-accent); color: var(--on-accent); }
+.btn.danger:hover:not(:disabled) { background: #7a2222; border-color: #7a2222; color: #fff; }
 .gradient-btn {
   width: 16px; height: 16px; flex: none; padding: 0; cursor: pointer;
   border: 2px solid #fff; border-radius: 50%;

@@ -117,6 +117,10 @@
     </section>
 
     <template v-if="device?.deviceType === 'BLOCK'">
+      <label class="t-item vacc-toggle">
+        <input type="checkbox" :checked="!isVaccHidden(chipId)" @change="onVaccChange($event.target.checked)" />
+        показывать Vacc (напряжение аккумулятора)
+      </label>
       <section class="section">
         <h3>Телеметрия блока</h3>
         <div class="telemetry-row" v-if="blockTelemetry">
@@ -126,12 +130,6 @@
           <span class="t-item" v-if="blockTelemetry?.time">Время: <b>{{ fmtEventTimeWithZone(blockTelemetry.time, device?.tzOffsetMinutes) }}</b></span>
         </div>
         <div class="telemetry-row muted" v-else>нет данных</div>
-        <!-- Выбор «что показывать» живёт здесь, а не в общем списке настроек: у блока он
-             свой, и при сотнях блоков список на странице настроек был бы нечитаемым. -->
-        <label v-if="!isAdmin" class="t-item vacc-toggle">
-          <input type="checkbox" :checked="!isVaccHidden(chipId)" @change="onVaccChange($event.target.checked)" />
-          показывать Vacc (напряжение аккумулятора)
-        </label>
       </section>
     </template>
 
@@ -929,6 +927,7 @@ onMounted(() => {
       try { await load() } catch { /* ignore */ }
     }, 1500)
   })
+  connectWs()
 })
 
 onBeforeUnmount(() => {
@@ -1063,11 +1062,7 @@ function getUnit(sensor, field) {
   return getFieldUnit(sensor.sensorType, field)
 }
 
-/**
- * Админ не выбирает, что показывать (настройки отображения у него убраны), поэтому у него
- * Vacc всегда виден: иначе колонка пропала бы у него без возможности её вернуть.
- */
-const showVacc = computed(() => isAdmin.value || !isVaccHidden(chipId))
+const showVacc = computed(() => !isVaccHidden(chipId))
 
 function onVaccChange(visible) {
   setVaccVisible(chipId, visible)
@@ -1253,8 +1248,8 @@ function applyCustom() {
 .btn:hover:not(:disabled) { background: var(--btn-bg-hover); border-color: var(--btn-border); }
 .btn.small { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
 .btn.secondary { background: var(--btn-bg-hover); }
-.btn.danger { background: #7a2626; border-color: #a84040; color: var(--on-accent); }
-.btn.danger:hover:not(:disabled) { background: #933030; border-color: #cb5654; }
+.btn.danger { background: var(--bg-accent); border-color: var(--bg-accent); color: var(--on-accent); }
+.btn.danger:hover:not(:disabled) { background: #7a2222; border-color: #7a2222; color: #fff; }
 .btn.active { background: var(--bg-active); border-color: var(--accent); color: var(--on-accent); }
 /* Раньше при 0.5 opacity кнопки «Вкл/Выкл» на карточке канала (var(--bg-card))
    и в hover-режиме карточки (var(--bg-primary)) визуально совпадали с фоном. */
@@ -1327,6 +1322,8 @@ function applyCustom() {
 .telemetry-row.muted { color: var(--text-faint); }
 .t-item { font-size: 0.85rem; color: var(--text-muted); }
 .t-item b { color: var(--text); }
+.vacc-toggle { display: inline-flex; align-items: center; gap: 0.45rem; margin-bottom: 0.75rem; cursor: pointer; }
+.vacc-toggle input { margin: 0; }
 .empty.small { color: var(--text-faint); text-align: center; padding: 1rem; font-size: 0.85rem; }
 .range-select { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .custom-range { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: var(--bg-card); border-radius: 10px; }

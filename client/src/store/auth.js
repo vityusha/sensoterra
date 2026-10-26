@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { me, getToken } from '../api/auth'
 import { loadPrefs, settings } from './settings'
-import { disconnectWs } from './notifications'
+import { connectWs, disconnectWs } from './notifications'
 
 export const auth = reactive({
   user: null,
@@ -19,6 +19,7 @@ export async function loadUser() {
     // Настройки блоков и датчиков живут в БД — тянем сразу вместе с пользователем,
     // иначе до первого запроса графики успеют отрисоваться со старыми значениями.
     await loadPrefs()
+    connectWs()
   } catch {
     auth.user = null
   } finally {
@@ -38,6 +39,7 @@ export function setUser(user) {
 export async function enterSession(user) {
   setUser(user)
   await loadPrefs()
+  connectWs()
 }
 
 /**
