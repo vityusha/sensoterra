@@ -4,6 +4,7 @@ import ru.sensoterra.server.entity.AppUser;
 import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.entity.DeviceInvite;
 import ru.sensoterra.server.repository.AppUserRepository;
+import ru.sensoterra.server.security.AuthController;
 import ru.sensoterra.server.security.PasswordEncoder;
 import ru.sensoterra.server.service.DeviceAccessService;
 import ru.sensoterra.server.service.InviteService;
@@ -162,8 +163,9 @@ public class InviteController {
     private String generateToken(AppUser user) {
         List<String> roles = Collections.singletonList(user.getRole());
         ServerAuthentication authentication = new ServerAuthentication(
-                user.getUsername(), roles, Map.of("sub", user.getUsername(), "roles", roles));
-        return tokenGenerator.generateToken(authentication, 86400).orElseThrow(
+                user.getUsername(), roles, Map.of("sub", user.getUsername(), "roles", roles,
+                        AuthController.AUTH_TIME_CLAIM, java.time.Instant.now().getEpochSecond()));
+        return tokenGenerator.generateToken(authentication, AuthController.TOKEN_TTL_SECONDS).orElseThrow(
                 () -> new HttpStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Token generation failed"));
     }
 

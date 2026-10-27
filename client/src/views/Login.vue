@@ -5,6 +5,7 @@
       <h1>Sens-O-Terra</h1>
       <p class="subtitle">{{ isBootstrap ? 'Первый запуск — создайте админа' : 'Вход' }}</p>
 
+      <div v-if="sessionExpiredNotice && !error" class="notice">Сессия истекла, войдите снова</div>
       <div v-if="error" class="error">{{ error }}</div>
 
       <form @submit.prevent="submit">
@@ -53,13 +54,16 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { login, bootstrap, authStatus, loginWithGoogle, setToken } from '../api/auth'
 import { enterSession, userFromAuthResponse } from '../store/auth'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
 import YandexAuthButton from '../components/YandexAuthButton.vue'
 
 const router = useRouter()
+const route = useRoute()
+// Set by the session-expired handler (main.js) and the router guard.
+const sessionExpiredNotice = computed(() => route.query.expired === '1')
 const username = ref('')
 const password = ref('')
 const loading = ref(false)
@@ -141,6 +145,7 @@ input { width: 100%; padding: 0.6rem; border: 1px solid var(--border); border-ra
 button { width: 100%; padding: 0.7rem; border: none; border-radius: 8px; background: var(--success); color: #fff; font-size: 1rem; cursor: pointer; margin-top: 0.5rem; }
 button:disabled { opacity: 0.6; }
 .error { color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem; }
+.notice { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem; }
 .divider { display: flex; align-items: center; gap: 0.6rem; margin: 1.1rem 0 0.2rem; color: var(--text-faint); font-size: 0.75rem; }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border-soft); }
 .hint { color: var(--text-dim); font-size: 0.72rem; line-height: 1.4; margin: 0.6rem 0 0; }

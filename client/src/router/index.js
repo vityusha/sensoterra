@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getToken } from '../api/auth'
-import { auth, deviceAccess } from '../store/auth'
+import { getToken, tokenExpiresAt, wasSessionExpired } from '../api/auth'
+import { auth, deviceAccess, logout } from '../store/auth'
 
 const isAdminRole = () => auth.user?.role === 'ADMIN'
 import Login from '../views/Login.vue'
@@ -108,7 +108,13 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = getToken()
   if (to.meta.requiresAuth && !token) {
-    next('/login')
+    next(wasSessionExpired() ? { path: '/login', query: { expired: '1' } } : '/login')
+    return
+  }
+  // Tab reopened after the session ran out: say so instead of showing stale data.
+  if (to.meta.requiresAuth && tokenExpiresAt(token) <= Date.now()) {
+    logout()
+    next({ path: '/login', query: { expired: '1' } })
     return
   }
   const role = auth.user?.role

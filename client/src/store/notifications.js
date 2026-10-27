@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { getDeviceRelays } from '../api/auth'
+import { getDeviceRelays, sessionExpired } from '../api/auth'
 import { getBlockName, getIndividualName, areAlertsEnabled } from './settings'
 
 let nextId = 0
@@ -202,6 +202,13 @@ export function connectWs() {
     // 5 s with the same token only floods its log. Reconnect after the token changes.
     if (event.code === CLOSE_POLICY_VIOLATION) {
       rejectedToken = token
+      if (getToken() === token) {
+        // Still our current token: the session is over -> login page with a message.
+        sessionExpired()
+      } else {
+        // The token was refreshed meanwhile: retry with the new one.
+        connectWs()
+      }
       return
     }
     scheduleReconnect()
@@ -317,6 +324,16 @@ function scheduleReconnect() {
     reconnectTimer = null
     connectWs()
   }, 5000)
+}
+
+/**
+ * Tab visible again / network back: reconnect now instead of waiting for the 5 s timer,
+ * which browsers throttle heavily in background tabs.
+ */
+export function reconnectWsNow() {
+  clearTimeout(reconnectTimer)
+  reconnectTimer = null
+  connectWs()
 }
 
 /** On logout: close the socket and stop reconnecting (connectWs() resumes after a new login). */
