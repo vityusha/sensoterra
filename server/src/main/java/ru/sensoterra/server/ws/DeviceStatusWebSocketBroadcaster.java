@@ -1,6 +1,5 @@
 package ru.sensoterra.server.ws;
 
-import ru.sensoterra.server.service.DeviceStateStore;
 import io.micronaut.websocket.WebSocketSession;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -14,12 +13,6 @@ import java.util.Set;
 public class DeviceStatusWebSocketBroadcaster {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceStatusWebSocketBroadcaster.class);
-
-    private final DeviceStateStore stateStore;
-
-    public DeviceStatusWebSocketBroadcaster(DeviceStateStore stateStore) {
-        this.stateStore = stateStore;
-    }
 
     /**
      * Рассылает событие только тем сессиям, которым доступно устройство из сообщения.
@@ -61,14 +54,4 @@ public class DeviceStatusWebSocketBroadcaster {
         return false;
     }
 
-    /** Начальное уведомление о состоянии MQTT-подключения — без данных устройств. */
-    public void broadcastCurrentStatus(WebSocketSession session) {
-        if (session.isOpen()) {
-            var message = Map.of(
-                    "type", "status",
-                    "status", stateStore.getLastStatus(),
-                    "timestamp", System.currentTimeMillis());
-            session.sendAsync(message);
-        }
-    }
 }

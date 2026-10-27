@@ -41,7 +41,6 @@ public class AuthController {
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     /** Минимум для нового пароля при смене. */
-    private static final int MIN_PASSWORD_LENGTH = 8;
 
     /** JWT lifetime: an idle session expires after this; active clients refresh before it. */
     public static final int TOKEN_TTL_SECONDS = 24 * 3600;
@@ -140,10 +139,7 @@ public class AuthController {
         if (next == null || next.isBlank()) {
             throw new HttpStatusException(HttpStatus.BAD_REQUEST, "New password is required");
         }
-        if (next.length() < MIN_PASSWORD_LENGTH) {
-            throw new HttpStatusException(HttpStatus.BAD_REQUEST,
-                    "New password must be at least " + MIN_PASSWORD_LENGTH + " characters");
-        }
+        CredentialsPolicy.requirePassword(next, user.getUsername());
         if (!passwordEncoder.matches(current, user.getPasswordHash())) {
             log.warn("Password change rejected: wrong current password username='{}'", user.getUsername());
             throw new HttpStatusException(HttpStatus.UNAUTHORIZED, "Current password is wrong");
@@ -171,13 +167,8 @@ public class AuthController {
     @Secured(SecurityRule.IS_ANONYMOUS)
     @Transactional
     public HttpResponse<?> register(@Body RegisterRequest request) {
-        String username = request.username() == null ? null : request.username().trim();
-        if (username == null || username.isEmpty()) {
-            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Username is required");
-        }
-        if (request.password() == null || request.password().isBlank()) {
-            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Password is required");
-        }
+        String username = CredentialsPolicy.requireUsername(request.username());
+        CredentialsPolicy.requirePassword(request.password(), username);
         if (userRepository.findByUsername(username).isPresent()) {
             throw new HttpStatusException(HttpStatus.CONFLICT, "Username already exists");
         }
@@ -250,8 +241,10 @@ public class AuthController {
         if (userRepository.count() > 0) {
             throw new HttpStatusException(HttpStatus.FORBIDDEN, "Admin user already exists");
         }
+        String username = CredentialsPolicy.requireUsername(request.username());
+        CredentialsPolicy.requirePassword(request.password(), username);
         AppUser admin = new AppUser();
-        admin.setUsername(request.username());
+        admin.setUsername(username);
         admin.setPasswordHash(passwordEncoder.encode(request.password()));
         admin.setRole("ADMIN");
         admin.setEnabled(Boolean.TRUE);

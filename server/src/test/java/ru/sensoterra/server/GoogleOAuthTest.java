@@ -53,7 +53,7 @@ class GoogleOAuthTest {
 
     @BeforeEach
     void ensureAdmin() {
-        Map<String, String> creds = Map.of("username", "admin", "password", "admin123");
+        Map<String, String> creds = Map.of("username", "admin", "password", "admin-pass-123");
         Map status = client.toBlocking().exchange(
                 HttpRequest.GET("/api/auth/status"), Argument.of(Map.class)).body();
         if (Boolean.TRUE.equals(status.get("bootstrapNeeded"))) {

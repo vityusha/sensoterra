@@ -33,7 +33,7 @@ class AuthFlowTest {
     void bootstrap() {
         HttpResponse<Map> resp = client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/bootstrap",
-                        Map.of("username", "admin", "password", "admin123")),
+                        Map.of("username", "admin", "password", "admin-pass-123")),
                 Argument.of(Map.class));
         assertEquals(200, resp.getStatus().getCode());
         Map body = resp.body();
@@ -48,7 +48,7 @@ class AuthFlowTest {
     void loginAdmin() {
         HttpResponse<Map> resp = client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/login",
-                        Map.of("username", "admin", "password", "admin123")),
+                        Map.of("username", "admin", "password", "admin-pass-123")),
                 Argument.of(Map.class));
         assertEquals(200, resp.getStatus().getCode());
         Map body = resp.body();

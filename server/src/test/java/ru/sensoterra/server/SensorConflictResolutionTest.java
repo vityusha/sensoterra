@@ -66,12 +66,12 @@ class SensorConflictResolutionTest {
     void setup() {
         try {
             client.toBlocking().exchange(HttpRequest.POST("/api/auth/bootstrap",
-                    Map.of("username", "admin", "password", "admin123")));
+                    Map.of("username", "admin", "password", "admin-pass-123")));
         } catch (HttpClientResponseException ignored) {
         }
         HttpResponse<Map> resp = client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/login",
-                        Map.of("username", "admin", "password", "admin123")),
+                        Map.of("username", "admin", "password", "admin-pass-123")),
                 Argument.of(Map.class));
         adminToken = (String) resp.body().get("token");
 

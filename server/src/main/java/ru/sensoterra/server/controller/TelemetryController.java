@@ -156,10 +156,13 @@ public class TelemetryController {
         }
         deviceId = requireSensorTelemetryAccess(deviceId, sensorChipId);
         final int pageSize = 5000;
+        // Any logged-in user can call this: without a cap one request walks a sensor's whole
+        // year of raw history. 40 pages = 200k rows, far more than a real gap search needs.
+        final int maxPages = 40;
         Instant before = null;
         Integer newerNum = null;
         Instant newerTime = null;
-        while (true) {
+        for (int page = 0; page < maxPages; page++) {
             StringBuilder jpql = new StringBuilder(
                     "SELECT t.time, t.numMessage FROM SensorTelemetry t WHERE t.sensorChipId = :chipId");
             if (deviceId != null) {

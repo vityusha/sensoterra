@@ -154,6 +154,17 @@ class SecurityFixesTest {
         assertTrue(disabled == 401 || disabled == 403, "disabled account -> " + disabled);
     }
 
+    // ----- command log -----
+
+    @Test
+    @DisplayName("Command log: odd limits don't fail, results are capped")
+    void commandLogLimits() {
+        assertEquals(200, status(HttpRequest.GET("/api/commands?limit=-5&offset=-1"), guestToken));
+        List<Map> page = client.toBlocking().retrieve(auth(HttpRequest.GET("/api/commands?limit=100000"), adminToken),
+                Argument.listOf(Map.class));
+        assertTrue(page.size() <= 200, "capped, got " + page.size());
+    }
+
     // ----- HTTP Basic -----
 
     @Test
@@ -168,7 +179,7 @@ class SecurityFixesTest {
     // ----- helpers -----
 
     private String adminToken() {
-        Map<String, String> creds = Map.of("username", "admin", "password", "admin123");
+        Map<String, String> creds = Map.of("username", "admin", "password", "admin-pass-123");
         try {
             return (String) body(client.toBlocking().exchange(HttpRequest.POST("/api/auth/login", creds), Map.class))
                     .get("token");

@@ -5,6 +5,7 @@ import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.entity.DeviceInvite;
 import ru.sensoterra.server.repository.AppUserRepository;
 import ru.sensoterra.server.security.AuthController;
+import ru.sensoterra.server.security.CredentialsPolicy;
 import ru.sensoterra.server.security.PasswordEncoder;
 import ru.sensoterra.server.service.DeviceAccessService;
 import ru.sensoterra.server.service.InviteService;
@@ -134,10 +135,8 @@ public class InviteController {
     @Post("/api/invites/{token}/register")
     @Secured(SecurityRule.IS_ANONYMOUS)
     public HttpResponse<?> register(String token, @Body InviteRegisterRequest request) {
-        String username = request.username() == null ? null : request.username().trim();
-        if (username == null || username.isEmpty() || request.password() == null || request.password().isBlank()) {
-            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Username and password are required");
-        }
+        String username = CredentialsPolicy.requireUsername(request.username());
+        CredentialsPolicy.requirePassword(request.password(), username);
         if (userRepository.findByUsername(username).isPresent()) {
             throw new HttpStatusException(HttpStatus.CONFLICT, "Username already exists");
         }

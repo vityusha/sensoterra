@@ -59,6 +59,7 @@ import { login, bootstrap, authStatus, loginWithGoogle, setToken } from '../api/
 import { enterSession, userFromAuthResponse } from '../store/auth'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
 import YandexAuthButton from '../components/YandexAuthButton.vue'
+import { credentialsErrorText, passwordProblem, usernameProblem } from '../utils/credentials'
 
 const router = useRouter()
 const route = useRoute()
@@ -114,6 +115,15 @@ async function submit() {
   error.value = ''
   // На телефоне клавиатура часто подмешивает пробел в конце — логин сравнивается точно.
   const user_ = username.value.trim()
+  if (isBootstrap.value) {
+    // The first admin goes through the same policy as everyone else.
+    const problem = usernameProblem(user_) || passwordProblem(password.value, user_)
+    if (problem) {
+      error.value = problem
+      loading.value = false
+      return
+    }
+  }
   try {
     const user = isBootstrap.value
       ? await bootstrap(user_, password.value)
@@ -121,7 +131,7 @@ async function submit() {
     await enterSession(user)
     router.push('/')
   } catch (e) {
-    error.value = e.response?.data?.message || 'Ошибка входа'
+    error.value = credentialsErrorText(e) || 'Ошибка входа'
   } finally {
     loading.value = false
   }

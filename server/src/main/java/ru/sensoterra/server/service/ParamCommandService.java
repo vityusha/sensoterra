@@ -42,7 +42,26 @@ public class ParamCommandService {
         this.commandLogRepository = commandLogRepository;
     }
 
+    /**
+     * Payloads to the firmware are positional fields joined by ';'. A ';' (or a line break)
+     * in a name would shift every following field — including timestr, the firmware's
+     * anti-replay check. Names typed by the user are rejected; names that came from the
+     * device itself (STATE_R/EVENT_S) are cleaned when echoed back.
+     */
+    static void requireSafeName(String name) {
+        if (name != null && UNSAFE_NAME_CHARS.matcher(name).find()) {
+            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Name must not contain ';' or line breaks");
+        }
+    }
+
+    static Object payloadName(Object name) {
+        return name == null ? null : UNSAFE_NAME_CHARS.matcher(String.valueOf(name)).replaceAll(" ");
+    }
+
+    private static final java.util.regex.Pattern UNSAFE_NAME_CHARS = java.util.regex.Pattern.compile("[;\\p{Cntrl}]");
+
     public CommandResult relayParams(Long relayId, RelayParamsRequest request) {
+        requireSafeName(request.getName());
         Relay relay = relayRepository.findById(relayId)
                 .orElseThrow(() -> new HttpStatusException(HttpStatus.NOT_FOUND, "Relay not found"));
         if (!mqttClientService.isConnected()) {
@@ -75,6 +94,7 @@ public class ParamCommandService {
     }
 
     public CommandResult sensorParams(Long sensorId, SensorParamsRequest request) {
+        requireSafeName(request.getName());
         Sensor sensor = sensorRepository.findById(sensorId)
                 .orElseThrow(() -> new HttpStatusException(HttpStatus.NOT_FOUND, "Sensor not found"));
 
@@ -155,7 +175,7 @@ public class ParamCommandService {
             // limit_single;limit_low;limit_high;timestr
             // Пустые поля прошивка трактует как "оставить по умолчанию" (strlen()==0).
             java.util.List<String> fields = new java.util.ArrayList<>();
-            fields.add(sv(firstNonNull(name, relay.getName())));
+            fields.add(sv(payloadName(firstNonNull(name, relay.getName()))));
             fields.add(sv(requestOrCurrent(activate, relay.getActivity())));
             fields.add(sv(type != null ? type : typeToInt(relay.getTypeEnum())));
             fields.add(sv(toInt(useTimer, relay.getTimerEnabled())));
@@ -258,7 +278,7 @@ public class ParamCommandService {
             // Позиционный формат прошивки блока, ровно 7 полей через ';':
             // name;sleep;send;percent_n;percent_s;min_voltage;timestr
             java.util.List<String> fields = new java.util.ArrayList<>();
-            fields.add(sv(firstNonNull(name, sensor.getName())));
+            fields.add(sv(payloadName(firstNonNull(name, sensor.getName()))));
             fields.add(sv(sleep != null ? sleep : sensor.getSleep()));
             fields.add(sv(send != null ? send : sensor.getSend()));
             fields.add(sv(percentN != null ? percentN : nullToInt(sensor.getPercentN())));

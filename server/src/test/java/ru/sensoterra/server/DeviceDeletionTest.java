@@ -70,10 +70,10 @@ class DeviceDeletionTest {
     void bootstrap() throws Exception {
         try {
             client.toBlocking().exchange(HttpRequest.POST("/api/auth/bootstrap",
-                    Map.of("username", "admin", "password", "admin123")));
+                    Map.of("username", "admin", "password", "admin-pass-123")));
         } catch (HttpClientResponseException ignored) {
         }
-        adminToken = login("admin", "admin123");
+        adminToken = login("admin", "admin-pass-123");
 
         try {
             client.toBlocking().exchange(HttpRequest.POST("/api/auth/register",

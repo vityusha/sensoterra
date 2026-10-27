@@ -30,6 +30,8 @@
         </button>
       </div>
 
+      <p class="hint">{{ PASSWORD_HINT }}</p>
+
       <label>Повторите пароль</label>
       <input v-model="form.repeat" :type="showPwd ? 'text' : 'password'" autocomplete="new-password" required />
 
@@ -70,6 +72,7 @@ import { useRouter } from 'vue-router'
 import { authStatus, loginWithGoogle, register, setToken } from '../api/auth'
 import { enterSession, userFromAuthResponse } from '../store/auth'
 import { pushNotification } from '../store/notifications'
+import { PASSWORD_HINT, credentialsErrorText, passwordProblem, usernameProblem } from '../utils/credentials'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
 import YandexAuthButton from '../components/YandexAuthButton.vue'
 
@@ -136,6 +139,11 @@ async function onGoogle(idToken) {
 
 async function submit() {
   error.value = ''
+  const problem = usernameProblem(form.username) || passwordProblem(form.password, form.username)
+  if (problem) {
+    error.value = problem
+    return
+  }
   if (form.password !== form.repeat) {
     error.value = 'Пароли не совпадают'
     return
@@ -162,7 +170,7 @@ async function submit() {
     pushNotification(data.deviceBound ? 'Аккаунт создан, блок привязан' : 'Аккаунт создан')
     router.push('/')
   } catch (e) {
-    error.value = e.response?.data?.message
+    error.value = credentialsErrorText(e)
       || (chipId ? 'ID или ключ не подошли — аккаунт не создан' : 'Не удалось создать аккаунт')
   } finally {
     busy.value = false

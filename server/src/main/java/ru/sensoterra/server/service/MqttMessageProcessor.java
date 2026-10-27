@@ -30,6 +30,7 @@ public class MqttMessageProcessor {
     private static final Pattern EMPTY_VALUE = Pattern.compile("(\"[^\"\\\\\r\n]+\"\\s*+:\\s*+)(?=[,}])");
     /** Device payloads are a few hundred bytes; anything far larger is junk or an attack. */
     static final int MAX_PAYLOAD_CHARS = 16 * 1024;
+    static final int MAX_STATUS_LENGTH = 20;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final TelemetryService telemetryService;
@@ -103,6 +104,11 @@ public class MqttMessageProcessor {
 
     private void handleStatus(Long deviceId, String payload) {
         String status = payload.trim().isEmpty() ? "unknown" : payload.trim();
+        // device.last_status / device_status_log.status are VARCHAR(20); a longer device
+        // payload would fail the insert and still be kept in memory and broadcast.
+        if (status.length() > MAX_STATUS_LENGTH) {
+            status = status.substring(0, MAX_STATUS_LENGTH);
+        }
         String previous = deviceStateStore.getStatus(deviceId);
         if (previous.equals(status)) {
             log.debug("Device {} status {} (unchanged, skipping)", deviceId, status);

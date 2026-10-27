@@ -44,7 +44,7 @@ class RolesAccessTest {
     private String tokenFor(String username) {
         // Роль в токене и в БД должна совпадать, поэтому токены берём из /api/auth/login.
         HttpResponse<Map> resp = client.toBlocking().exchange(
-                HttpRequest.POST("/api/auth/login", Map.of("username", username, "password", "pw12345"))
+                HttpRequest.POST("/api/auth/login", Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class));
         return (String) resp.body().get("token");
@@ -55,7 +55,7 @@ class RolesAccessTest {
         if (adminToken != null) {
             return;
         }
-        Map<String, String> creds = Map.of("username", "admin", "password", "admin123");
+        Map<String, String> creds = Map.of("username", "admin", "password", "admin-pass-123");
         try {
             adminToken = (String) client.toBlocking().exchange(
                     HttpRequest.POST("/api/auth/login", creds)
@@ -127,7 +127,7 @@ class RolesAccessTest {
         }
         HttpResponse<Map> created = client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/register",
-                                Map.of("username", username, "password", "pw12345"))
+                                Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class));
         return ((Number) created.body().get("id")).longValue();
@@ -205,7 +205,7 @@ class RolesAccessTest {
         HttpClientResponseException ex = assertThrows(HttpClientResponseException.class, () ->
                 client.toBlocking().exchange(
                         HttpRequest.POST("/api/auth/login",
-                                Map.of("username", "roles-viewer", "password", "pw12345"))
+                                Map.of("username", "roles-viewer", "password", "pw-123456"))
                                 .contentType(MediaType.APPLICATION_JSON)));
         assertEquals(403, ex.getStatus().getCode());
 
@@ -287,7 +287,7 @@ class RolesAccessTest {
     void builtinLoginDisabled() {
         HttpClientResponseException ex = assertThrows(HttpClientResponseException.class, () ->
                 client.toBlocking().exchange(
-                        HttpRequest.POST("/login", Map.of("username", "admin", "password", "admin123"))
+                        HttpRequest.POST("/login", Map.of("username", "admin", "password", "admin-pass-123"))
                                 .contentType(MediaType.APPLICATION_JSON)));
         // В тестовой среде анонимный запрос отбивает security-фильтр (401), в проде маршрута
         // просто нет (404) — важно, что JWT больше не выдаётся.

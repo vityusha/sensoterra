@@ -4,6 +4,7 @@ import ru.sensoterra.server.entity.AppUser;
 import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.repository.AppUserRepository;
 import ru.sensoterra.server.repository.DeviceRepository;
+import ru.sensoterra.server.security.CredentialsPolicy;
 import ru.sensoterra.server.security.PasswordEncoder;
 import ru.sensoterra.server.service.DeviceAccessService;
 import ru.sensoterra.server.service.BlockPaymentService;
@@ -67,10 +68,8 @@ public class AdminUserController {
      */
     @Post
     public HttpResponse<UserResponse> create(@Body UserCreateRequest request) {
-        String username = request.username() != null ? request.username().trim() : null;
-        if (username == null || username.isEmpty() || request.password() == null || request.password().isBlank()) {
-            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Username and password are required");
-        }
+        String username = CredentialsPolicy.requireUsername(request.username());
+        CredentialsPolicy.requirePassword(request.password(), username);
         if (userRepository.findByUsername(username).isPresent()) {
             throw new HttpStatusException(HttpStatus.CONFLICT, "Username already exists");
         }
@@ -93,6 +92,7 @@ public class AdminUserController {
     public HttpResponse<UserResponse> update(Long id, @Body UserUpdateRequest request) {
         AppUser user = find(id);
         if (request.password() != null && !request.password().isBlank()) {
+            CredentialsPolicy.requirePassword(request.password(), user.getUsername());
             user.setPasswordHash(passwordEncoder.encode(request.password()));
         }
         if (request.role() != null && !request.role().isBlank()) {
