@@ -47,6 +47,7 @@ public class MqttClientService {
     private static final String LEGACY_STATUS_TOPIC = "sensoterra/server/status";
 
     private static final int MAX_TRACKED_DEVICES = 2000;
+    private static final int MAX_RETAINED_SEEN = 50_000;
     private static final int MAX_TOPICS_PER_DEVICE = 128;
 
     private final MqttConfiguration config;
@@ -208,7 +209,11 @@ public class MqttClientService {
                     boolean retained = message.isRetained();
                     trackTopic(topic);
                     if (retained) {
-                        retainedSeen.add(topic);
+                        // Bounded: any publisher can invent topics. Missing entries only make
+                        // clearRetained() report "nothing to clear"; the clear itself still runs.
+                        if (retainedSeen.size() < MAX_RETAINED_SEEN) {
+                            retainedSeen.add(topic);
+                        }
                     }
                     if (retained || topic.endsWith("/STATUS") || topic.endsWith("/PING")) {
                         log.debug("MQTT retained={} topic={} payload={}", retained, topic, new String(message.getPayload()));
@@ -353,10 +358,6 @@ public class MqttClientService {
 
     public boolean isConnected(Device device) {
         return isConnected();
-    }
-
-    public String getLastStatus() {
-        return stateStore.getLastStatus();
     }
 
     public String getDeviceStatus(Long deviceId) {

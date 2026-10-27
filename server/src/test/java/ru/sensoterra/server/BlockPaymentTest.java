@@ -82,7 +82,7 @@ class BlockPaymentTest {
     }
 
     private String loginOrBootstrap() {
-        Map<String, String> creds = Map.of("username", ADMIN, "password", "admin123");
+        Map<String, String> creds = Map.of("username", ADMIN, "password", "admin-pass-123");
         try {
             return (String) client.toBlocking().exchange(
                     HttpRequest.POST("/api/auth/login", creds)
@@ -99,7 +99,7 @@ class BlockPaymentTest {
     private String tokenFor(String username) {
         return (String) client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/login",
-                                Map.of("username", username, "password", "pw12345"))
+                                Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class)).body().get("token");
     }
@@ -113,7 +113,7 @@ class BlockPaymentTest {
             }
         }
         return ((Number) client.toBlocking().exchange(
-                HttpRequest.POST("/api/auth/register", Map.of("username", username, "password", "pw12345"))
+                HttpRequest.POST("/api/auth/register", Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class)).body().get("id")).longValue();
     }

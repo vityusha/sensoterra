@@ -111,7 +111,7 @@
             </div>
           </label>
 
-          <p class="hint">Не короче {{ MIN_LENGTH }} символов.</p>
+          <p class="hint">{{ PASSWORD_HINT }}</p>
           <div v-if="error" class="error">{{ error }}</div>
           <button type="submit" :disabled="busy">
             {{ busy ? '...' : 'Сменить пароль' }}
@@ -132,8 +132,9 @@ import { reactive, ref, computed } from 'vue'
 import { auth } from '../store/auth'
 import { changePassword } from '../api/auth'
 import { pushNotification } from '../store/notifications'
+import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, credentialsErrorText, passwordProblem } from '../utils/credentials'
 
-const MIN_LENGTH = 8
+const MIN_LENGTH = MIN_PASSWORD_LENGTH
 
 const form = reactive({ current: '', next: '', repeat: '' })
 const show = reactive({ current: false, next: false, repeat: false })
@@ -167,7 +168,7 @@ function detailMessage(err) {
 function errorText(err) {
   if (err.response?.status === 401) return 'Текущий пароль указан неверно'
   const message = detailMessage(err)
-  if (message.includes('at least')) return `Новый пароль должен быть не короче ${MIN_LENGTH} символов`
+  if (message.startsWith('Password ')) return credentialsErrorText(err)
   if (message.includes('must differ')) return 'Новый пароль должен отличаться от текущего'
   if (message.includes('signs in with')) return 'Этот аккаунт входит через внешнего провайдера, пароля у него нет'
   return message || 'Не удалось сменить пароль'
@@ -187,8 +188,9 @@ function reset() {
 async function submit() {
   if (busy.value) return
   error.value = ''
-  if (form.next.length < MIN_LENGTH) {
-    error.value = `Новый пароль должен быть не короче ${MIN_LENGTH} символов`
+  const problem = passwordProblem(form.next, auth.user?.username)
+  if (problem) {
+    error.value = problem
     return
   }
   if (form.next !== form.repeat) {

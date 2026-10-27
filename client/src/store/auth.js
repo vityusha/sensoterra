@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { me, getToken } from '../api/auth'
+import { me, getToken, setToken } from '../api/auth'
 import { loadPrefs, settings } from './settings'
 import { connectWs, disconnectWs } from './notifications'
 
@@ -114,7 +114,8 @@ export function canControlDevice(chipId) {
 
 export function logout() {
   auth.user = null
-  localStorage.removeItem('token')
+  // setToken(null), not just localStorage: it also drops the axios default Authorization header.
+  setToken(null)
   disconnectWs()
   settings.devices = {}
   settings.sensors = {}

@@ -25,6 +25,7 @@ public class NotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
     private static final long RE_NOTIFY_MINUTES = 15;
+    private static final int MAX_REMEMBERED = 10_000;
     private static final float FALLBACK_LOW_BATTERY = 1.9f;
 
     private final SensorRepository sensorRepository;
@@ -141,6 +142,12 @@ public class NotificationService {
     }
 
     private boolean canNotify(String key) {
+        if (lastNotified.size() > MAX_REMEMBERED) {
+            // Entries older than the re-notify window no longer matter; drop them so the map
+            // can't grow without bound.
+            Instant cutoff = Instant.now().minusSeconds(RE_NOTIFY_MINUTES * 60);
+            lastNotified.values().removeIf(t -> t.isBefore(cutoff));
+        }
         Instant last = lastNotified.get(key);
         if (last == null || last.isBefore(Instant.now().minusSeconds(RE_NOTIFY_MINUTES * 60))) {
             lastNotified.put(key, Instant.now());

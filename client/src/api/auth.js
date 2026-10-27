@@ -6,12 +6,91 @@ api.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+    // Any API call is user activity: extend the session before the token runs out.
+    refreshTokenIfNeeded()
   }
   return config
 })
 
+// Endpoints where 401 is a normal answer (wrong password etc.), not an expired session.
+const AUTH_FORM_URL = /^\/?auth\/(login|bootstrap|register|password|oauth\/)/
+
+api.interceptors.response.use(res => res, err => {
+  const config = err.config || {}
+  if (err.response?.status === 401 && config.headers?.Authorization && !AUTH_FORM_URL.test(config.url || '')) {
+    sessionExpired()
+  }
+  return Promise.reject(err)
+})
+
+// --- Sliding session: JWT lives 24 h, an active client gets a new one past half of it ---
+
+const REFRESH_WHEN_LEFT_MS = 12 * 3600 * 1000
+
+let sessionExpiredHandler = null
+let refreshing = null
+// Set when a session ends by expiry, cleared on the next login: lets the router keep the
+// "session expired" message even when it, not the handler, does the redirect.
+let expiredFlag = false
+
+export function wasSessionExpired() {
+  return expiredFlag
+}
+
+/** main.js registers what to do when the session is over (logout + login page). */
+export function onSessionExpired(handler) {
+  sessionExpiredHandler = handler
+}
+
+/** Token rejected or expired: drop it and let the app show the login page once. */
+export function sessionExpired() {
+  if (!getToken()) return
+  setToken(null)
+  expiredFlag = true
+  if (sessionExpiredHandler) sessionExpiredHandler()
+}
+
+/** exp of the JWT in ms; 0 if the token can't be read (treated as expired). */
+export function tokenExpiresAt(token) {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(payload)).exp * 1000
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Called on user activity (API calls, tab visible). Expired token -> session expired;
+ * less than 12 h left -> POST /api/auth/refresh. The server refuses (401) after the
+ * absolute session limit, which also ends the session.
+ */
+export function refreshTokenIfNeeded() {
+  const token = getToken()
+  if (!token || refreshing) return
+  const left = tokenExpiresAt(token) - Date.now()
+  if (left <= 0) {
+    sessionExpired()
+    return
+  }
+  if (left > REFRESH_WHEN_LEFT_MS) return
+  // Plain axios: this request must not go through the interceptors above.
+  refreshing = axios.post('/api/auth/refresh', {}, { headers: { Authorization: `Bearer ${token}` } })
+    .then(({ data }) => {
+      // A logout or another login meanwhile wins over this refresh.
+      if (getToken() === token && data?.token) setToken(data.token)
+    })
+    .catch(e => {
+      if (e.response?.status === 401) sessionExpired()
+    })
+    .finally(() => {
+      refreshing = null
+    })
+}
+
 export function setToken(token) {
   if (token) {
+    expiredFlag = false
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`
     localStorage.setItem('token', token)
   } else {

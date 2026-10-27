@@ -27,6 +27,8 @@ public class DeviceZoneService {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeviceZoneService.class);
 
+    static final int MAX_CACHED_DEVICES = 10_000;
+
     static boolean validOffset(int offsetMinutes) {
         return offsetMinutes >= MIN_OFFSET_MINUTES && offsetMinutes <= MAX_OFFSET_MINUTES;
     }
@@ -53,7 +55,10 @@ public class DeviceZoneService {
                 .map(Device::getTzOffsetMinutes)
                 .filter(v -> v != null && validOffset(v))
                 .orElse(DEFAULT_OFFSET_MINUTES);
-        cache.put(deviceId, offset);
+        // Bounded like DeviceStateStore: invented device ids must not grow the heap.
+        if (cache.size() < MAX_CACHED_DEVICES) {
+            cache.put(deviceId, offset);
+        }
         return offset;
     }
 

@@ -47,7 +47,7 @@ class InviteTest {
 
     private String tokenFor(String username) {
         HttpResponse<Map> resp = client.toBlocking().exchange(
-                HttpRequest.POST("/api/auth/login", Map.of("username", username, "password", "pw12345"))
+                HttpRequest.POST("/api/auth/login", Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class));
         return (String) resp.body().get("token");
@@ -57,7 +57,7 @@ class InviteTest {
         if (adminToken != null) {
             return;
         }
-        Map<String, String> creds = Map.of("username", "admin", "password", "admin123");
+        Map<String, String> creds = Map.of("username", "admin", "password", "admin-pass-123");
         try {
             adminToken = (String) client.toBlocking().exchange(
                     HttpRequest.POST("/api/auth/login", creds)
@@ -83,7 +83,7 @@ class InviteTest {
         }
         HttpResponse<Map> created = client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/register",
-                                Map.of("username", username, "password", "pw12345"))
+                                Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class));
         return ((Number) created.body().get("id")).longValue();
@@ -273,7 +273,7 @@ class InviteTest {
 
         HttpResponse<Map> resp = client.toBlocking().exchange(
                 HttpRequest.POST("/api/invites/" + token + "/register",
-                                Map.of("username", username, "password", "pw12345"))
+                                Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class));
 
@@ -300,7 +300,7 @@ class InviteTest {
         HttpClientResponseException ex = assertThrows(HttpClientResponseException.class, () ->
                 client.toBlocking().exchange(
                         HttpRequest.POST("/api/invites/ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ/register",
-                                        Map.of("username", username, "password", "pw12345"))
+                                        Map.of("username", username, "password", "pw-123456"))
                                 .contentType(MediaType.APPLICATION_JSON)));
         assertEquals(410, ex.getStatus().getCode());
 

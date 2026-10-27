@@ -121,6 +121,7 @@ async function listDeviceAccessChip(userId, devices) {
   return result
 }
 import { pushNotification } from '../store/notifications'
+import { credentialsErrorText, passwordProblem, usernameProblem } from '../utils/credentials'
 import { auth } from '../store/auth'
 
 const users = ref([])
@@ -184,7 +185,17 @@ async function load() {
 onMounted(load)
 
 async function create() {
-  await createAdmin(form.username, form.password)
+  const problem = usernameProblem(form.username) || passwordProblem(form.password, form.username)
+  if (problem) {
+    pushNotification(problem, 'error')
+    return
+  }
+  try {
+    await createAdmin(form.username.trim(), form.password)
+  } catch (e) {
+    pushNotification(credentialsErrorText(e) || 'Не удалось создать админа', 'error')
+    return
+  }
   form.username = ''
   form.password = ''
   pushNotification('Админ создан')

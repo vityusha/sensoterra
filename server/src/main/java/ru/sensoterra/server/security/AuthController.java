@@ -18,6 +18,7 @@ import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
+import io.micronaut.security.authentication.Authentication;
 import io.micronaut.security.authentication.ServerAuthentication;
 import io.micronaut.security.rules.SecurityRule;
 import io.micronaut.security.token.generator.TokenGenerator;
@@ -40,7 +41,13 @@ public class AuthController {
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     /** Минимум для нового пароля при смене. */
-    private static final int MIN_PASSWORD_LENGTH = 8;
+
+    /** JWT lifetime: an idle session expires after this; active clients refresh before it. */
+    public static final int TOKEN_TTL_SECONDS = 24 * 3600;
+    /** Absolute session limit counted from the login, however active the user is. */
+    public static final long MAX_SESSION_SECONDS = 30L * 24 * 3600;
+    /** Claim with the original login time (epoch seconds), kept across refreshes. */
+    public static final String AUTH_TIME_CLAIM = "auth_time";
 
     private final AppUserRepository userRepository;
     private final ru.sensoterra.server.service.UserPrefService prefs;
@@ -132,10 +139,7 @@ public class AuthController {
         if (next == null || next.isBlank()) {
             throw new HttpStatusException(HttpStatus.BAD_REQUEST, "New password is required");
         }
-        if (next.length() < MIN_PASSWORD_LENGTH) {
-            throw new HttpStatusException(HttpStatus.BAD_REQUEST,
-                    "New password must be at least " + MIN_PASSWORD_LENGTH + " characters");
-        }
+        CredentialsPolicy.requirePassword(next, user.getUsername());
         if (!passwordEncoder.matches(current, user.getPasswordHash())) {
             log.warn("Password change rejected: wrong current password username='{}'", user.getUsername());
             throw new HttpStatusException(HttpStatus.UNAUTHORIZED, "Current password is wrong");
@@ -163,13 +167,8 @@ public class AuthController {
     @Secured(SecurityRule.IS_ANONYMOUS)
     @Transactional
     public HttpResponse<?> register(@Body RegisterRequest request) {
-        String username = request.username() == null ? null : request.username().trim();
-        if (username == null || username.isEmpty()) {
-            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Username is required");
-        }
-        if (request.password() == null || request.password().isBlank()) {
-            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Password is required");
-        }
+        String username = CredentialsPolicy.requireUsername(request.username());
+        CredentialsPolicy.requirePassword(request.password(), username);
         if (userRepository.findByUsername(username).isPresent()) {
             throw new HttpStatusException(HttpStatus.CONFLICT, "Username already exists");
         }
@@ -242,8 +241,10 @@ public class AuthController {
         if (userRepository.count() > 0) {
             throw new HttpStatusException(HttpStatus.FORBIDDEN, "Admin user already exists");
         }
+        String username = CredentialsPolicy.requireUsername(request.username());
+        CredentialsPolicy.requirePassword(request.password(), username);
         AppUser admin = new AppUser();
-        admin.setUsername(request.username());
+        admin.setUsername(username);
         admin.setPasswordHash(passwordEncoder.encode(request.password()));
         admin.setRole("ADMIN");
         admin.setEnabled(Boolean.TRUE);
@@ -253,6 +254,40 @@ public class AuthController {
         String token = generateToken(admin);
         return HttpResponse.ok(Map.of("token", token,
                 "user", responseOf(admin)));
+    }
+
+    /**
+     * Sliding session: the client calls this while the user is active (token past half its
+     * life), so an active user is never logged out, while a session idle for more than the
+     * token lifetime expires. DbAccountSecurityRule has already checked that the account
+     * exists and is enabled.
+     * <p>
+     * The original login time travels in the auth_time claim; after MAX_SESSION_SECONDS the
+     * refresh is refused (401) and the user must sign in again — a stolen token can't be
+     * kept alive forever.
+     */
+    @Post("/refresh")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    public HttpResponse<?> refresh(Authentication authentication) {
+        AppUser user = userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new HttpStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+        long authTime = authTimeOf(authentication);
+        if (Instant.now().getEpochSecond() - authTime > MAX_SESSION_SECONDS) {
+            throw new HttpStatusException(HttpStatus.UNAUTHORIZED, "Session expired");
+        }
+        return HttpResponse.ok(Map.of("token", generateToken(user, authTime), "user", responseOf(user)));
+    }
+
+    /** Login time of the session; tokens issued before auth_time existed count from now. */
+    private static long authTimeOf(Authentication authentication) {
+        Object value = authentication.getAttributes().get(AUTH_TIME_CLAIM);
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        if (value instanceof java.util.Date d) {
+            return d.getTime() / 1000;
+        }
+        return Instant.now().getEpochSecond();
     }
 
     private AppUser principalUser(Principal principal) {
@@ -270,10 +305,15 @@ public class AuthController {
     }
 
     private String generateToken(AppUser user) {
+        return generateToken(user, Instant.now().getEpochSecond());
+    }
+
+    private String generateToken(AppUser user, long authTime) {
         List<String> roles = Collections.singletonList(user.getRole());
         ServerAuthentication auth = new ServerAuthentication(
-                user.getUsername(), roles, Map.of("sub", user.getUsername(), "roles", roles));
-        return tokenGenerator.generateToken(auth, 86400).orElseThrow(
+                user.getUsername(), roles, Map.of("sub", user.getUsername(), "roles", roles,
+                        AUTH_TIME_CLAIM, authTime));
+        return tokenGenerator.generateToken(auth, TOKEN_TTL_SECONDS).orElseThrow(
                 () -> new HttpStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Token generation failed"));
     }
 

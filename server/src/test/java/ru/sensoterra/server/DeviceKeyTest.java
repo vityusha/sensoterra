@@ -46,7 +46,7 @@ class DeviceKeyTest {
     }
 
     private String adminToken() {
-        Map<String, String> creds = Map.of("username", "admin", "password", "admin123");
+        Map<String, String> creds = Map.of("username", "admin", "password", "admin-pass-123");
         try {
             return (String) client.toBlocking().exchange(
                     HttpRequest.POST("/api/auth/login", creds)
@@ -71,11 +71,11 @@ class DeviceKeyTest {
     private String selfRegister(String username) {
         client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/register",
-                                Map.of("username", username, "password", "pw12345"))
+                                Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON));
         return (String) client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/login",
-                        Map.of("username", username, "password", "pw12345"))
+                        Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class)).body().get("token");
     }
@@ -194,7 +194,7 @@ class DeviceKeyTest {
 
         HttpResponse<Map> reg = client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/register",
-                                Map.of("username", "key-combined", "password", "pw12345",
+                                Map.of("username", "key-combined", "password", "pw-123456",
                                         "chipId", blockId, "key", key))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class));
@@ -218,7 +218,7 @@ class DeviceKeyTest {
         assertThrows(HttpClientResponseException.class, () ->
                 client.toBlocking().exchange(
                         HttpRequest.POST("/api/auth/register",
-                                Map.of("username", "key-rollback", "password", "pw12345",
+                                Map.of("username", "key-rollback", "password", "pw-123456",
                                         "chipId", blockId, "key", "AAAA-BBBB-CCCC"))
                                 .contentType(MediaType.APPLICATION_JSON)));
 

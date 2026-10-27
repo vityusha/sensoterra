@@ -114,7 +114,7 @@ class UserPrefTest {
 
     private String tokenFor(String username) {
         HttpResponse<Map> resp = client.toBlocking().exchange(
-                HttpRequest.POST("/api/auth/login", Map.of("username", username, "password", "pw12345"))
+                HttpRequest.POST("/api/auth/login", Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class));
         return (String) resp.body().get("token");
@@ -124,7 +124,7 @@ class UserPrefTest {
         if (adminToken != null) {
             return;
         }
-        Map<String, String> creds = Map.of("username", "admin", "password", "admin123");
+        Map<String, String> creds = Map.of("username", "admin", "password", "admin-pass-123");
         try {
             adminToken = tokenForAdmin(creds);
         } catch (HttpClientResponseException e) {
@@ -153,7 +153,7 @@ class UserPrefTest {
         }
         return ((Number) client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/register",
-                                Map.of("username", username, "password", "pw12345"))
+                                Map.of("username", username, "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class)).body().get("id")).longValue();
     }

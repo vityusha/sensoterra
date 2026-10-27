@@ -42,12 +42,12 @@ class AdminUserTest {
     void bootstrapAdmin() {
         try {
             client.toBlocking().exchange(HttpRequest.POST("/api/auth/bootstrap",
-                    Map.of("username", "admin", "password", "admin123")));
+                    Map.of("username", "admin", "password", "admin-pass-123")));
         } catch (HttpClientResponseException ignored) {
         }
         HttpResponse<Map> resp = client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/login",
-                        Map.of("username", "admin", "password", "admin123")),
+                        Map.of("username", "admin", "password", "admin-pass-123")),
                 Argument.of(Map.class));
         adminToken = (String) resp.body().get("token");
     }
@@ -62,7 +62,7 @@ class AdminUserTest {
     void selfRegisterUser() {
         HttpResponse<Map> resp = client.toBlocking().exchange(
                 HttpRequest.POST("/api/auth/register",
-                                Map.of("username", "tester", "password", "pw123"))
+                                Map.of("username", "tester", "password", "pw-123456"))
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class));
         assertEquals(200, resp.getStatus().getCode());
@@ -79,7 +79,7 @@ class AdminUserTest {
         assertThrows(HttpClientResponseException.class, () ->
                 client.toBlocking().exchange(
                         HttpRequest.POST("/api/auth/register",
-                                        Map.of("username", "tester", "password", "x"))
+                                        Map.of("username", "tester", "password", "pw-123456"))
                                 .contentType(MediaType.APPLICATION_JSON)));
     }
 
@@ -90,7 +90,7 @@ class AdminUserTest {
         HttpClientResponseException ex = assertThrows(HttpClientResponseException.class, () ->
                 client.toBlocking().exchange(
                         HttpRequest.POST("/api/admin/users",
-                                        Map.of("username", "made-by-admin", "password", "pw123",
+                                        Map.of("username", "made-by-admin", "password", "pw-123456",
                                                 "role", "USER"))
                                 .header("Authorization", "Bearer " + adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)));
@@ -98,7 +98,7 @@ class AdminUserTest {
 
         HttpResponse<Map> admin = client.toBlocking().exchange(
                 HttpRequest.POST("/api/admin/users",
-                                Map.of("username", "admin-assistant", "password", "pw123", "role", "ADMIN"))
+                                Map.of("username", "admin-assistant", "password", "pw-123456", "role", "ADMIN"))
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON),
                 Argument.of(Map.class));
@@ -158,7 +158,7 @@ class AdminUserTest {
     @DisplayName("User sees own device in /api/devices")
     void clientSeesOwnDevice() {
         HttpResponse<Map> login = client.toBlocking().exchange(
-                HttpRequest.POST("/api/auth/login", Map.of("username", "tester", "password", "pw123")),
+                HttpRequest.POST("/api/auth/login", Map.of("username", "tester", "password", "pw-123456")),
                 Argument.of(Map.class));
         String token = (String) login.body().get("token");
 
@@ -186,7 +186,7 @@ class AdminUserTest {
         assertEquals(204, unassign.getStatus().getCode());
 
         HttpResponse<Map> login = client.toBlocking().exchange(
-                HttpRequest.POST("/api/auth/login", Map.of("username", "tester", "password", "pw123")),
+                HttpRequest.POST("/api/auth/login", Map.of("username", "tester", "password", "pw-123456")),
                 Argument.of(Map.class));
         String token = (String) login.body().get("token");
 

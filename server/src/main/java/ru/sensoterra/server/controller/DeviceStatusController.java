@@ -19,7 +19,9 @@ public class DeviceStatusController {
     @Get("/status")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     public StatusResponse getStatus() {
-        return new StatusResponse(mqttService.getLastStatus());
+        // The server's MQTT link, not the raw STATUS of whichever device reported last:
+        // that one went to every user, including devices they have no access to.
+        return new StatusResponse(mqttService.isConnected() ? "online" : "offline");
     }
 
     @Serdeable

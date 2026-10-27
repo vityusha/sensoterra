@@ -46,7 +46,7 @@ class YandexOAuthTest {
                 HttpRequest.GET("/api/auth/status"), Argument.of(Map.class)).body();
         if (Boolean.TRUE.equals(status.get("bootstrapNeeded"))) {
             client.toBlocking().exchange(
-                    HttpRequest.POST("/api/auth/bootstrap", Map.of("username", "admin", "password", "admin123"))
+                    HttpRequest.POST("/api/auth/bootstrap", Map.of("username", "admin", "password", "admin-pass-123"))
                             .contentType(MediaType.APPLICATION_JSON),
                     Argument.of(Map.class));
         }

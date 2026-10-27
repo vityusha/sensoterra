@@ -35,6 +35,7 @@
               autocomplete="new-password" autocapitalize="none" spellcheck="false" />
             <input v-model="password2" :type="showPassword ? 'text' : 'password'" placeholder="Повторите пароль"
               required autocomplete="new-password" />
+            <p class="muted">{{ PASSWORD_HINT }}</p>
             <button type="button" class="btn ghost eye" @click="showPassword = !showPassword"
               :aria-label="showPassword ? 'Скрыть пароль' : 'Показать пароль'">👁</button>
             <button type="submit" class="btn primary" :disabled="busy">
@@ -69,6 +70,7 @@ import { getToken, setToken } from '../api/auth'
 import { auth, enterSession, userFromAuthResponse } from '../store/auth'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
 import YandexAuthButton from '../components/YandexAuthButton.vue'
+import { PASSWORD_HINT, credentialsErrorText, passwordProblem, usernameProblem } from '../utils/credentials'
 
 const route = useRoute()
 const router = useRouter()
@@ -158,6 +160,11 @@ function acceptErrorText(e) {
 }
 
 async function register() {
+  const problem = usernameProblem(username.value) || passwordProblem(password.value, username.value)
+  if (problem) {
+    actionError.value = problem
+    return
+  }
   if (password.value !== password2.value) {
     actionError.value = 'Пароли не совпадают'
     return
@@ -173,7 +180,8 @@ async function register() {
     const status = e.response?.status
     actionError.value = status === 409 ? 'Такой логин уже занят'
       : status === 410 ? 'Ссылка недействительна, истекла или уже использована'
-        : 'Не удалось зарегистрироваться'
+        : status === 400 ? credentialsErrorText(e) || 'Не удалось зарегистрироваться'
+          : 'Не удалось зарегистрироваться'
   } finally {
     busy.value = false
   }

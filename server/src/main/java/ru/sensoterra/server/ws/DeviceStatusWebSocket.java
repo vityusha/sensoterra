@@ -90,14 +90,13 @@ public class DeviceStatusWebSocket {
             return;
         }
         String username = auth.getName();
-        SessionInfo info = new SessionInfo(username, access.isAdmin(username),
+        SessionInfo info = new SessionInfo(username, () -> access.isAdmin(username),
                 () -> access.visibleChipIdsFor(username), () -> access.accountActive(username));
         info.refresh();
         infos.put(session.getId(), info);
         sessions.add(session);
         log.debug("WebSocket opened: {} user={} admin={} devices={}",
                 session.getId(), username, info.admin, info.visibleCount());
-        broadcaster.broadcastCurrentStatus(session);
     }
 
     @OnMessage
@@ -151,21 +150,25 @@ public class DeviceStatusWebSocket {
     public static final class SessionInfo {
 
         private final String username;
-        private final boolean admin;
+        private final java.util.function.BooleanSupplier adminCheck;
         private final Supplier<Set<Long>> loader;
         private final java.util.function.BooleanSupplier active;
+        // Re-read with the device list: a demoted admin must stop getting every device's
+        // events without reconnecting (it used to be fixed for the life of the socket).
+        private volatile boolean admin;
         private volatile Set<Long> chips = Set.of();
         private volatile long expiresAt = 0;
 
-        SessionInfo(String username, boolean admin, Supplier<Set<Long>> loader,
+        SessionInfo(String username, java.util.function.BooleanSupplier adminCheck, Supplier<Set<Long>> loader,
                     java.util.function.BooleanSupplier active) {
             this.username = username;
-            this.admin = admin;
+            this.adminCheck = adminCheck;
             this.loader = loader;
             this.active = active;
         }
 
         public void refresh() {
+            this.admin = adminCheck.getAsBoolean();
             this.chips = loader.get();
             this.expiresAt = System.currentTimeMillis() + VISIBLE_TTL_MS;
         }
@@ -191,11 +194,11 @@ public class DeviceStatusWebSocket {
             if (!active.getAsBoolean()) {
                 return false;
             }
-            if (admin || chipsToCheck == null || chipsToCheck.isEmpty()) {
-                return true;
-            }
             if (System.currentTimeMillis() > expiresAt) {
                 refresh();
+            }
+            if (admin || chipsToCheck == null || chipsToCheck.isEmpty()) {
+                return true;
             }
             return chips.containsAll(chipsToCheck);
         }
