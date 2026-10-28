@@ -34,6 +34,7 @@ body {
 }
 
 :root {
+  color-scheme: dark;
   --bg: #1a1a2e;
   --bg-soft: #242444;
   --bg-card: #2c2c3e;
@@ -79,6 +80,7 @@ body {
 }
 
 [data-theme="light"] {
+  color-scheme: light;
   --bg: #f7f7f7;
   --bg-soft: #f0f0f5;
   --bg-card: #ffffff;
@@ -124,6 +126,23 @@ body {
 }
 
 canvas, img, svg { max-width: 100%; }
+
+/* Safari рисует нативный color input овалом; задаём прямоугольник во всех браузерах. */
+input[type='color'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 3.2rem;
+  height: 1.8rem;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+  overflow: hidden;
+}
+input[type='color']::-webkit-color-swatch-wrapper { padding: 0; }
+input[type='color']::-webkit-color-swatch { border: none; border-radius: 4px; }
+input[type='color']::-moz-color-swatch { border: none; border-radius: 4px; }
 
 /* Все чекбоксы — переключатели того же вида, что «Активация» в настройках канала. */
 input[type='checkbox'] {

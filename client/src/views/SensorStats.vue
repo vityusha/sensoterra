@@ -114,7 +114,20 @@
           </div>
           <LineChart :labels="timeLabels" :datasets="chartDatasets(che)" :unit="chartUnit(che)" :zone-offset="tzOffset ?? undefined" :x-min="statsXMin" :x-max="statsXMax" :y-min="yBounds(che.key).min" :y-max="yBounds(che.key).max" />
         </div>
-        <div class="empty small" v-if="!chartSections.length">За выбранный период данных нет</div>
+        <div class="chart-section transmission-section" v-if="transmissionLines.length">
+          <div class="chart-head">
+            <h4>Передача данных</h4>
+            <span class="transmission-count">{{ transmissionLines.length }} сообщ.</span>
+          </div>
+          <div class="transmission-chart" role="img" :aria-label="`Передача данных: ${transmissionLines.length} сообщений`">
+            <span v-for="line in transmissionLines" :key="line.key" class="transmission-line" :style="{ left: line.left }" :title="line.title"></span>
+          </div>
+          <div class="transmission-axis">
+            <span>{{ transmissionStartLabel }}</span>
+            <span>{{ transmissionEndLabel }}</span>
+          </div>
+        </div>
+        <div class="empty small" v-if="!chartSections.length && !transmissionLines.length">За выбранный период данных нет</div>
       </template>
       <div v-else class="empty small">Нет данных за выбранный период</div>
     </section>
@@ -223,6 +236,36 @@ const timeLabels = computed(() => rows.value.map(r => r.time))
 
 const statsXMin = ref(null)
 const statsXMax = ref(null)
+
+const transmissionXMin = computed(() => statsXMin.value)
+const transmissionXMax = computed(() => {
+  const customEnd = range.value === 'custom' && customTo.value ? Date.parse(customTo.value) : NaN
+  const end = Number.isFinite(customEnd) ? customEnd : Date.now()
+  return Math.max(end, (transmissionXMin.value ?? 0) + 1)
+})
+
+const transmissionLines = computed(() => {
+  const min = transmissionXMin.value
+  const max = transmissionXMax.value
+  if (min == null || max == null || max <= min) return []
+  return rows.value.flatMap((r, i) => {
+    const ms = Date.parse(r.time)
+    if (!Number.isFinite(ms)) return []
+    const pct = Math.min(100, Math.max(0, ((ms - min) / (max - min)) * 100))
+    return [{
+      key: `${r.time}-${i}`,
+      left: `${pct}%`,
+      title: `${fmtEventTimeWithZone(r.time, tzOffset.value)}${r.numMessage != null ? ` [${r.numMessage}]` : ''}`,
+    }]
+  })
+})
+
+function fmtMs(ms) {
+  return ms != null ? fmtEventTimeWithZone(new Date(ms).toISOString(), tzOffset.value) : ''
+}
+
+const transmissionStartLabel = computed(() => fmtMs(transmissionXMin.value))
+const transmissionEndLabel = computed(() => fmtMs(transmissionXMax.value))
 
 /**
  * Права текущего пользователя на устройство датчика. Границы оси и скрытие
@@ -804,6 +847,12 @@ onUnmounted(() => {
 .chart-section { margin-bottom: 1.5rem; }
 .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
 .chart-section h4 { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 0; }
+.transmission-section { margin-bottom: 1.5rem; }
+.transmission-count { color: var(--text-faint); font-size: 0.72rem; }
+.transmission-chart { position: relative; height: 90px; overflow: hidden; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 8px; }
+.transmission-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--success); opacity: 0.8; transform: translateX(-50%); }
+.transmission-line:hover { width: 3px; background: var(--text-strong); opacity: 1; }
+.transmission-axis { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 0.3rem; color: var(--text-dim); font-size: 0.72rem; }
 .y-edit { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .y-edit label { display: flex; align-items: center; gap: 0.3rem; color: var(--text-dim); font-size: 0.7rem; }
 .y-edit input { width: 5.5rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.75rem; padding: 0.2rem 0.4rem; }

@@ -616,6 +616,7 @@ h2 { color: var(--text-strong); }
 .btn.secondary { background: var(--bg-accent); }
 .btn.danger { background: var(--bg-accent); color: var(--on-accent); flex-shrink: 0; }
 .btn.danger:hover { background: #7a2222; color: #fff; }
+.device-card:not(.locked) > .btn.danger { opacity: 0.75; }
 .btn.small { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
 .loading, .empty { color: var(--text-dim); text-align: center; padding: 2rem; }
 

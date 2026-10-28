@@ -173,7 +173,7 @@ function formatApiError(e, fallback) {
 .label { color: var(--text-muted); font-size: 0.8rem; }
 .field input[type="number"] { background: #0f0f1a; border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); padding: 0.4rem 0.6rem; font-size: 0.9rem; }
 .preview { display: flex; flex-direction: column; gap: 0.4rem; }
-.swatch { height: 24px; border-radius: 6px; border: 1px solid var(--border-soft); }
+.swatch { width: 100%; height: 24px; border-radius: 6px; border: 1px solid var(--border-soft); }
 .labels { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.8rem; }
 .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 .message { color: var(--warn); font-size: 0.85rem; }
