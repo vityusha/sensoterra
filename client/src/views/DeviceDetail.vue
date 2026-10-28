@@ -142,14 +142,16 @@
             <span class="dot" :class="relayDotClass(r)">{{ isRelayQuestion(r) ? '?' : '' }}</span>
             <span class="relay-num">R{{ r.relayNumber }}</span>
             <div class="relay-id">
-              <span class="relay-name">{{ r.name || '—' }}</span>
+              <div class="relay-name-row">
+                <span class="relay-name">{{ r.name || '—' }}</span>
+                <span class="relay-last-time" v-if="!r.activity">неактивен</span>
+                <span class="relay-last-time" v-else-if="relayLastText(r)">{{ relayLastText(r) }}</span>
+              </div>
               <span class="relay-type">
                 {{ relayTypeName(r) }}
                 <span v-if="relayTypeComment(r)" class="relay-type-comment">{{ relayTypeComment(r) }}</span>
               </span>
             </div>
-            <span class="relay-last-time" v-if="!r.activity">неактивен</span>
-            <span class="relay-last-time" v-else-if="relayLastText(r)">{{ relayLastText(r) }}</span>
           </div>
           <div class="relay-actions">
             <button v-if="canControl" @click.stop="toggle(r, 1)" class="btn small" :disabled="busy===r.id || !r.activity || !isOnline">Вкл</button>
@@ -383,9 +385,9 @@ const ranges = [
 ]
 const relayTypeNames = [
   { value: 0, code: 'TIME', label: 'по времени' },
-  { value: 1, code: 'S_ONE', label: 'от датчика по одному порогу', comment: 'по превышению одного порога' },
-  { value: 2, code: 'S_LOW', label: 'от датчика по нижнему порогу', comment: 'включение по нижнему, выключение по верхнему' },
-  { value: 3, code: 'S_HIGH', label: 'от датчика по верхнему порогу', comment: 'включение по верхнему, выключение по нижнему' },
+  { value: 1, code: 'S_ONE', label: 'от датчика', comment: 'по превышению одного порога' },
+  { value: 2, code: 'S_LOW', label: 'от датчика', comment: 'включение по нижнему, выключение по верхнему' },
+  { value: 3, code: 'S_HIGH', label: 'от датчика', comment: 'включение по верхнему, выключение по нижнему' },
 ]
 const lastEventsByRelay = ref({})
 
@@ -1287,7 +1289,8 @@ function applyCustom() {
 .relay-top { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
 .relay-num { font-family: monospace; color: var(--text-muted); font-size: 0.9rem; flex-shrink: 0; }
 .relay-id { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 0.2rem; }
-.relay-name { color: var(--text); font-size: 0.9rem; }
+.relay-name-row { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
+.relay-name { flex: 1; min-width: 0; color: var(--text); font-size: 0.9rem; }
 .state { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
 .state.on { background: var(--tag-bg-ok); color: var(--success); }
 .state.off { background: var(--bg-accent); color: var(--danger); }

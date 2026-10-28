@@ -86,7 +86,9 @@
 
             <div class="field" :class="{ disabled: !isOnline }">
               <span class="field-label">Основное время включения</span>
-              <input type="time" step="60" v-model="form.turnOnTimeFirst" :disabled="!isOnline" />
+              <span class="field-row">
+                <input type="time" step="60" v-model="form.turnOnTimeFirst" :disabled="!isOnline" />
+              </span>
             </div>
 
             <div class="field" :class="{ disabled: !isOnline }">
@@ -241,9 +243,9 @@ const relayNumber = Number(route.params.relayNumber)
 
 const types = [
   { value: 0, code: 'TIME', label: 'по времени' },
-  { value: 1, code: 'S_ONE', label: 'от датчика по одному порогу', comment: 'по превышению одного порога' },
-  { value: 2, code: 'S_LOW', label: 'от датчика по нижнему порогу', comment: 'включение по нижнему, выключение по верхнему' },
-  { value: 3, code: 'S_HIGH', label: 'от датчика по верхнему порогу', comment: 'включение по верхнему, выключение по нижнему' },
+  { value: 1, code: 'S_ONE', label: 'от датчика', comment: 'по превышению одного порога' },
+  { value: 2, code: 'S_LOW', label: 'от датчика', comment: 'включение по нижнему, выключение по верхнему' },
+  { value: 3, code: 'S_HIGH', label: 'от датчика', comment: 'включение по верхнему, выключение по нижнему' },
 ]
 const typeCodes = { TIME: 0, S_ONE: 1, S_LOW: 2, S_HIGH: 3 }
 const intMin = -32768
