@@ -167,6 +167,7 @@ class AdminUserTest {
                 Argument.listOf(Map.class));
         assertEquals(1, resp.body().size());
         assertEquals(111111L, ((Number) ((Map) resp.body().get(0)).get("chipId")).longValue());
+        assertEquals("tester", ((Map) resp.body().get(0)).get("ownerUsername"));
     }
 
     @Test

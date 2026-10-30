@@ -1,6 +1,7 @@
 import { reactive, watch } from 'vue'
 import { getPrefs, updatePrefs, saveFieldDefaults, applyFieldDefaults } from '../api/auth'
 import { pushNotification } from './notifications'
+import { THEME_VAR_NAMES, buildThemePalette, pickPaletteMode } from '../utils/themePalette'
 
 const STORAGE_KEY = 'sensoterra-settings'
 const MIGRATED_KEY = 'sensoterra-settings-migrated'
@@ -20,6 +21,27 @@ function load() {
  */
 function normalizeBgColor(v) {
   return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : null
+}
+
+const DEFAULT_BG = { dark: '#1a1a2e', light: '#f7f7f7' }
+
+function clearPaletteVars(root) {
+  for (const name of THEME_VAR_NAMES) root.style.removeProperty(name)
+  root.style.removeProperty('--bg')
+  root.style.removeProperty('color-scheme')
+}
+
+function readThemeVars(root, theme) {
+  const previous = root.getAttribute('data-theme')
+  root.setAttribute('data-theme', theme)
+  const style = getComputedStyle(root)
+  const base = {}
+  for (const name of THEME_VAR_NAMES) {
+    const value = style.getPropertyValue(name).trim()
+    if (value) base[name] = value
+  }
+  root.setAttribute('data-theme', previous || settings.theme)
+  return base
 }
 
 function saveLocal(state) {
@@ -389,9 +411,15 @@ export function applyTheme() {
     const root = document.documentElement
     root.setAttribute('data-theme', settings.theme)
     const bgColor = getBgColor()
-    if (bgColor) root.style.setProperty('--bg', bgColor)
-    else root.style.removeProperty('--bg')
-    const themeColor = bgColor || (settings.theme === 'light' ? '#f7f7f7' : '#1a1a2e')
+    clearPaletteVars(root)
+    if (bgColor) {
+      const mode = pickPaletteMode(bgColor)
+      const base = readThemeVars(root, mode)
+      const vars = buildThemePalette(bgColor, mode, base)
+      for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value)
+      root.style.setProperty('color-scheme', mode)
+    }
+    const themeColor = bgColor || DEFAULT_BG[settings.theme]
     let meta = document.querySelector('meta[name="theme-color"]')
     if (!meta) {
       meta = document.createElement('meta')

@@ -1,4 +1,5 @@
-const CACHE = 'sensoterra-precache'
+const CACHE = 'sensoterra-precache-v2'
+const DEV_PATHS = ['/src/', '/@vite/', '/@id/', '/@fs/', '/node_modules/']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -30,6 +31,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url)
   if (url.origin !== location.origin) return
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws')) return
+  if (DEV_PATHS.some((path) => url.pathname.startsWith(path))) return
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
@@ -46,8 +48,11 @@ self.addEventListener('fetch', (event) => {
     caches.match(req).then((cached) =>
       cached ||
       fetch(req).then((res) => {
-        const copy = res.clone()
-        caches.open(CACHE).then((c) => c.put(req, copy))
+        // Never store a 404 or a proxy error page in place of an asset.
+        if (res.ok) {
+          const copy = res.clone()
+          caches.open(CACHE).then((c) => c.put(req, copy))
+        }
         return res
       })
     )

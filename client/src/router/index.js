@@ -135,4 +135,17 @@ router.beforeEach((to, from, next) => {
   next()
 })
 
+// A page from an older build asks for chunks the deploy has removed: load the fresh
+// index.html once. The key stops a reload loop when the chunk is really unavailable.
+const CHUNK_RELOAD_KEY = 'chunk-reload'
+
+router.onError((err, to) => {
+  if (!/dynamically imported module|importing a module script failed|unable to preload/i.test(err?.message)) return
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === to.fullPath) return
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, to.fullPath)
+  location.assign(to.fullPath)
+})
+
+router.afterEach(() => sessionStorage.removeItem(CHUNK_RELOAD_KEY))
+
 export default router

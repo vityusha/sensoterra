@@ -98,8 +98,10 @@
       <div v-if="showCustom" class="custom-range">
         <label>С <input v-model="customFrom" type="datetime-local" /></label>
         <label>По <input v-model="customTo" type="datetime-local" /></label>
+        <span class="zone-label">{{ zoneLabel(tzOffset ?? undefined) }}</span>
         <button class="btn small" @click="applyCustom">Применить</button>
       </div>
+      <div class="range-hint">Выделите период на графике мышью или пальцем</div>
       <div v-if="loading" class="empty small">Загрузка...</div>
       <template v-else-if="rows.length">
         <div class="chart-section" v-for="che in chartSections" :key="che.key">
@@ -112,22 +114,16 @@
               <button class="btn small ghost" @click="resetY(che.key)">Авто</button>
             </div>
           </div>
-          <LineChart :labels="timeLabels" :datasets="chartDatasets(che)" :unit="chartUnit(che)" :zone-offset="tzOffset ?? undefined" :x-min="statsXMin" :x-max="statsXMax" :y-min="yBounds(che.key).min" :y-max="yBounds(che.key).max" />
+          <LineChart :labels="timeLabels" :datasets="chartDatasets(che)" :unit="chartUnit(che)" :zone-offset="tzOffset ?? undefined" :x-min="statsXMin" :x-max="statsXMax" :y-min="yBounds(che.key).min" :y-max="yBounds(che.key).max" selectable @select-range="applySelectedRange" />
         </div>
-        <div class="chart-section transmission-section" v-if="transmissionLines.length">
+        <div class="chart-section transmission-section" v-if="transmissionMarkers.length">
           <div class="chart-head">
             <h4>Передача данных</h4>
-            <span class="transmission-count">{{ transmissionLines.length }} сообщ.</span>
+            <span class="transmission-count">{{ transmissionMarkers.length }} сообщ.</span>
           </div>
-          <div class="transmission-chart" role="img" :aria-label="`Передача данных: ${transmissionLines.length} сообщений`">
-            <span v-for="line in transmissionLines" :key="line.key" class="transmission-line" :style="{ left: line.left }" :title="line.title"></span>
-          </div>
-          <div class="transmission-axis">
-            <span>{{ transmissionStartLabel }}</span>
-            <span>{{ transmissionEndLabel }}</span>
-          </div>
+          <LineChart :markers="transmissionMarkers" :x-min="statsXMin" :x-max="statsXMax" :zone-offset="tzOffset ?? undefined" timeline selectable :aria-label="`Передача данных: ${transmissionMarkers.length} сообщений`" @select-range="applySelectedRange" />
         </div>
-        <div class="empty small" v-if="!chartSections.length && !transmissionLines.length">За выбранный период данных нет</div>
+        <div class="empty small" v-if="!chartSections.length && !transmissionMarkers.length">За выбранный период данных нет</div>
       </template>
       <div v-else class="empty small">Нет данных за выбранный период</div>
     </section>
@@ -187,7 +183,7 @@ import { pushNotification } from '../store/notifications'
 import { calibrationFor, loadCalibration, setCalibration } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
-import { fmtEventTimeWithZone, fmtAgo } from '../utils/datetime'
+import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import LineChart from '../components/LineChart.vue'
 
 const route = useRoute()
@@ -237,35 +233,19 @@ const timeLabels = computed(() => rows.value.map(r => r.time))
 const statsXMin = ref(null)
 const statsXMax = ref(null)
 
-const transmissionXMin = computed(() => statsXMin.value)
-const transmissionXMax = computed(() => {
-  const customEnd = range.value === 'custom' && customTo.value ? Date.parse(customTo.value) : NaN
-  const end = Number.isFinite(customEnd) ? customEnd : Date.now()
-  return Math.max(end, (transmissionXMin.value ?? 0) + 1)
-})
-
-const transmissionLines = computed(() => {
-  const min = transmissionXMin.value
-  const max = transmissionXMax.value
+const transmissionMarkers = computed(() => {
+  const min = statsXMin.value
+  const max = statsXMax.value
   if (min == null || max == null || max <= min) return []
-  return rows.value.flatMap((r, i) => {
+  return rows.value.flatMap(r => {
     const ms = Date.parse(r.time)
     if (!Number.isFinite(ms)) return []
-    const pct = Math.min(100, Math.max(0, ((ms - min) / (max - min)) * 100))
     return [{
-      key: `${r.time}-${i}`,
-      left: `${pct}%`,
+      x: ms,
       title: `${fmtEventTimeWithZone(r.time, tzOffset.value)}${r.numMessage != null ? ` [${r.numMessage}]` : ''}`,
     }]
   })
 })
-
-function fmtMs(ms) {
-  return ms != null ? fmtEventTimeWithZone(new Date(ms).toISOString(), tzOffset.value) : ''
-}
-
-const transmissionStartLabel = computed(() => fmtMs(transmissionXMin.value))
-const transmissionEndLabel = computed(() => fmtMs(transmissionXMax.value))
 
 /**
  * Права текущего пользователя на устройство датчика. Границы оси и скрытие
@@ -706,7 +686,8 @@ async function setRange(r) {
 /** Начало периода: для «своего» — поле «С», для пресетов — откат от сейчас. */
 function currentSince() {
   if (range.value === 'custom') {
-    return customFrom.value ? new Date(customFrom.value).toISOString() : ''
+    const ms = zoneInputToMs(customFrom.value, tzOffset.value ?? undefined)
+    return ms != null ? new Date(ms).toISOString() : ''
   }
   return parseRange(range.value)
 }
@@ -714,12 +695,26 @@ function currentSince() {
 /** Конец периода: только у «своего» периода, у пресетов — до текущего момента. */
 function currentTo() {
   if (range.value === 'custom') {
-    return customTo.value ? new Date(customTo.value).toISOString() : ''
+    const ms = zoneInputToMs(customTo.value, tzOffset.value ?? undefined)
+    return ms != null ? new Date(ms).toISOString() : ''
   }
   return ''
 }
 
 function applyCustom() {
+  range.value = 'custom'
+  loadData()
+}
+
+function applySelectedRange({ from, to }) {
+  if (loading.value) return
+  const fromMs = Math.floor(from / 60000) * 60000
+  const toMs = Math.ceil(to / 60000) * 60000
+  if (!(toMs > fromMs)) return
+  const offset = tzOffset.value ?? undefined
+  customFrom.value = msToZoneInput(fromMs, offset)
+  customTo.value = msToZoneInput(toMs, offset)
+  showCustom.value = true
   range.value = 'custom'
   loadData()
 }
@@ -835,6 +830,8 @@ onUnmounted(() => {
 .custom-range { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: var(--bg-card); border-radius: 10px; }
 .custom-range label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.78rem; }
 .custom-range input { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.8rem; padding: 0.3rem 0.5rem; }
+.zone-label { color: var(--text-faint); font-size: 0.72rem; }
+.range-hint { color: var(--text-faint); font-size: 0.72rem; margin: -0.35rem 0 0.8rem; }
 .last-received { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.6rem; }
 .last-received b { color: var(--text-strong); }
 .immersion-warning { color: var(--danger); background: #3a1518; font-weight: 600; font-size: 0.85rem; padding: 0.5rem 0.7rem; border-radius: 8px; margin-bottom: 0.7rem; }
@@ -849,10 +846,6 @@ onUnmounted(() => {
 .chart-section h4 { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 0; }
 .transmission-section { margin-bottom: 1.5rem; }
 .transmission-count { color: var(--text-faint); font-size: 0.72rem; }
-.transmission-chart { position: relative; height: 90px; overflow: hidden; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 8px; }
-.transmission-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--success); opacity: 0.8; transform: translateX(-50%); }
-.transmission-line:hover { width: 3px; background: var(--text-strong); opacity: 1; }
-.transmission-axis { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 0.3rem; color: var(--text-dim); font-size: 0.72rem; }
 .y-edit { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .y-edit label { display: flex; align-items: center; gap: 0.3rem; color: var(--text-dim); font-size: 0.7rem; }
 .y-edit input { width: 5.5rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.75rem; padding: 0.2rem 0.4rem; }

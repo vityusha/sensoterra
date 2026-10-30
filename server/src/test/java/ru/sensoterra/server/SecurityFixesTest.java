@@ -122,6 +122,22 @@ class SecurityFixesTest {
         assertEquals("OWNER", accessRoleOf(ownerId));
     }
 
+    @Test
+    @DisplayName("Admins are hidden from the device access list")
+    void adminsHiddenFromAccessList() {
+        Long adminId = me(adminToken);
+        assign(adminId, "VIEWER");
+        try {
+            List<Map> entries = client.toBlocking().retrieve(
+                    auth(HttpRequest.GET("/api/devices/" + chipId + "/access"), adminToken),
+                    Argument.listOf(Map.class));
+            assertTrue(entries.stream().noneMatch(e -> "ADMIN".equals(e.get("role"))));
+            assertTrue(entries.stream().noneMatch(e -> adminId.equals(((Number) e.get("userId")).longValue())));
+        } finally {
+            assertEquals(204, status(HttpRequest.DELETE("/api/devices/" + chipId + "/access/" + adminId), adminToken));
+        }
+    }
+
     // ----- telemetry -----
 
     @Test

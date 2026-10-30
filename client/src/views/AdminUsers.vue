@@ -42,8 +42,18 @@
       </p>
     </section>
 
+    <div class="users-head">
+      <h3>Все пользователи</h3>
+      <span v-if="users.length" class="section-count">{{ filteredUsers.length }} из {{ users.length }}</span>
+    </div>
+    <div class="list-tools">
+      <input v-model="userSearch" class="search-input" type="search" autocapitalize="none" spellcheck="false"
+        placeholder="Поиск по логину или ID устройства" aria-label="Поиск пользователей по логину или ID устройства" />
+      <button v-if="userSearch" class="btn small" @click="userSearch = ''">Сброс</button>
+    </div>
+    <div v-if="users.length && filteredUsers.length === 0" class="empty">Ничего не найдено</div>
     <div class="user-list">
-      <div class="user-card" v-for="u in users" :key="u.id">
+      <div class="user-card" v-for="u in pagedUsers" :key="u.id">
         <div class="user-main">
           <div class="user-name">{{ u.username }}</div>
           <span class="role-badge" :class="effectiveRole(u).toLowerCase()">{{ effectiveRole(u) }}</span>
@@ -61,6 +71,9 @@
         </div>
 
         <div class="user-actions">
+          <button v-if="u.role !== 'ADMIN'" @click="$router.push({ path: '/', query: { user: u.id } })" class="btn small">
+            Устройства
+          </button>
           <template v-if="u.id !== auth.user?.id">
             <button @click="toggleEnabled(u)" class="btn small">
               {{ u.enabled === false ? 'Включить' : 'Отключить' }}
@@ -100,6 +113,7 @@
         </div>
       </div>
     </div>
+    <Paginator v-if="userPages > 1" v-model:page="userPage" :pages="userPages" label="Страницы пользователей" />
   </div>
 </template>
 
@@ -120,6 +134,8 @@ async function listDeviceAccessChip(userId, devices) {
   }
   return result
 }
+import Paginator from '../components/Paginator.vue'
+import { usePager } from '../composables/usePager'
 import { pushNotification } from '../store/notifications'
 import { credentialsErrorText, passwordProblem, usernameProblem } from '../utils/credentials'
 import { auth } from '../store/auth'
@@ -130,6 +146,16 @@ const form = reactive({ username: '', password: '' })
 const editing = ref(null)
 const assignForm = reactive({ chipId: '', deviceType: 'BLOCK', accessRole: 'USER' })
 const accessRoles = reactive({})
+
+const userSearch = ref('')
+const {
+  page: userPage,
+  filtered: filteredUsers,
+  pages: userPages,
+  paged: pagedUsers,
+} = usePager(users, userSearch, (u, q) =>
+  u.username.toLowerCase().includes(q)
+  || (devicesByUser[u.id] || []).some(d => String(d.chipId).includes(q)))
 
 /** Роль аккаунта: либо админ, либо обычный пользователь. */
 const ROLES = ['ADMIN', 'USER']
@@ -263,6 +289,14 @@ h2 { color: var(--text-strong); margin-bottom: 1rem; }
 .defaults-row label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.8rem; }
 .defaults-row input[type='number'] { width: 5rem; padding: 0.3rem 0.4rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.8rem; }
 .note { color: var(--text-dim); font-size: 0.75rem; line-height: 1.45; margin: 0.7rem 0 0; }
+.users-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin: 1.25rem 0 0.6rem; }
+.users-head h3 { margin: 0; font-size: 0.9rem; font-weight: 500; color: var(--text-strong); }
+.section-count { color: var(--text-faint); font-size: 0.72rem; white-space: nowrap; }
+.list-tools { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.search-input { flex: 1; min-width: 0; padding: 0.42rem 0.6rem; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.8rem; }
+.search-input:focus { outline: none; border-color: var(--accent); }
+.search-input::placeholder { color: var(--text-faint); }
+.empty { color: var(--text-dim); text-align: center; padding: 1rem; font-size: 0.85rem; }
 .user-list { display: flex; flex-direction: column; gap: 0.75rem; }
 .user-card { background: var(--bg-card); border-radius: 12px; padding: 1rem; }
 .user-main { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
@@ -270,7 +304,7 @@ h2 { color: var(--text-strong); margin-bottom: 1rem; }
 .role-badge { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
 .role-badge.admin { background: var(--bg-accent); color: var(--text); }
 .role-badge.user { background: var(--tag-bg-ok); color: var(--text); }
-.role-badge.viewer { background: #2a2a3e; color: var(--text-muted); }
+.role-badge.viewer { background: var(--bg-primary); color: var(--text-muted); }
 .role-badge.on { background: var(--tag-bg-ok); color: var(--tag-text-ok); }
 .role-badge.off { background: var(--bg-accent); color: var(--danger); }
 .user-paid { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem; }

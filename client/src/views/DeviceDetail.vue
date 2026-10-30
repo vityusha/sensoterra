@@ -103,10 +103,10 @@
     <!-- Кто ещё имеет доступ к этому устройству и на каких условиях. -->
     <section v-if="accessList.length" class="section">
       <div class="section-head"><h3>Доступ</h3></div>
-      <div class="invite-list">
-        <div class="invite-row" v-for="a in accessList" :key="a.userId">
-          <code class="invite-token">{{ a.username }}</code>
-          <span class="invite-role">{{ accessRoleLabel(a.accessRole) }}</span>
+      <div class="invite-list access-list">
+        <div class="invite-row access-row" v-for="a in accessList" :key="a.userId">
+          <code class="access-username">{{ a.username }}</code>
+          <span class="access-role">{{ accessRoleLabel(a.accessRole) }}</span>
           <!-- The owner's row has no actions: ownership moves only through the admin page. -->
           <button v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="btn small" @click="swapAccessRole(a)">
             {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
@@ -171,10 +171,12 @@
             <div v-if="relayShowCustom[r.relayNumber]" class="custom-range">
               <label>С <input @click.stop v-model="relayCustomFrom[r.relayNumber]" type="datetime-local" /></label>
               <label>По <input @click.stop v-model="relayCustomTo[r.relayNumber]" type="datetime-local" /></label>
+              <span class="zone-label">{{ zoneLabel(device?.tzOffsetMinutes) }}</span>
               <button class="btn small" @click.stop="applyRelayCustom(r)">Применить</button>
             </div>
-            <div class="chart-section" v-if="relayStatsData[r.relayNumber]?.states?.length">
-              <LineChart :labels="relayStatsData[r.relayNumber].labels" :datasets="[{ label: relayName(r), data: relayStatsData[r.relayNumber].states, color: '#f39c12', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'выкл', 1: 'вкл' }" :x-min="relayStatsData[r.relayNumber].startMs" :x-max="relayStatsData[r.relayNumber].endMs" />
+            <div class="range-hint">Выделите период на графике мышью или пальцем</div>
+            <div class="chart-section" v-if="relayStatsData[r.relayNumber]?.states?.length" @click.stop>
+              <LineChart :labels="relayStatsData[r.relayNumber].labels" :datasets="[{ label: relayName(r), data: relayStatsData[r.relayNumber].states, color: '#f39c12', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'выкл', 1: 'вкл' }" :x-min="relayStatsData[r.relayNumber].startMs" :x-max="relayStatsData[r.relayNumber].endMs" selectable @select-range="applyRelayRange(r, $event)" />
             </div>
             <div class="empty small" v-else>Нет переключений за выбранный период</div>
           </div>
@@ -272,8 +274,10 @@
         <div v-if="showCustom" class="custom-range">
           <label>С <input v-model="customFrom" type="datetime-local" /></label>
           <label>По <input v-model="customTo" type="datetime-local" /></label>
+          <span class="zone-label">{{ zoneLabel(device?.tzOffsetMinutes) }}</span>
           <button class="btn small" @click="applyCustom">Применить</button>
         </div>
+        <div class="range-hint">Выделите период на графике мышью или пальцем</div>
         <div class="stats-summary" v-if="statusStatsData.length">
           <span>Отключений (&gt;60&nbsp;c): {{ statusSummary.outages }}</span>
           <span>Микросрывов (≤60&nbsp;c): {{ statusSummary.micro }}</span>
@@ -282,19 +286,19 @@
         </div>
         <div class="chart-section" v-if="blockStatsData.length">
           <h4>RSSI_R</h4>
-          <LineChart :labels="timeLabels" :datasets="[{ label: 'RSSI_R', data: blockStatsData.map(d => d.rssiR), color: '#3498db' }]" unit="dBm" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :x-min="statsXMin" :x-max="statsXMax" />
+          <LineChart :labels="timeLabels" :datasets="[{ label: 'RSSI_R', data: blockStatsData.map(d => d.rssiR), color: '#3498db' }]" unit="dBm" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="chart-section" v-if="blockStatsData.length">
           <h4>Батарея, В</h4>
-          <LineChart :labels="vbatStatsData.map(d => d.time)" :datasets="[{ label: 'Батарея', data: vbatStatsData.map(d => d.vbat), color: '#2ecc71' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="3.5" :y-step="0.5" :x-min="statsXMin" :x-max="statsXMax" />
+          <LineChart :labels="vbatStatsData.map(d => d.time)" :datasets="[{ label: 'Батарея', data: vbatStatsData.map(d => d.vbat), color: '#2ecc71' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="3.5" :y-step="0.5" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="chart-section" v-if="showVacc && blockStatsData.length">
           <h4>Аккумулятор, В</h4>
-          <LineChart :labels="timeLabels" :datasets="[{ label: 'Аккумулятор', data: blockStatsData.map(d => d.vacc), color: '#f39c12' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="25" :y-step="5" :x-min="statsXMin" :x-max="statsXMax" />
+          <LineChart :labels="timeLabels" :datasets="[{ label: 'Аккумулятор', data: blockStatsData.map(d => d.vacc), color: '#f39c12' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="25" :y-step="5" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="chart-section" v-if="statusStatsData.length">
           <h4>Статус</h4>
-          <LineChart :labels="statusTimeLabels" :datasets="[{ label: 'online', data: statusStatsData.map(d => d.status === 'online' ? 1 : 0), color: '#2ecc71', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :continuous="true" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'оффлайн', 1: 'онлайн' }" :x-min="statsXMin" :x-max="statsXMax" />
+          <LineChart :labels="statusTimeLabels" :datasets="[{ label: 'online', data: statusStatsData.map(d => d.status === 'online' ? 1 : 0), color: '#2ecc71', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :continuous="true" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'оффлайн', 1: 'онлайн' }" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="empty small" v-if="!blockStatsData.length && !statusStatsData.length">Нет данных за выбранный период</div>
       </template>
@@ -307,7 +311,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, api, getDeviceStatuses, getBlockTelemetry, getDeviceStatusLog, getRelayTelemetry, getServerUptimeHistory, listInvites, createInvite, revokeInvite, clearFinishedInvites, clearAllInvites, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, getDeviceKey, regenerateDeviceKey, getDevicePayment, setDevicePayment, extendDevicePayment, resetDeviceRegistrations, getMoistureScale, getSensorScales } from '../api/auth'
 import { getBlockName, setBlockName, getFieldName, getFieldUnit, isFieldHidden, isVaccHidden, setVaccVisible } from '../store/settings'
-import { fmtEventTimeWithZone, fmtAgo } from '../utils/datetime'
+import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
 import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
 import { auth, rememberDeviceAccess, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
@@ -477,16 +481,16 @@ function openRelaySettings(r) {
 
 function relaySince(rn) {
   if (relayRangeVal.value[rn] === 'custom') {
-    const cf = relayCustomFrom.value[rn]
-    return cf ? new Date(cf).toISOString() : ''
+    const ms = zoneInputToMs(relayCustomFrom.value[rn], device.value?.tzOffsetMinutes)
+    return ms != null ? new Date(ms).toISOString() : ''
   }
   return parseRange(relayRangeVal.value[rn] || '24h')
 }
 
 function relayTo(rn) {
   if (relayRangeVal.value[rn] === 'custom') {
-    const ct = relayCustomTo.value[rn]
-    return ct ? new Date(ct).toISOString() : ''
+    const ms = zoneInputToMs(relayCustomTo.value[rn], device.value?.tzOffsetMinutes)
+    return ms != null ? new Date(ms).toISOString() : ''
   }
   return ''
 }
@@ -536,6 +540,18 @@ async function selectRelayRange(r, v) {
 async function applyRelayCustom(r) {
   relayRangeVal.value[r.relayNumber] = 'custom'
   await loadRelayStats(r)
+}
+
+function applyRelayRange(r, { from, to }) {
+  const fromMs = Math.floor(from / 60000) * 60000
+  const toMs = Math.ceil(to / 60000) * 60000
+  if (!(toMs > fromMs)) return
+  const rn = r.relayNumber
+  const offset = device.value?.tzOffsetMinutes
+  relayCustomFrom.value[rn] = msToZoneInput(fromMs, offset)
+  relayCustomTo.value[rn] = msToZoneInput(toMs, offset)
+  relayShowCustom.value[rn] = true
+  applyRelayCustom(r)
 }
 
 async function ensureDowntimes() {
@@ -1230,9 +1246,22 @@ async function setRange(r) {
 function applyCustom() {
   range.value = 'custom'
   showStats.value = true
-  windowSince.value = customFrom.value ? new Date(customFrom.value).toISOString() : ''
-  windowTo.value = customTo.value ? new Date(customTo.value).toISOString() : ''
+  const sinceMs = zoneInputToMs(customFrom.value, device.value?.tzOffsetMinutes)
+  const toMs = zoneInputToMs(customTo.value, device.value?.tzOffsetMinutes)
+  windowSince.value = sinceMs != null ? new Date(sinceMs).toISOString() : ''
+  windowTo.value = toMs != null ? new Date(toMs).toISOString() : ''
   loadStats()
+}
+
+function applyBlockRange({ from, to }) {
+  const fromMs = Math.floor(from / 60000) * 60000
+  const toMs = Math.ceil(to / 60000) * 60000
+  if (!(toMs > fromMs)) return
+  const offset = device.value?.tzOffsetMinutes
+  customFrom.value = msToZoneInput(fromMs, offset)
+  customTo.value = msToZoneInput(toMs, offset)
+  showCustom.value = true
+  applyCustom()
 }
 </script>
 
@@ -1277,6 +1306,10 @@ function applyCustom() {
 .role-select { padding: 0.25rem 0.4rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.75rem; }
 .invite-role { color: var(--muted-fg); font-size: 0.7rem; }
 .invite-token { color: var(--text-dim); font-size: 0.75rem; }
+.access-list { gap: 0.5rem; }
+.access-row { flex-wrap: wrap; gap: 0.65rem; padding: 0.55rem 0.7rem; }
+.access-username { color: var(--text); font-size: 0.9rem; font-weight: 600; overflow-wrap: anywhere; }
+.access-role { color: var(--text-sub); font-size: 0.82rem; }
 .invite-state { font-size: 0.7rem; flex: 1; }
 .invite-state.ok { color: var(--success); }
 .invite-state.no { color: var(--text-dim); }
@@ -1340,6 +1373,8 @@ function applyCustom() {
 .custom-range { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: var(--bg-card); border-radius: 10px; }
 .custom-range label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.78rem; }
 .custom-range input { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.8rem; padding: 0.3rem 0.5rem; }
+.zone-label { color: var(--text-faint); font-size: 0.72rem; }
+.range-hint { color: var(--text-faint); font-size: 0.72rem; margin: -0.35rem 0 0.8rem; }
 .stats-summary { display: flex; flex-wrap: wrap; column-gap: 1.8rem; row-gap: 0.3rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-muted); }
 .stats-summary .ongoing { color: var(--danger); font-weight: 600; }
 .chart-section { margin-bottom: 1.5rem; }

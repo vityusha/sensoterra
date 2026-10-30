@@ -243,6 +243,11 @@ export async function setBlockPaymentDefaults(days, unlimited) {
   return data
 }
 
+export async function getUser(id) {
+  const { data } = await api.get(`/admin/users/${id}`)
+  return data
+}
+
 export async function listUsers() {
   const { data } = await api.get('/admin/users')
   return data

@@ -8,6 +8,11 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    // WSL sometimes misses inotify events on /mnt drives; polling keeps HMR reliable.
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
     proxy: {
       '/api': 'http://localhost:8080',
       '/health': 'http://localhost:8080',

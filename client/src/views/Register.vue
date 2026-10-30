@@ -1,6 +1,7 @@
 <template>
   <div class="register">
     <form class="card" @submit.prevent="submit">
+      <img class="logo" src="/favicon.svg" alt="" width="56" height="56" />
       <h2>Регистрация</h2>
       <p class="lead">
         Заведите аккаунт и подтвердите свой блок. На листе, который шёл вместе с устройством,
@@ -181,6 +182,7 @@ async function submit() {
 <style scoped>
 .register { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
 .card { width: 100%; max-width: 380px; background: var(--bg-card); border-radius: 14px; padding: 1.5rem; }
+.logo { display: block; width: 56px; height: 56px; margin: 0 auto 0.75rem; border-radius: 12px; }
 h2 { color: var(--text); margin: 0 0 0.5rem; font-size: 1.2rem; }
 .lead { color: var(--text-muted); font-size: 0.8rem; line-height: 1.45; margin: 0 0 1rem; }
 label { display: block; color: var(--text-muted); font-size: 0.72rem; margin: 0.7rem 0 0.25rem; }
