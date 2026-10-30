@@ -1,6 +1,7 @@
 <template>
-  <div class="chart-wrap">
-    <canvas ref="canvas"></canvas>
+  <div class="chart-wrap" :class="{ selectable, timeline }">
+    <canvas ref="canvas" :role="ariaLabel ? 'img' : undefined" :aria-label="ariaLabel || undefined"></canvas>
+    <div v-if="brush" class="brush-box" :style="brushStyle"></div>
   </div>
 </template>
 
@@ -63,7 +64,29 @@ const offlinePlugin = {
   },
 }
 
-Chart.register(LineController, LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Filler, Tooltip, Legend, downtimePlugin, offlinePlugin)
+// Плагин: вертикальные отметки на timeline (например, передачи данных).
+const timelineMarkersPlugin = {
+  id: 'timelineMarkers',
+  afterDatasetsDraw(chart) {
+    const items = chart.config.options.plugins?.timelineMarkers?.items || []
+    if (!items.length) return
+    const { ctx, chartArea } = chart
+    const xScale = chart.scales.x
+    if (!ctx || !chartArea || !xScale) return
+    const color = chart.config.options.plugins?.timelineMarkers?.color || 'rgba(46,204,113,0.85)'
+    ctx.save()
+    ctx.fillStyle = color
+    ctx.globalAlpha = 0.85
+    for (const it of items) {
+      const x = xScale.getPixelForValue(it.x)
+      if (!Number.isFinite(x) || x < chartArea.left || x > chartArea.right) continue
+      ctx.fillRect(x - 1, chartArea.top, 2, chartArea.bottom - chartArea.top)
+    }
+    ctx.restore()
+  },
+}
+
+Chart.register(LineController, LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Filler, Tooltip, Legend, downtimePlugin, offlinePlugin, timelineMarkersPlugin)
 
 const props = defineProps({
   labels: { type: Array, default: () => [] },
@@ -80,13 +103,114 @@ const props = defineProps({
   yTickMap: { type: Object, default: () => null },
   xMin: { type: Number, default: null },
   xMax: { type: Number, default: null },
+  selectable: { type: Boolean, default: false },
+  markers: { type: Array, default: () => [] },
+  timeline: { type: Boolean, default: false },
+  ariaLabel: { type: String, default: '' },
   // Непрерывный ряд (статус): линия держит последнее значение между записями,
   // но разрывается строго по границам серой зоны простоя (нет данных — нет уверенности).
   continuous: { type: Boolean, default: false },
 })
 
+const emit = defineEmits(['select-range'])
 const canvas = ref(null)
+const brush = ref(null)
 let chart = null
+let drag = null
+
+const brushStyle = computed(() => brush.value ? {
+  left: `${brush.value.left}px`,
+  top: `${brush.value.top}px`,
+  width: `${brush.value.width}px`,
+  height: `${brush.value.height}px`,
+} : null)
+
+function releaseCapture(pointerId) {
+  try {
+    if (canvas.value?.hasPointerCapture?.(pointerId)) canvas.value.releasePointerCapture(pointerId)
+  } catch {}
+}
+
+function cancelBrush() {
+  if (drag) releaseCapture(drag.pointerId)
+  drag = null
+  brush.value = null
+}
+
+function localPoint(e) {
+  const rect = canvas.value.getBoundingClientRect()
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+}
+
+function clampToChartX(x) {
+  const area = chart?.chartArea
+  if (!area) return x
+  return Math.max(area.left, Math.min(area.right, x))
+}
+
+function onPointerDown(e) {
+  if (!props.selectable || !chart || e.button !== 0 || e.isPrimary === false) return
+  const { x, y } = localPoint(e)
+  const area = chart.chartArea
+  if (!area || x < area.left || x > area.right || y < area.top || y > area.bottom) return
+  drag = { pointerId: e.pointerId, startX: x, startY: y, active: false }
+  try {
+    canvas.value.setPointerCapture(e.pointerId)
+  } catch {}
+}
+
+function onPointerMove(e) {
+  if (!drag || e.pointerId !== drag.pointerId || !chart) return
+  const { x, y } = localPoint(e)
+  const area = chart.chartArea
+  if (!area) return
+  const currentX = clampToChartX(x)
+  const dx = currentX - drag.startX
+  const dy = y - drag.startY
+  if (!drag.active) {
+    if (Math.abs(dx) < 8) {
+      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) cancelBrush()
+      return
+    }
+    if (Math.abs(dy) > Math.abs(dx)) {
+      cancelBrush()
+      return
+    }
+    drag.active = true
+  }
+  e.preventDefault()
+  const left = Math.min(drag.startX, currentX)
+  brush.value = {
+    left: canvas.value.offsetLeft + left,
+    top: canvas.value.offsetTop + area.top,
+    width: Math.abs(currentX - drag.startX),
+    height: area.bottom - area.top,
+  }
+}
+
+function onPointerUp(e) {
+  if (!drag || e.pointerId !== drag.pointerId) return
+  const active = drag.active
+  const startX = drag.startX
+  const area = chart?.chartArea
+  const endX = area ? clampToChartX(localPoint(e).x) : drag.startX
+  releaseCapture(e.pointerId)
+  drag = null
+  brush.value = null
+  if (!active || !area || !chart) return
+  const left = Math.min(startX, endX)
+  const right = Math.max(startX, endX)
+  if (right - left < 8) return
+  const from = chart.scales.x.getValueForPixel(left)
+  const to = chart.scales.x.getValueForPixel(right)
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return
+  emit('select-range', { from: Math.round(from), to: Math.round(to) })
+}
+
+function onPointerCancel(e) {
+  if (!drag || e.pointerId !== drag.pointerId) return
+  cancelBrush()
+}
 
 // Интервалы для фона и разрывов линии — единый список (должны быть согласованы).
 function mergeIntervals(list) {
@@ -207,6 +331,7 @@ function tickLabel(ms) {
 }
 
 function buildChart() {
+  cancelBrush()
   if (chart) chart.destroy()
   if (!canvas.value) return
   const tipOn = chartTooltipsEnabled()
@@ -214,6 +339,7 @@ function buildChart() {
   const tickColor = cssVar('--text-dim', '#888')
   const tickColor2 = cssVar('--text-faint', '#666')
   const gridColor = cssVar('--chart-grid', '#2a2a3e')
+  const markerColor = cssVar('--success', '#2ecc71')
   chart = new Chart(canvas.value, {
     type: 'line',
     data: {
@@ -237,6 +363,7 @@ function buildChart() {
       plugins: {
         downtime: { downtimes: bgBreaks.value },
         offline: { intervals: offlineClipped.value },
+        timelineMarkers: { items: props.markers, color: markerColor },
         legend: { display: series.value.length > 1, labels: { color: legendColor, font: { size: 10 } } },
         tooltip: {
           enabled: tipOn,
@@ -262,10 +389,11 @@ function buildChart() {
         },
         y: {
           display: true,
-          min: props.yMin != null ? props.yMin : undefined,
-          max: props.yMax != null ? props.yMax : undefined,
+          min: props.timeline ? 0 : (props.yMin != null ? props.yMin : undefined),
+          max: props.timeline ? 1 : (props.yMax != null ? props.yMax : undefined),
           afterFit: (scale) => { scale.width = 46 },
           ticks: {
+            display: !props.timeline,
             color: tickColor,
             font: { size: 9 },
             stepSize: props.yStep != null ? props.yStep : undefined,
@@ -279,23 +407,47 @@ function buildChart() {
               return String(Math.round(v * 100) / 100)
             },
           },
-          grid: { color: gridColor },
-          title: { display: !!props.unit, text: props.unit, color: tickColor, font: { size: 9 } },
+          grid: { display: !props.timeline, color: gridColor },
+          border: { display: !props.timeline },
+          title: { display: !props.timeline && !!props.unit, text: props.unit, color: tickColor, font: { size: 9 } },
         },
       },
     },
   })
 }
 
-onMounted(buildChart)
+onMounted(() => {
+  buildChart()
+  canvas.value?.addEventListener('pointerdown', onPointerDown, { passive: true })
+  canvas.value?.addEventListener('pointermove', onPointerMove, { passive: false })
+  canvas.value?.addEventListener('pointerup', onPointerUp)
+  canvas.value?.addEventListener('pointercancel', onPointerCancel)
+})
 watch(() => [props.labels, props.datasets, props.downtimes, props.yMin, props.yMax, props.yStep,
-    props.xMin, props.xMax, props.zoneOffset, props.unit, props.continuous], buildChart, { deep: true })
+    props.xMin, props.xMax, props.zoneOffset, props.unit, props.continuous, props.markers, props.timeline],
+  buildChart, { deep: true })
 watch(() => settings.chartTooltips, buildChart)
-onUnmounted(() => { if (chart) chart.destroy() })
+onUnmounted(() => {
+  canvas.value?.removeEventListener('pointerdown', onPointerDown)
+  canvas.value?.removeEventListener('pointermove', onPointerMove)
+  canvas.value?.removeEventListener('pointerup', onPointerUp)
+  canvas.value?.removeEventListener('pointercancel', onPointerCancel)
+  if (chart) chart.destroy()
+})
 </script>
 
 <style scoped>
 .chart-wrap { height: 180px; position: relative; background: var(--bg); border-radius: 8px; padding: 0.5rem; }
 /* Чтобы на телефоне страница прокручивалась пальцем прямо по графику. */
 .chart-wrap canvas { touch-action: pan-y; }
+.chart-wrap.selectable canvas { cursor: crosshair; }
+.brush-box {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  background: rgba(52, 152, 219, 0.18);
+  border-left: 1px solid #3498db;
+  border-right: 1px solid #3498db;
+  border-radius: 2px;
+}
 </style>

@@ -30,6 +30,7 @@ import jakarta.inject.Singleton;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Controller("/api/devices")
@@ -75,7 +76,13 @@ public class DeviceController {
     @Get
     @Secured(SecurityRule.IS_AUTHENTICATED)
     public List<Device> list() {
-        return visibleDevices();
+        List<Device> devices = visibleDevices();
+        Map<Long, String> owners = access.ownerUsernames(
+                devices.stream().map(Device::getChipId).toList());
+        for (Device device : devices) {
+            device.setOwnerUsername(owners.get(device.getChipId()));
+        }
+        return devices;
     }
 
     @Get("/status")

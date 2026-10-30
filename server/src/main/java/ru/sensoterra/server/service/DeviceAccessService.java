@@ -16,8 +16,11 @@ import io.micronaut.security.utils.SecurityService;
 import jakarta.inject.Singleton;
 import jakarta.transaction.Transactional;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -360,6 +363,35 @@ public class DeviceAccessService {
                 .anyMatch(a -> chipId.equals(a.getChipId()));
     }
 
+    /** Owner logins for the device list: chipId -> username. */
+    public Map<Long, String> ownerUsernames(Collection<Long> chipIds) {
+        if (chipIds == null || chipIds.isEmpty()) {
+            return Map.of();
+        }
+        List<DeviceAccess> owners = accessRepository.findByChipIdIn(chipIds).stream()
+                .filter(a -> ACCESS_OWNER.equals(a.getAccessRole()))
+                .toList();
+        if (owners.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> userIds = new LinkedHashSet<>();
+        for (DeviceAccess owner : owners) {
+            userIds.add(owner.getUserId());
+        }
+        Map<Long, String> usernames = new HashMap<>();
+        for (AppUser user : userRepository.findByIdIn(userIds)) {
+            usernames.put(user.getId(), user.getUsername());
+        }
+        Map<Long, String> result = new HashMap<>();
+        for (DeviceAccess owner : owners) {
+            String username = usernames.get(owner.getUserId());
+            if (username != null) {
+                result.put(owner.getChipId(), username);
+            }
+        }
+        return result;
+    }
+
     /**
      * Выдать доступ к устройству. Права можно поменять повторным вызовом — так владелец
      * понижает гостя до «только чтение» и обратно.
@@ -514,6 +546,7 @@ public class DeviceAccessService {
         return accessRepository.findByChipId(chipId).stream()
                 .map(a -> userRepository.findById(a.getUserId()).orElse(null))
                 .filter(java.util.Objects::nonNull)
+                .filter(user -> !ROLE_ADMIN.equals(user.getRole()))
                 .toList();
     }
 }

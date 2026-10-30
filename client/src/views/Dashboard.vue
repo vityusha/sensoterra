@@ -85,101 +85,139 @@
     <div v-if="loading" class="loading">Загрузка...</div>
     <template v-else>
       <section class="section">
-        <h3>Блоки управления</h3>
+        <div class="section-head">
+          <h3>Блоки управления</h3>
+          <span v-if="blocks.length" class="section-count">{{ filteredBlocks.length }} из {{ blocks.length }}</span>
+        </div>
         <div v-if="blocks.length === 0" class="empty small">Нет блоков</div>
-        <div class="device-list" v-else>
-          <div class="device-card" v-for="d in blocks" :key="d.chipId"
-            :class="{ locked: isLocked(d.chipId) }" @click="$router.push(`/device/${d.chipId}`)">
-            <div class="device-icon block">
-              <span class="status-dot" :class="isOnline(d.chipId) ? 'online' : 'offline'"></span>
-              B
-            </div>
-            <div class="device-info">
-              <div class="device-name">
-                <template v-if="editing === d.chipId">
-                  <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveBlockName(d.chipId)" @keyup.esc="editing=null" />
-                </template>
-                <template v-else>
-                  <span @click.stop="startEdit(d.chipId, 'block')">{{ getBlockName(d.chipId) || 'Имя блока' }}</span>
-                </template>
-              </div>
-              <div class="device-type block"></div>
-              <!-- Оплата у блока своя: у одного истёк, у другого впереди. -->
-              <div class="pay-badge" :class="payClass(d.chipId)">{{ payLabel(d.chipId) }}</div>
-            </div>
-            <div class="device-chip">{{ d.chipId }}</div>
-            <button
-              v-if="auth.user?.role === 'ADMIN'"
-              class="btn danger small"
-              @click.stop="removeBlock(d)"
-            >Удалить</button>
+        <template v-else>
+          <div class="list-tools">
+            <input v-model="blockSearch" class="search-input" type="search" inputmode="numeric"
+              placeholder="Поиск по ID" aria-label="Поиск блоков по ID" />
+            <button v-if="blockSearch" class="btn small" @click="blockSearch = ''">Сброс</button>
           </div>
-        </div>
+          <div v-if="filteredBlocks.length === 0" class="empty small">По ID ничего не найдено</div>
+          <div class="device-list" v-else>
+            <div class="device-card" v-for="d in pagedBlocks" :key="d.chipId"
+              :class="{ locked: isLocked(d.chipId) }" @click="$router.push(`/device/${d.chipId}`)">
+              <div class="device-icon block">
+                <span class="status-dot" :class="isOnline(d.chipId) ? 'online' : 'offline'"></span>
+                B
+              </div>
+              <div class="device-info">
+                <div class="device-name">
+                  <template v-if="editing === d.chipId">
+                    <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveBlockName(d.chipId)" @keyup.esc="editing=null" />
+                  </template>
+                  <template v-else>
+                    <span @click.stop="startEdit(d.chipId, 'block')">{{ getBlockName(d.chipId) || 'Имя блока' }}</span>
+                    <span v-if="d.ownerUsername" class="device-owner"> ({{ d.ownerUsername }})</span>
+                  </template>
+                </div>
+                <div class="device-type block"></div>
+                <!-- Оплата у блока своя: у одного истёк, у другого впереди. -->
+                <div class="pay-badge" :class="payClass(d.chipId)">{{ payLabel(d.chipId) }}</div>
+              </div>
+              <div class="device-chip">{{ d.chipId }}</div>
+              <button
+                v-if="auth.user?.role === 'ADMIN'"
+                class="btn danger small"
+                @click.stop="removeBlock(d)"
+              >Удалить</button>
+            </div>
+          </div>
+          <Paginator v-if="blockPages > 1" v-model:page="blockPage" :pages="blockPages" label="Страницы блоков" />
+        </template>
       </section>
 
       <section class="section">
-        <h3>Датчики блоков</h3>
+        <div class="section-head">
+          <h3>Датчики блоков</h3>
+          <span v-if="blockSensors.length" class="section-count">{{ filteredBlockSensors.length }} из {{ blockSensors.length }}</span>
+        </div>
         <div v-if="blockSensors.length === 0" class="empty small">Нет датчиков блоков</div>
-        <div class="device-list" v-else>
-          <div
-            class="device-card"
-            v-for="s in blockSensors"
-            :key="s.chipId"
-            :class="{ error: s.conflict }"
-            @click="openBlockSensor(s)"
-          >
-            <div class="device-icon" :class="s.conflict ? 'conflict' : 'block'">
-              {{ s.conflict ? '!' : 'SB' }}
-            </div>
-            <div class="device-info">
-              <div class="device-name">{{ blockSensorName(s) }}</div>
-              <div class="device-tags">
-                <span class="tag block-tag" v-for="b in s.blockRoles" :key="b.blockId">
-                  блок {{ getBlockName(b.blockId) ? getBlockName(b.blockId) + ' (' + b.blockId + ')' : b.blockId }} · S{{ b.slot }}
-                </span>
-              </div>
-              <div class="device-type" v-if="s.conflict">
-                Ошибка: зарегистрирован на {{ s.blockRoles.length }} блока. Выберите блок, где оставить регистрацию.
-              </div>
-              <div class="sensor-config" v-if="sensorConfigText(s)">
-                <span class="config-text">{{ sensorConfigText(s) }}</span>
-              </div>
-            </div>
-            <div class="device-chip">{{ s.chipId }}</div>
+        <template v-else>
+          <div class="list-tools">
+            <input v-model="blockSensorSearch" class="search-input" type="search" inputmode="numeric"
+              placeholder="Поиск по ID датчика" aria-label="Поиск датчиков блоков по ID" />
+            <button v-if="blockSensorSearch" class="btn small" @click="blockSensorSearch = ''">Сброс</button>
           </div>
-        </div>
+          <div v-if="filteredBlockSensors.length === 0" class="empty small">По ID ничего не найдено</div>
+          <div class="device-list" v-else>
+            <div
+              class="device-card"
+              v-for="s in pagedBlockSensors"
+              :key="s.chipId"
+              :class="{ error: s.conflict }"
+              @click="openBlockSensor(s)"
+            >
+              <div class="device-icon" :class="s.conflict ? 'conflict' : 'block'">
+                {{ s.conflict ? '!' : 'SB' }}
+              </div>
+              <div class="device-info">
+                <div class="device-name">{{ blockSensorName(s) }}</div>
+                <div class="device-tags">
+                  <span class="tag block-tag" v-for="b in s.blockRoles" :key="b.blockId">
+                    блок {{ getBlockName(b.blockId) ? getBlockName(b.blockId) + ' (' + b.blockId + ')' : b.blockId }} · S{{ b.slot }}
+                  </span>
+                </div>
+                <div class="device-type" v-if="s.conflict">
+                  Ошибка: зарегистрирован на {{ s.blockRoles.length }} блока. Выберите блок, где оставить регистрацию.
+                </div>
+                <div class="sensor-config" v-if="sensorConfigText(s)">
+                  <span class="config-text">{{ sensorConfigText(s) }}</span>
+                </div>
+              </div>
+              <div class="device-chip">{{ s.chipId }}</div>
+            </div>
+          </div>
+          <Paginator v-if="blockSensorPages > 1" v-model:page="blockSensorPage" :pages="blockSensorPages" label="Страницы датчиков блоков" />
+        </template>
       </section>
 
       <section class="section">
-        <h3>Автономные датчики</h3>
-        <div v-if="individualSensors.length === 0" class="empty small">Нет автономных датчиков</div>
-        <div class="device-list" v-else>
-          <div class="device-card" v-for="s in individualSensors" :key="s.chipId" @click="router.push(`/sensor/${s.chipId}`)">
-            <div class="device-icon sensor">SA</div>
-            <div class="device-info">
-              <div class="device-name">
-                <template v-if="editing === s.chipId">
-                  <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveIndividualName(s.chipId)" @keyup.esc="editing=null" />
-                </template>
-                <template v-else>
-                  <span @click.stop="startEdit(s.chipId, 'individual')">{{ individualSensorName(s) }}</span>
-                </template>
-              </div>
-              <div class="device-tags">
-                <span class="tag">автономный</span>
-              </div>
-              <div class="sensor-config" v-if="sensorConfigText(s)">
-                <span class="config-text">{{ sensorConfigText(s) }}</span>
-              </div>
-            </div>
-            <div class="device-chip">{{ s.chipId }}</div>
-            <button
-              v-if="auth.user?.role === 'ADMIN'"
-              class="btn danger small"
-              @click.stop="removeSensor(s)"
-            >Удалить</button>
-          </div>
+        <div class="section-head">
+          <h3>Автономные датчики</h3>
+          <span v-if="individualSensors.length" class="section-count">{{ filteredIndividualSensors.length }} из {{ individualSensors.length }}</span>
         </div>
+        <div v-if="individualSensors.length === 0" class="empty small">Нет автономных датчиков</div>
+        <template v-else>
+          <div class="list-tools">
+            <input v-model="individualSearch" class="search-input" type="search" inputmode="numeric"
+              placeholder="Поиск по ID датчика" aria-label="Поиск автономных датчиков по ID" />
+            <button v-if="individualSearch" class="btn small" @click="individualSearch = ''">Сброс</button>
+          </div>
+          <div v-if="filteredIndividualSensors.length === 0" class="empty small">По ID ничего не найдено</div>
+          <div class="device-list" v-else>
+            <div class="device-card" v-for="s in pagedIndividualSensors" :key="s.chipId" @click="router.push(`/sensor/${s.chipId}`)">
+              <div class="device-icon sensor">SA</div>
+              <div class="device-info">
+                <div class="device-name">
+                  <template v-if="editing === s.chipId">
+                    <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveIndividualName(s.chipId)" @keyup.esc="editing=null" />
+                  </template>
+                  <template v-else>
+                    <span @click.stop="startEdit(s.chipId, 'individual')">{{ individualSensorName(s) }}</span>
+                    <span v-if="ownerOf(s.chipId)" class="device-owner"> ({{ ownerOf(s.chipId) }})</span>
+                  </template>
+                </div>
+                <div class="device-tags">
+                  <span class="tag">автономный</span>
+                </div>
+                <div class="sensor-config" v-if="sensorConfigText(s)">
+                  <span class="config-text">{{ sensorConfigText(s) }}</span>
+                </div>
+              </div>
+              <div class="device-chip">{{ s.chipId }}</div>
+              <button
+                v-if="auth.user?.role === 'ADMIN'"
+                class="btn danger small"
+                @click.stop="removeSensor(s)"
+              >Удалить</button>
+            </div>
+          </div>
+          <Paginator v-if="individualPages > 1" v-model:page="individualPage" :pages="individualPages" label="Страницы автономных датчиков" />
+        </template>
       </section>
     </template>
 
@@ -222,8 +260,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import Paginator from '../components/Paginator.vue'
 import { listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments } from '../api/auth'
 import { auth, logout, devicePayment, rememberPayment } from '../store/auth'
 import { paymentLabel } from '../utils/payment'
@@ -325,6 +364,64 @@ function openApPage() {
 const blocks = computed(() => devices.value.filter(d => d.deviceType === 'BLOCK'))
 const individualSensors = computed(() => catalog.value.filter(c => c.individual))
 const blockSensors = computed(() => catalog.value.filter(c => !c.individual))
+
+const DEVICES_PER_PAGE = 5
+
+// Client-side paging is enough while the API returns the full list; move it
+// server-side when the admin catalog outgrows a single response.
+function useDevicePager(source, query) {
+  const page = ref(1)
+  const filtered = computed(() => {
+    const q = query.value.trim().toLowerCase()
+    if (!q) return source.value
+    return source.value.filter(item => String(item.chipId).toLowerCase().includes(q))
+  })
+  const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / DEVICES_PER_PAGE)))
+  const paged = computed(() => {
+    const current = Math.min(page.value, pages.value)
+    const start = (current - 1) * DEVICES_PER_PAGE
+    return filtered.value.slice(start, start + DEVICES_PER_PAGE)
+  })
+  watch(query, () => { page.value = 1 })
+  watch(pages, total => { if (page.value > total) page.value = total })
+  return { page, filtered, pages, paged }
+}
+
+const blockSearch = ref('')
+const {
+  page: blockPage,
+  filtered: filteredBlocks,
+  pages: blockPages,
+  paged: pagedBlocks,
+} = useDevicePager(blocks, blockSearch)
+
+const blockSensorSearch = ref('')
+const {
+  page: blockSensorPage,
+  filtered: filteredBlockSensors,
+  pages: blockSensorPages,
+  paged: pagedBlockSensors,
+} = useDevicePager(blockSensors, blockSensorSearch)
+
+const individualSearch = ref('')
+const {
+  page: individualPage,
+  filtered: filteredIndividualSensors,
+  pages: individualPages,
+  paged: pagedIndividualSensors,
+} = useDevicePager(individualSensors, individualSearch)
+
+const ownerByChip = computed(() => {
+  const map = {}
+  for (const d of devices.value) {
+    if (d.ownerUsername) map[String(d.chipId)] = d.ownerUsername
+  }
+  return map
+})
+
+function ownerOf(chipId) {
+  return ownerByChip.value[String(chipId)] || ''
+}
 
 const dialogBlocks = computed(() => {
   const seen = new Set()
@@ -628,7 +725,13 @@ h2 { color: var(--text-strong); }
 .device-card.locked .device-name { color: var(--warn); }
 .empty.small { padding: 1rem; font-size: 0.85rem; }
 .section { margin-bottom: 2rem; }
-.section h3 { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; }
+.section h3 { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0; }
+.section-count { color: var(--text-faint); font-size: 0.72rem; white-space: nowrap; }
+.list-tools { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.search-input { flex: 1; min-width: 0; padding: 0.42rem 0.6rem; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.8rem; }
+.search-input:focus { outline: none; border-color: var(--accent); }
+.search-input::placeholder { color: var(--text-faint); }
 .device-list { display: flex; flex-direction: column; gap: 0.75rem; }
 .device-card { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-card); border-radius: 12px; cursor: pointer; box-shadow: var(--card-shadow); transition: background 0.2s; }
 .device-card:hover { background: var(--bg-primary); }
@@ -645,6 +748,8 @@ h2 { color: var(--text-strong); }
 .device-name { color: var(--text); font-weight: 500; }
 .device-name span { cursor: pointer; }
 .device-name span:hover { color: var(--accent); }
+.device-name .device-owner { color: var(--text-dim); font-weight: 400; font-size: 0.8rem; cursor: default; }
+.device-name .device-owner:hover { color: var(--text-dim); }
 .name-input { background: var(--bg); border: 1px solid var(--accent); border-radius: 4px; padding: 0.2rem 0.5rem; color: var(--text); font-size: 0.9rem; width: 100%; }
 .device-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
 .sensor-config { margin-top: 0.35rem; }
@@ -678,5 +783,6 @@ h2 { color: var(--text-strong); }
   .device-card > .btn { margin-left: auto; }
   .device-icon { width: 34px; height: 34px; font-size: 0.95rem; }
   .header-row { flex-wrap: wrap; row-gap: 0.5rem; }
+  .header-actions { width: 100%; }
 }
 </style>

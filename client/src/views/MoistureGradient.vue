@@ -171,7 +171,7 @@ function formatApiError(e, fallback) {
 .row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .field { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 140px; }
 .label { color: var(--text-muted); font-size: 0.8rem; }
-.field input[type="number"] { background: #0f0f1a; border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); padding: 0.4rem 0.6rem; font-size: 0.9rem; }
+.field input[type="number"] { background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); padding: 0.4rem 0.6rem; font-size: 0.9rem; }
 .preview { display: flex; flex-direction: column; gap: 0.4rem; }
 .swatch { width: 100%; height: 24px; border-radius: 6px; border: 1px solid var(--border-soft); }
 .labels { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.8rem; }

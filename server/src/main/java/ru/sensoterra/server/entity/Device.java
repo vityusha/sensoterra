@@ -47,4 +47,8 @@ public class Device {
 
     @Column(name = "last_status_at", insertable = false, updatable = false)
     private Instant lastStatusAt;
+
+    /** Owner login for the device list; filled per request, never persisted. */
+    @Transient
+    private String ownerUsername;
 }

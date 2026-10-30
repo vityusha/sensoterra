@@ -73,3 +73,22 @@ export function fmtChartAxis(iso, offsetMin) {
 export function fmtDateTime(iso, offsetMin) {
   return `${fmtShortDate(iso, offsetMin)} ${fmtClock(iso, offsetMin)}`
 }
+
+export function msToZoneInput(ms, offsetMin) {
+  if (!Number.isFinite(ms)) return ''
+  const offset = offsetMin ?? DEFAULT_ZONE_OFFSET_MIN
+  const d = new Date(ms + offset * 60000)
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const hh = String(d.getUTCHours()).padStart(2, '0')
+  const mi = String(d.getUTCMinutes()).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${mm}-${dd}T${hh}:${mi}`
+}
+
+export function zoneInputToMs(value, offsetMin) {
+  if (!value) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value)
+  if (!m) return null
+  const offset = offsetMin ?? DEFAULT_ZONE_OFFSET_MIN
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - offset * 60000
+}

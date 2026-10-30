@@ -270,7 +270,7 @@ h2 { color: var(--text-strong); margin-bottom: 1rem; }
 .role-badge { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
 .role-badge.admin { background: var(--bg-accent); color: var(--text); }
 .role-badge.user { background: var(--tag-bg-ok); color: var(--text); }
-.role-badge.viewer { background: #2a2a3e; color: var(--text-muted); }
+.role-badge.viewer { background: var(--bg-primary); color: var(--text-muted); }
 .role-badge.on { background: var(--tag-bg-ok); color: var(--tag-text-ok); }
 .role-badge.off { background: var(--bg-accent); color: var(--danger); }
 .user-paid { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem; }
