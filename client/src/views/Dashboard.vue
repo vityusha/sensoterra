@@ -82,7 +82,14 @@
       <div v-if="claimError" class="activation-error">{{ claimError }}</div>
     </div>
 
-    <div v-if="loading" class="loading">Загрузка...</div>
+    <div v-if="viewedUserId" class="user-filter-banner">
+      <span class="user-filter-text">
+        Устройства пользователя <b>{{ viewedUser?.username ?? '...' }}</b>
+      </span>
+      <button class="btn small" @click="showAllDevices">Показать все</button>
+    </div>
+
+    <div v-if="loading || viewedLoading" class="loading">Загрузка...</div>
     <template v-else>
       <section class="section">
         <div class="section-head">
@@ -261,9 +268,10 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Paginator from '../components/Paginator.vue'
-import { listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments } from '../api/auth'
+import { usePager } from '../composables/usePager'
+import { getUser, getUserDevices, listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments } from '../api/auth'
 import { auth, logout, devicePayment, rememberPayment } from '../store/auth'
 import { paymentLabel } from '../utils/payment'
 import { getBlockName, setBlockName, getIndividualName, setIndividualName } from '../store/settings'
@@ -271,6 +279,7 @@ import { connection, pushNotification, onWsMessage, connectWs } from '../store/n
 import { initMissedTimings, prefetchRelayNames } from '../store/notifications'
 
 const router = useRouter()
+const route = useRoute()
 const devices = ref([])
 const catalog = ref([])
 const statusMap = ref({})
@@ -361,30 +370,53 @@ function openApPage() {
   apDialog.value = false
 }
 
-const blocks = computed(() => devices.value.filter(d => d.deviceType === 'BLOCK'))
-const individualSensors = computed(() => catalog.value.filter(c => c.individual))
-const blockSensors = computed(() => catalog.value.filter(c => !c.individual))
+// Admin opened one user's devices from the users page (/?user=<id>); the admin's own
+// list and catalog already hold everything, so this only narrows what is shown.
+const viewedUserId = computed(() => Number(route.query.user) || null)
+const viewedUser = ref(null)
+const viewedChips = ref(null)
+const viewedLoading = ref(false)
 
-const DEVICES_PER_PAGE = 5
+watch(viewedUserId, async (id) => {
+  viewedUser.value = null
+  viewedChips.value = null
+  viewedLoading.value = !!id
+  if (!id) return
+  try {
+    const [user, userDevices] = await Promise.all([getUser(id), getUserDevices(id)])
+    if (id !== viewedUserId.value) return
+    viewedUser.value = user
+    viewedChips.value = new Set(userDevices.map(d => d.chipId))
+  } catch {
+    if (id !== viewedUserId.value) return
+    pushNotification('Не удалось загрузить устройства пользователя', 'error')
+    showAllDevices()
+  } finally {
+    if (id === viewedUserId.value) viewedLoading.value = false
+  }
+}, { immediate: true })
 
-// Client-side paging is enough while the API returns the full list; move it
-// server-side when the admin catalog outgrows a single response.
+function showAllDevices() {
+  router.replace({ path: '/' })
+}
+
+const visibleDevices = computed(() => {
+  const chips = viewedChips.value
+  return chips ? devices.value.filter(d => chips.has(d.chipId)) : devices.value
+})
+// A block sensor belongs to the user through the block it is registered on.
+const visibleCatalog = computed(() => {
+  const chips = viewedChips.value
+  if (!chips) return catalog.value
+  return catalog.value.filter(c => chips.has(c.chipId) || c.blockRoles?.some(r => chips.has(r.blockId)))
+})
+
+const blocks = computed(() => visibleDevices.value.filter(d => d.deviceType === 'BLOCK'))
+const individualSensors = computed(() => visibleCatalog.value.filter(c => c.individual))
+const blockSensors = computed(() => visibleCatalog.value.filter(c => !c.individual))
+
 function useDevicePager(source, query) {
-  const page = ref(1)
-  const filtered = computed(() => {
-    const q = query.value.trim().toLowerCase()
-    if (!q) return source.value
-    return source.value.filter(item => String(item.chipId).toLowerCase().includes(q))
-  })
-  const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / DEVICES_PER_PAGE)))
-  const paged = computed(() => {
-    const current = Math.min(page.value, pages.value)
-    const start = (current - 1) * DEVICES_PER_PAGE
-    return filtered.value.slice(start, start + DEVICES_PER_PAGE)
-  })
-  watch(query, () => { page.value = 1 })
-  watch(pages, total => { if (page.value > total) page.value = total })
-  return { page, filtered, pages, paged }
+  return usePager(source, query, (item, q) => String(item.chipId).toLowerCase().includes(q))
 }
 
 const blockSearch = ref('')
@@ -769,6 +801,8 @@ h2 { color: var(--text-strong); }
 .opt-warn { color: var(--danger); font-size: 0.7rem; margin-left: auto; text-align: right; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
 .ap-actions .btn { min-height: 2.5rem; padding: 0.45rem 0.9rem; }
+.user-filter-banner { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; background: var(--banner-bg); border: 1px solid var(--banner-border); border-radius: 12px; padding: 0.6rem 1rem; margin-bottom: 1rem; }
+.user-filter-text { color: var(--banner-text); font-size: 0.85rem; min-width: 0; overflow-wrap: anywhere; }
 .activation-banner { background: var(--banner-bg); border: 1px solid var(--banner-border); border-radius: 12px; padding: 0.9rem 1rem; margin-bottom: 1rem; }
 .activation-text { color: var(--banner-text); font-size: 0.85rem; line-height: 1.4; margin-bottom: 0.6rem; }
 .activation-form { display: flex; gap: 0.5rem; flex-wrap: wrap; }

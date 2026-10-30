@@ -48,8 +48,11 @@ self.addEventListener('fetch', (event) => {
     caches.match(req).then((cached) =>
       cached ||
       fetch(req).then((res) => {
-        const copy = res.clone()
-        caches.open(CACHE).then((c) => c.put(req, copy))
+        // Never store a 404 or a proxy error page in place of an asset.
+        if (res.ok) {
+          const copy = res.clone()
+          caches.open(CACHE).then((c) => c.put(req, copy))
+        }
         return res
       })
     )
