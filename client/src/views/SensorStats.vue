@@ -1,51 +1,55 @@
 <template>
   <div class="sensor">
-    <div class="header-row">
-      <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-      <h2>{{ displayName }} ({{ chipId }})</h2>
-      <span class="type-tag">{{ isIndividual ? 'автономный' : `${blockLabel} &nbsp;S${blockRole?.slot ?? ''}` }}</span>
-      <div v-if="catalogEntry && canEditPrefs" class="menu-wrap" ref="menuRef">
-        <button
-          class="menu-toggle"
-          :aria-expanded="menuOpen"
-          aria-haspopup="menu"
-          aria-label="Меню"
-          @click="menuOpen = !menuOpen"
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
-            <circle cx="12" cy="5" r="2" />
-            <circle cx="12" cy="12" r="2" />
-            <circle cx="12" cy="19" r="2" />
-          </svg>
-        </button>
-        <div v-if="menuOpen" class="menu-dropdown" role="menu">
-          <button v-if="isIndividual" role="menuitem" @click="openSettingsFromMenu">
-            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+    <header class="page-header">
+      <div class="header-top">
+        <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+        <h2>{{ displayName }} ({{ chipId }})</h2>
+        <div v-if="catalogEntry && canEditPrefs" class="menu-wrap" ref="menuRef">
+          <button
+            class="menu-toggle"
+            :aria-expanded="menuOpen"
+            aria-haspopup="menu"
+            aria-label="Меню"
+            @click="menuOpen = !menuOpen"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
             </svg>
-            Настройка
           </button>
-          <button role="menuitem" @click="openCalibrateFromMenu">
-            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
-            </svg>
-            Калибровка
-          </button>
-          <button v-if="calibSectionVisible" role="menuitem" @click="openCalibSettings">
-            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
-            </svg>
-            Калибровка влажности
-          </button>
-          <button role="menuitem" @click="openDisplaySettings">
-            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-            </svg>
-            Показ измерений
-          </button>
+          <div v-if="menuOpen" class="menu-dropdown" role="menu">
+            <button v-if="isIndividual" role="menuitem" @click="openSettingsFromMenu">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+              </svg>
+              Настройка
+            </button>
+            <button role="menuitem" @click="openCalibrateFromMenu">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
+              </svg>
+              Калибровка
+            </button>
+            <button v-if="calibSectionVisible" role="menuitem" @click="openCalibSettings">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
+              </svg>
+              Калибровка влажности
+            </button>
+            <button role="menuitem" @click="openDisplaySettings">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+              </svg>
+              Показ измерений
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+      <div class="header-meta">
+        <span class="type-tag">{{ typeLabel }}</span>
+      </div>
+    </header>
 
     <section class="section" v-if="latest">
       <h3>Последние данные</h3>
@@ -101,6 +105,15 @@
         <span class="zone-label">{{ zoneLabel(tzOffset ?? undefined) }}</span>
         <button class="btn small" @click="applyCustom">Применить</button>
       </div>
+      <RangeTimeline
+        v-if="baseFromMs != null && baseToMs != null && baseToMs > baseFromMs"
+        :from="baseFromMs"
+        :to="baseToMs"
+        :selection="selection"
+        :zone-offset="tzOffset ?? undefined"
+        @shift="shiftRange"
+        @update:selection="applyTimelineSelection"
+      />
       <div class="range-hint">Выделите период на графике мышью или пальцем</div>
       <div v-if="loading" class="empty small">Загрузка...</div>
       <template v-else-if="rows.length">
@@ -185,6 +198,7 @@ import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import LineChart from '../components/LineChart.vue'
+import RangeTimeline from '../components/RangeTimeline.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -195,6 +209,10 @@ const range = ref('24h')
 const showCustom = ref(false)
 const customFrom = ref('')
 const customTo = ref('')
+const baseFromMs = ref(null)
+const baseToMs = ref(null)
+const selection = ref(null)
+const baseLive = ref(true)
 const loading = ref(true)
 const catalogEntry = ref(null)
 const tzOffset = ref(null)
@@ -221,6 +239,12 @@ const displayName = computed(() => {
   const local = getIndividualName(chipId)
   if (local) return local
   return catalogEntry.value?.name || 'Датчик'
+})
+
+const typeLabel = computed(() => {
+  if (isIndividual.value) return 'автономный'
+  const slot = blockRole.value?.slot
+  return ['Блок', blockLabel.value, slot != null ? `S${slot}` : null].filter(Boolean).join(' ')
 })
 
 const sensorType = computed(() => {
@@ -671,38 +695,56 @@ function fmtValue(v) {
   return typeof v === 'number' ? v.toFixed(1).replace(/\.0$/, '') : String(v)
 }
 
-function parseRange(r) {
+function rangeDurationMs(r) {
   const num = parseInt(r)
   const unit = r.slice(-1)
-  const ms = unit === 'h' ? num * 3600000 : num * 86400000
-  return new Date(Date.now() - ms).toISOString()
+  return unit === 'h' ? num * 3600000 : num * 86400000
 }
+
+function presetWindowMs(r) {
+  const to = Date.now()
+  return { from: to - rangeDurationMs(r), to }
+}
+
+function ensureBaseWindow() {
+  if (selection.value || !baseLive.value) return
+  const w = presetWindowMs(range.value === 'custom' ? '24h' : range.value)
+  baseFromMs.value = w.from
+  baseToMs.value = w.to
+}
+
+const activeFromMs = computed(() => selection.value?.from ?? baseFromMs.value)
+const activeToMs = computed(() => selection.value?.to ?? baseToMs.value)
 
 async function setRange(r) {
   range.value = r
+  selection.value = null
+  baseLive.value = true
+  const w = presetWindowMs(r)
+  baseFromMs.value = w.from
+  baseToMs.value = w.to
   await loadData()
 }
 
-/** Начало периода: для «своего» — поле «С», для пресетов — откат от сейчас. */
+/** Начало периода: выделенный участок важнее базового периода. */
 function currentSince() {
-  if (range.value === 'custom') {
-    const ms = zoneInputToMs(customFrom.value, tzOffset.value ?? undefined)
-    return ms != null ? new Date(ms).toISOString() : ''
-  }
-  return parseRange(range.value)
+  return activeFromMs.value != null ? new Date(activeFromMs.value).toISOString() : ''
 }
 
-/** Конец периода: только у «своего» периода, у пресетов — до текущего момента. */
+/** Конец периода: выделенный участок важнее базового периода. */
 function currentTo() {
-  if (range.value === 'custom') {
-    const ms = zoneInputToMs(customTo.value, tzOffset.value ?? undefined)
-    return ms != null ? new Date(ms).toISOString() : ''
-  }
-  return ''
+  return activeToMs.value != null ? new Date(activeToMs.value).toISOString() : ''
 }
 
 function applyCustom() {
+  const fromMs = zoneInputToMs(customFrom.value, tzOffset.value ?? undefined)
+  const toMs = zoneInputToMs(customTo.value, tzOffset.value ?? undefined)
+  if (fromMs == null || toMs == null || toMs <= fromMs) return
   range.value = 'custom'
+  selection.value = null
+  baseLive.value = false
+  baseFromMs.value = fromMs
+  baseToMs.value = toMs
   loadData()
 }
 
@@ -710,17 +752,58 @@ function applySelectedRange({ from, to }) {
   if (loading.value) return
   const fromMs = Math.floor(from / 60000) * 60000
   const toMs = Math.ceil(to / 60000) * 60000
-  if (!(toMs > fromMs)) return
-  const offset = tzOffset.value ?? undefined
-  customFrom.value = msToZoneInput(fromMs, offset)
-  customTo.value = msToZoneInput(toMs, offset)
-  showCustom.value = true
-  range.value = 'custom'
+  const baseFrom = activeFromMs.value
+  const baseTo = activeToMs.value
+  if (baseFrom == null || baseTo == null || !(toMs > fromMs)) return
+  const f = Math.max(baseFrom, fromMs)
+  const t = Math.min(baseTo, toMs)
+  if (!(t > f)) return
+  selection.value = { from: f, to: t }
+  baseLive.value = false
   loadData()
+}
+
+function applyTimelineSelection({ from, to }) {
+  const fromMs = Math.floor(from / 60000) * 60000
+  const toMs = Math.ceil(to / 60000) * 60000
+  const baseFrom = baseFromMs.value
+  const baseTo = baseToMs.value
+  if (baseFrom == null || baseTo == null || !(toMs > fromMs)) return
+  const f = Math.max(baseFrom, fromMs)
+  const t = Math.min(baseTo, toMs)
+  if (!(t > f)) return
+  selection.value = { from: f, to: t }
+  baseLive.value = false
+  loadData()
+}
+
+async function shiftRange(direction) {
+  const from = baseFromMs.value
+  const to = baseToMs.value
+  if (from == null || to == null) return
+  const width = to - from
+  let nextFrom = from + direction * width
+  let nextTo = to + direction * width
+  if (direction > 0 && nextTo > Date.now()) {
+    nextTo = Date.now()
+    nextFrom = nextTo - width
+  }
+  if (nextFrom === from && nextTo === to) return
+  baseFromMs.value = nextFrom
+  baseToMs.value = nextTo
+  selection.value = null
+  baseLive.value = false
+  if (range.value === 'custom') {
+    const offset = tzOffset.value ?? undefined
+    customFrom.value = msToZoneInput(nextFrom, offset)
+    customTo.value = msToZoneInput(nextTo, offset)
+  }
+  await loadData()
 }
 
 async function loadData(silent = false) {
   if (!silent) loading.value = true
+  ensureBaseWindow()
   try {
     const catalog = await getSensorCatalog()
     catalogEntry.value = catalog.find(c => Number(c.chipId) === chipId) || null
@@ -755,10 +838,8 @@ async function loadData(silent = false) {
     rows.value = periodRows
     rows.value.reverse()
     if (Array.isArray(fresh)) lastAny.value = fresh.length ? fresh[0] : null
-    statsXMin.value = since ? Date.parse(since) : (rows.value.length ? Date.parse(rows.value[0].time) : Date.now() - 3600000)
-    statsXMax.value = to
-      ? Date.parse(to)
-      : (rows.value.length ? Date.parse(rows.value[rows.value.length - 1].time) : statsXMin.value + 1)
+    statsXMin.value = activeFromMs.value ?? (rows.value.length ? Date.parse(rows.value[0].time) : Date.now() - 3600000)
+    statsXMax.value = activeToMs.value ?? (rows.value.length ? Date.parse(rows.value[rows.value.length - 1].time) : statsXMin.value + 1)
     if (!(statsXMax.value > statsXMin.value)) statsXMax.value = statsXMin.value + 1
     if (sensorType.value === 0) await loadCalibration(chipId)
   } finally {
@@ -791,10 +872,12 @@ onUnmounted(() => {
 
 <style scoped>
 .sensor { max-width: 600px; margin: 0 auto; padding: 1rem; }
-.header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
-.header-row h2 { color: var(--text-strong); flex: 1; }
+.page-header { position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 0.75rem 1rem 1rem; background: var(--bg); }
+.header-top { display: flex; align-items: center; gap: 0.75rem; }
+.header-top h2 { color: var(--text-strong); flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-meta { display: flex; justify-content: flex-start; margin-top: 0.35rem; }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg); color: var(--tag-text); }
-.menu-wrap { position: relative; flex: none; }
+.menu-wrap { position: relative; flex: none; margin-left: auto; }
 .menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
 .menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text-strong); }
 .menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 200px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
