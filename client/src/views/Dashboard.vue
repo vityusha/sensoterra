@@ -1,13 +1,8 @@
 <template>
   <div class="dashboard">
-    <div class="header-row">
-      <h2>Устройства</h2>
-      <div class="header-actions">
-        <span class="connection-status" :class="connection.online ? 'online' : 'offline'">
-          {{ connection.online ? 'Сервис OK' : 'Сервис недоступен' }}
-        </span>
-        <span class="user-info" v-if="auth.user">{{ auth.user.role }}</span>
-        <button v-if="showClaimButton" @click="claimOpen = !claimOpen" class="btn small">+ Устройство</button>
+    <header class="page-header">
+      <div class="header-top">
+        <h2>Устройства</h2>
         <div class="menu-wrap" ref="menuRef">
           <button
             class="menu-toggle"
@@ -41,6 +36,12 @@
               </svg>
               Настройка в AP режиме
             </button>
+            <button v-if="showClaimButton" role="menuitem" @click="openClaimDialog">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+              </svg>
+              Добавить устройство
+            </button>
             <button v-if="auth.user?.role === 'ADMIN'" role="menuitem" @click="go('/admin/users')">
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
@@ -57,7 +58,13 @@
           </div>
         </div>
       </div>
-    </div>
+      <div class="header-meta">
+        <span class="user-info" v-if="auth.user">{{ auth.user.username }} ({{ auth.user.role }})</span>
+        <span class="connection-status" :class="connection.online ? 'online' : 'offline'">
+          {{ connection.online ? 'Сервис OK' : 'Сервис недоступен' }}
+        </span>
+      </div>
+    </header>
 
 
     <div v-if="needsClaim || claimOpen" class="activation-banner">
@@ -355,6 +362,11 @@ function go(path) {
 function openApDialog() {
   menuOpen.value = false
   apDialog.value = true
+}
+
+function openClaimDialog() {
+  menuOpen.value = false
+  claimOpen.value = !claimOpen.value
 }
 
 function closeMenuOnOutsideClick(e) {
@@ -725,13 +737,14 @@ async function removeBlock(d) {
 
 <style scoped>
 .dashboard { max-width: 600px; margin: 0 auto; padding: 1rem; }
-.header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
-h2 { color: var(--text-strong); }
-.header-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-.connection-status { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
+.page-header { position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 0.75rem 1rem 1rem; background: var(--bg); }
+.header-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+h2 { color: var(--text-strong); margin: 0; }
+.header-meta { display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; margin-top: 0.35rem; overflow: hidden; white-space: nowrap; }
+.user-info { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); font-size: 0.8rem; }
+.connection-status { flex: none; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
 .connection-status.online { background: var(--tag-bg-ok); color: var(--success); }
 .connection-status.offline { background: var(--bg-accent); color: var(--danger); }
-.user-info { color: var(--text-dim); font-size: 0.8rem; }
 .menu-wrap { position: relative; margin-left: auto; }
 .menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
 .menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text-strong); }
@@ -816,7 +829,6 @@ h2 { color: var(--text-strong); }
   .device-card { flex-wrap: wrap; row-gap: 0.5rem; }
   .device-card > .btn { margin-left: auto; }
   .device-icon { width: 34px; height: 34px; font-size: 0.95rem; }
-  .header-row { flex-wrap: wrap; row-gap: 0.5rem; }
-  .header-actions { width: 100%; }
+  .page-header { padding: 0.65rem 0.75rem 0.85rem; }
 }
 </style>

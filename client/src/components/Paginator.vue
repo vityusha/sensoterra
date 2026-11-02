@@ -102,7 +102,8 @@ function go(next) {
   outline: 0;
   box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--accent) 35%, transparent);
 }
-.page-item.active .page-link {
+.page-item.active .page-link,
+.page-item.active .page-link:hover {
   z-index: 1;
   border-color: var(--accent);
   background: var(--accent);

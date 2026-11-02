@@ -174,6 +174,15 @@
               <span class="zone-label">{{ zoneLabel(device?.tzOffsetMinutes) }}</span>
               <button class="btn small" @click.stop="applyRelayCustom(r)">Применить</button>
             </div>
+            <RangeTimeline
+              v-if="relayBaseFromMs[r.relayNumber] != null && relayBaseToMs[r.relayNumber] != null && relayBaseToMs[r.relayNumber] > relayBaseFromMs[r.relayNumber]"
+              :from="relayBaseFromMs[r.relayNumber]"
+              :to="relayBaseToMs[r.relayNumber]"
+              :selection="relaySelection[r.relayNumber] || null"
+              :zone-offset="device?.tzOffsetMinutes"
+              @shift="shiftRelayRange(r, $event)"
+              @update:selection="applyRelayTimelineRange(r, $event)"
+            />
             <div class="range-hint">Выделите период на графике мышью или пальцем</div>
             <div class="chart-section" v-if="relayStatsData[r.relayNumber]?.states?.length" @click.stop>
               <LineChart :labels="relayStatsData[r.relayNumber].labels" :datasets="[{ label: relayName(r), data: relayStatsData[r.relayNumber].states, color: '#f39c12', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'выкл', 1: 'вкл' }" :x-min="relayStatsData[r.relayNumber].startMs" :x-max="relayStatsData[r.relayNumber].endMs" selectable @select-range="applyRelayRange(r, $event)" />
@@ -277,6 +286,15 @@
           <span class="zone-label">{{ zoneLabel(device?.tzOffsetMinutes) }}</span>
           <button class="btn small" @click="applyCustom">Применить</button>
         </div>
+        <RangeTimeline
+          v-if="baseFromMs != null && baseToMs != null && baseToMs > baseFromMs"
+          :from="baseFromMs"
+          :to="baseToMs"
+          :selection="selection"
+          :zone-offset="device?.tzOffsetMinutes"
+          @shift="shiftBlockRange"
+          @update:selection="applyBlockTimelineRange"
+        />
         <div class="range-hint">Выделите период на графике мышью или пальцем</div>
         <div class="stats-summary" v-if="statusStatsData.length">
           <span>Отключений (&gt;60&nbsp;c): {{ statusSummary.outages }}</span>
@@ -320,6 +338,7 @@ import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
 import { paymentText } from '../utils/payment'
 import LineChart from '../components/LineChart.vue'
+import RangeTimeline from '../components/RangeTimeline.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -355,12 +374,31 @@ const range = ref('24h')
 const showCustom = ref(false)
 const customFrom = ref('')
 const customTo = ref('')
-const windowSince = ref(parseRange('24h'))
-const windowTo = ref('')
+const baseFromMs = ref(null)
+const baseToMs = ref(null)
+const selection = ref(null)
 const downtimes = ref([])
 
-const rangeStartMs = computed(() => windowSince.value ? new Date(windowSince.value).getTime() : null)
-const rangeEndMs = computed(() => windowTo.value ? new Date(windowTo.value).getTime() : null)
+function rangeDurationMs(r) {
+  const num = parseInt(r)
+  const unit = r.slice(-1)
+  return unit === 'h' ? num * 3600000 : num * 86400000
+}
+
+function presetWindowMs(r) {
+  const to = Date.now()
+  return { from: to - rangeDurationMs(r), to }
+}
+
+function ensureBlockBase() {
+  if (selection.value || baseFromMs.value != null) return
+  const w = presetWindowMs(range.value === 'custom' ? '24h' : range.value)
+  baseFromMs.value = w.from
+  baseToMs.value = w.to
+}
+
+const activeFromMs = computed(() => selection.value?.from ?? baseFromMs.value)
+const activeToMs = computed(() => selection.value?.to ?? baseToMs.value)
 
 // Интервалы, когда устройство было офлайн (из статус-лога: offline → следующий online).
 const offlineIntervals = computed(() => {
@@ -464,6 +502,9 @@ const relayShowCustom = ref({})
 const relayRangeVal = ref({})
 const relayCustomFrom = ref({})
 const relayCustomTo = ref({})
+const relayBaseFromMs = ref({})
+const relayBaseToMs = ref({})
+const relaySelection = ref({})
 const relayStatsData = ref({})
 
 function relayName(r) {
@@ -479,25 +520,35 @@ function openRelaySettings(r) {
   router.push(`/device/${chipId}/relay/${r.relayNumber}`)
 }
 
+function relayActiveFrom(rn) {
+  return relaySelection.value[rn]?.from ?? relayBaseFromMs.value[rn] ?? null
+}
+
+function relayActiveTo(rn) {
+  return relaySelection.value[rn]?.to ?? relayBaseToMs.value[rn] ?? null
+}
+
 function relaySince(rn) {
-  if (relayRangeVal.value[rn] === 'custom') {
-    const ms = zoneInputToMs(relayCustomFrom.value[rn], device.value?.tzOffsetMinutes)
-    return ms != null ? new Date(ms).toISOString() : ''
-  }
-  return parseRange(relayRangeVal.value[rn] || '24h')
+  const ms = relayActiveFrom(rn)
+  return ms != null ? new Date(ms).toISOString() : ''
 }
 
 function relayTo(rn) {
-  if (relayRangeVal.value[rn] === 'custom') {
-    const ms = zoneInputToMs(relayCustomTo.value[rn], device.value?.tzOffsetMinutes)
-    return ms != null ? new Date(ms).toISOString() : ''
-  }
-  return ''
+  const ms = relayActiveTo(rn)
+  return ms != null ? new Date(ms).toISOString() : ''
+}
+
+function ensureRelayBase(rn) {
+  if (relayBaseFromMs.value[rn] != null) return
+  const w = presetWindowMs(relayRangeVal.value[rn] || '24h')
+  relayBaseFromMs.value[rn] = w.from
+  relayBaseToMs.value[rn] = w.to
 }
 
 async function loadRelayStats(r) {
   const rn = r.relayNumber
   await ensureDowntimes()
+  ensureRelayBase(rn)
   const since = relaySince(rn)
   const to = relayTo(rn)
   let rows = []
@@ -513,8 +564,8 @@ async function loadRelayStats(r) {
     switches.push({ time: row.time, state: s })
     prev = s
   }
-  const startMs = since ? new Date(since).getTime() : (switches.length ? new Date(switches[0].time).getTime() : null)
-  const endMs = to ? new Date(to).getTime() : (switches.length ? new Date(switches[switches.length - 1].time).getTime() : null)
+  const startMs = relayActiveFrom(rn) ?? (switches.length ? new Date(switches[0].time).getTime() : null)
+  const endMs = relayActiveTo(rn) ?? (switches.length ? new Date(switches[switches.length - 1].time).getTime() : null)
   relayStatsData.value[rn] = {
     labels: switches.map(x => x.time),
     states: switches.map(x => x.state),
@@ -528,30 +579,88 @@ async function toggleRelayStats(r) {
   relayStatsOpen.value[rn] = !relayStatsOpen.value[rn]
   if (relayStatsOpen.value[rn]) {
     if (!relayRangeVal.value[rn]) relayRangeVal.value[rn] = '24h'
+    if (relayBaseFromMs.value[rn] == null) {
+      const w = presetWindowMs(relayRangeVal.value[rn])
+      relayBaseFromMs.value[rn] = w.from
+      relayBaseToMs.value[rn] = w.to
+    }
+    relaySelection.value[rn] = null
     await loadRelayStats(r)
   }
 }
 
 async function selectRelayRange(r, v) {
-  relayRangeVal.value[r.relayNumber] = v
+  const rn = r.relayNumber
+  relayRangeVal.value[rn] = v
+  relaySelection.value[rn] = null
+  const w = presetWindowMs(v)
+  relayBaseFromMs.value[rn] = w.from
+  relayBaseToMs.value[rn] = w.to
   await loadRelayStats(r)
 }
 
 async function applyRelayCustom(r) {
-  relayRangeVal.value[r.relayNumber] = 'custom'
+  const rn = r.relayNumber
+  const fromMs = zoneInputToMs(relayCustomFrom.value[rn], device.value?.tzOffsetMinutes)
+  const toMs = zoneInputToMs(relayCustomTo.value[rn], device.value?.tzOffsetMinutes)
+  if (fromMs == null || toMs == null || toMs <= fromMs) return
+  relayRangeVal.value[rn] = 'custom'
+  relaySelection.value[rn] = null
+  relayBaseFromMs.value[rn] = fromMs
+  relayBaseToMs.value[rn] = toMs
   await loadRelayStats(r)
 }
 
 function applyRelayRange(r, { from, to }) {
+  const rn = r.relayNumber
   const fromMs = Math.floor(from / 60000) * 60000
   const toMs = Math.ceil(to / 60000) * 60000
-  if (!(toMs > fromMs)) return
+  const baseFrom = relayActiveFrom(rn)
+  const baseTo = relayActiveTo(rn)
+  if (baseFrom == null || baseTo == null || !(toMs > fromMs)) return
+  const f = Math.max(baseFrom, fromMs)
+  const t = Math.min(baseTo, toMs)
+  if (!(t > f)) return
+  relaySelection.value[rn] = { from: f, to: t }
+  loadRelayStats(r)
+}
+
+function applyRelayTimelineRange(r, { from, to }) {
   const rn = r.relayNumber
-  const offset = device.value?.tzOffsetMinutes
-  relayCustomFrom.value[rn] = msToZoneInput(fromMs, offset)
-  relayCustomTo.value[rn] = msToZoneInput(toMs, offset)
-  relayShowCustom.value[rn] = true
-  applyRelayCustom(r)
+  const fromMs = Math.floor(from / 60000) * 60000
+  const toMs = Math.ceil(to / 60000) * 60000
+  const baseFrom = relayBaseFromMs.value[rn]
+  const baseTo = relayBaseToMs.value[rn]
+  if (baseFrom == null || baseTo == null || !(toMs > fromMs)) return
+  const f = Math.max(baseFrom, fromMs)
+  const t = Math.min(baseTo, toMs)
+  if (!(t > f)) return
+  relaySelection.value[rn] = { from: f, to: t }
+  loadRelayStats(r)
+}
+
+async function shiftRelayRange(r, direction) {
+  const rn = r.relayNumber
+  const from = relayBaseFromMs.value[rn]
+  const to = relayBaseToMs.value[rn]
+  if (from == null || to == null) return
+  const width = to - from
+  let nextFrom = from + direction * width
+  let nextTo = to + direction * width
+  if (direction > 0 && nextTo > Date.now()) {
+    nextTo = Date.now()
+    nextFrom = nextTo - width
+  }
+  if (nextFrom === from && nextTo === to) return
+  relayBaseFromMs.value[rn] = nextFrom
+  relayBaseToMs.value[rn] = nextTo
+  relaySelection.value[rn] = null
+  if (relayRangeVal.value[rn] === 'custom') {
+    const offset = device.value?.tzOffsetMinutes
+    relayCustomFrom.value[rn] = msToZoneInput(nextFrom, offset)
+    relayCustomTo.value[rn] = msToZoneInput(nextTo, offset)
+  }
+  await loadRelayStats(r)
 }
 
 async function ensureDowntimes() {
@@ -1136,13 +1245,6 @@ function moistureImmersion(s) {
   return cal ? immersionWarning(s.moistureAdc, cal) : false
 }
 
-function parseRange(r) {
-  const num = parseInt(r)
-  const unit = r.slice(-1)
-  const ms = unit === 'h' ? num * 3600000 : num * 86400000
-  return new Date(Date.now() - ms).toISOString()
-}
-
 const BREAK_THRESHOLD_MS = 60000
 
 function classifyIntervals(log) {
@@ -1182,8 +1284,9 @@ function formatDuration(ms) {
 
 async function loadStats() {
   await ensureDowntimes()
-  const since = windowSince.value || undefined
-  const to = windowTo.value || undefined
+  ensureBlockBase()
+  const since = activeFromMs.value != null ? new Date(activeFromMs.value).toISOString() : undefined
+  const to = activeToMs.value != null ? new Date(activeToMs.value).toISOString() : undefined
   // Последнее статус-событие до начала окна: нужно, чтобы растянуть ряд влево
   // только при реально известном значении. Без него линия «выдумывала» онлайн
   // за период до запуска сервиса, когда данных ещё не было (как у RSSI/Vbat).
@@ -1204,8 +1307,8 @@ async function loadStats() {
   const all = bt.concat(st)
   const dataMax = all.length ? Math.max(...all) : null
   const dataMin = all.length ? Math.min(...all) : null
-  statsXMin.value = rangeStartMs.value != null ? rangeStartMs.value : dataMin
-  statsXMax.value = rangeEndMs.value != null ? rangeEndMs.value : dataMax
+  statsXMin.value = activeFromMs.value != null ? activeFromMs.value : dataMin
+  statsXMax.value = activeToMs.value != null ? activeToMs.value : dataMax
 
   // Растягиваем статусный ряд до границ окна: влево — только если статус на
   // левом крае известен (последнее событие до окна), иначе линия начинается
@@ -1238,30 +1341,72 @@ async function toggleStats() {
 async function setRange(r) {
   range.value = r
   showStats.value = true
-  windowSince.value = parseRange(r)
-  windowTo.value = ''
+  selection.value = null
+  const w = presetWindowMs(r)
+  baseFromMs.value = w.from
+  baseToMs.value = w.to
   await loadStats()
 }
 
 function applyCustom() {
-  range.value = 'custom'
-  showStats.value = true
   const sinceMs = zoneInputToMs(customFrom.value, device.value?.tzOffsetMinutes)
   const toMs = zoneInputToMs(customTo.value, device.value?.tzOffsetMinutes)
-  windowSince.value = sinceMs != null ? new Date(sinceMs).toISOString() : ''
-  windowTo.value = toMs != null ? new Date(toMs).toISOString() : ''
+  if (sinceMs == null || toMs == null || toMs <= sinceMs) return
+  range.value = 'custom'
+  showStats.value = true
+  selection.value = null
+  baseFromMs.value = sinceMs
+  baseToMs.value = toMs
   loadStats()
 }
 
 function applyBlockRange({ from, to }) {
   const fromMs = Math.floor(from / 60000) * 60000
   const toMs = Math.ceil(to / 60000) * 60000
-  if (!(toMs > fromMs)) return
-  const offset = device.value?.tzOffsetMinutes
-  customFrom.value = msToZoneInput(fromMs, offset)
-  customTo.value = msToZoneInput(toMs, offset)
-  showCustom.value = true
-  applyCustom()
+  const baseFrom = activeFromMs.value
+  const baseTo = activeToMs.value
+  if (baseFrom == null || baseTo == null || !(toMs > fromMs)) return
+  const f = Math.max(baseFrom, fromMs)
+  const t = Math.min(baseTo, toMs)
+  if (!(t > f)) return
+  selection.value = { from: f, to: t }
+  loadStats()
+}
+
+function applyBlockTimelineRange({ from, to }) {
+  const fromMs = Math.floor(from / 60000) * 60000
+  const toMs = Math.ceil(to / 60000) * 60000
+  const baseFrom = baseFromMs.value
+  const baseTo = baseToMs.value
+  if (baseFrom == null || baseTo == null || !(toMs > fromMs)) return
+  const f = Math.max(baseFrom, fromMs)
+  const t = Math.min(baseTo, toMs)
+  if (!(t > f)) return
+  selection.value = { from: f, to: t }
+  loadStats()
+}
+
+async function shiftBlockRange(direction) {
+  const from = baseFromMs.value
+  const to = baseToMs.value
+  if (from == null || to == null) return
+  const width = to - from
+  let nextFrom = from + direction * width
+  let nextTo = to + direction * width
+  if (direction > 0 && nextTo > Date.now()) {
+    nextTo = Date.now()
+    nextFrom = nextTo - width
+  }
+  if (nextFrom === from && nextTo === to) return
+  baseFromMs.value = nextFrom
+  baseToMs.value = nextTo
+  selection.value = null
+  if (range.value === 'custom') {
+    const offset = device.value?.tzOffsetMinutes
+    customFrom.value = msToZoneInput(nextFrom, offset)
+    customTo.value = msToZoneInput(nextTo, offset)
+  }
+  await loadStats()
 }
 </script>
 
