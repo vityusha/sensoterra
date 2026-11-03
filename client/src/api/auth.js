@@ -13,7 +13,7 @@ api.interceptors.request.use(config => {
 })
 
 // Endpoints where 401 is a normal answer (wrong password etc.), not an expired session.
-const AUTH_FORM_URL = /^\/?auth\/(login|bootstrap|register|password|oauth\/)/
+const AUTH_FORM_URL = /^\/?auth\/(login|register|password|oauth\/|mfa\/)/
 
 api.interceptors.response.use(res => res, err => {
   const config = err.config || {}
@@ -23,9 +23,7 @@ api.interceptors.response.use(res => res, err => {
   return Promise.reject(err)
 })
 
-// --- Sliding session: JWT lives 24 h, an active client gets a new one past half of it ---
-
-const REFRESH_WHEN_LEFT_MS = 12 * 3600 * 1000
+// --- Sliding session: a JWT (24 h, admins 1 h) is renewed by an active client past half its life ---
 
 let sessionExpiredHandler = null
 let refreshing = null
@@ -50,19 +48,30 @@ export function sessionExpired() {
   if (sessionExpiredHandler) sessionExpiredHandler()
 }
 
-/** exp of the JWT in ms; 0 if the token can't be read (treated as expired). */
-export function tokenExpiresAt(token) {
+function tokenClaims(token) {
   try {
     const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-    return JSON.parse(atob(payload)).exp * 1000
+    return JSON.parse(atob(payload))
   } catch {
-    return 0
+    return {}
   }
+}
+
+/** exp of the JWT in ms; 0 if the token can't be read (treated as expired). */
+export function tokenExpiresAt(token) {
+  const exp = tokenClaims(token).exp
+  return exp ? exp * 1000 : 0
+}
+
+/** Full lifetime of the token (exp - iat) in ms: 24 h for users, 1 h for admins. */
+function tokenLifetime(token) {
+  const { exp, iat } = tokenClaims(token)
+  return exp && iat ? (exp - iat) * 1000 : 24 * 3600 * 1000
 }
 
 /**
  * Called on user activity (API calls, tab visible). Expired token -> session expired;
- * less than 12 h left -> POST /api/auth/refresh. The server refuses (401) after the
+ * less than half of its lifetime left -> POST /api/auth/refresh. The server refuses (401) after the
  * absolute session limit, which also ends the session.
  */
 export function refreshTokenIfNeeded() {
@@ -73,7 +82,7 @@ export function refreshTokenIfNeeded() {
     sessionExpired()
     return
   }
-  if (left > REFRESH_WHEN_LEFT_MS) return
+  if (left > tokenLifetime(token) / 2) return
   // Plain axios: this request must not go through the interceptors above.
   refreshing = axios.post('/api/auth/refresh', {}, { headers: { Authorization: `Bearer ${token}` } })
     .then(({ data }) => {
@@ -103,16 +112,62 @@ export function getToken() {
   return localStorage.getItem('token')
 }
 
+/**
+ * Password sign-in. Returns the raw response: { token, user } for a session, or
+ * { mfaRequired | mfaSetupRequired, mfaToken } when an admin still has to pass 2FA.
+ */
 export async function login(username, password) {
   const { data } = await api.post('/auth/login', { username, password })
-  setToken(data.token)
-  return data.user
+  return data
 }
 
-export async function bootstrap(username, password) {
-  const { data } = await api.post('/auth/bootstrap', { username, password })
-  setToken(data.token)
-  return data.user
+// --- Admin 2FA (TOTP): second step after password / Google / Yandex ---
+
+const MFA_PENDING_KEY = 'mfaPending'
+
+/** The sign-in response is a 2FA challenge, not a session. */
+export function needsMfa(data) {
+  return !!data?.mfaToken
+}
+
+/**
+ * Pages other than /login (Google/Yandex sign-in on Register, invites, the Yandex callback)
+ * hand the challenge to the login page, which shows the code step.
+ */
+export function savePendingMfa(data) {
+  try {
+    sessionStorage.setItem(MFA_PENDING_KEY, JSON.stringify({
+      mfaToken: data.mfaToken, setup: data.mfaSetupRequired === true,
+    }))
+  } catch { /* storage blocked: the user signs in again on /login */ }
+}
+
+export function takePendingMfa() {
+  try {
+    const raw = sessionStorage.getItem(MFA_PENDING_KEY)
+    sessionStorage.removeItem(MFA_PENDING_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+/** Enrollment 1/2: { secret, otpauthUri } for the QR code. */
+export async function mfaSetup(mfaToken) {
+  const { data } = await axios.post('/api/auth/mfa/setup', { mfaToken })
+  return data
+}
+
+/** Enrollment 2/2: { token, user, recoveryCodes } — the codes are shown only now. */
+export async function mfaEnroll(mfaToken, code) {
+  const { data } = await axios.post('/api/auth/mfa/enroll', { mfaToken, code })
+  return data
+}
+
+/** Code from the app, or a recovery code: { token, user, recoveryCodesLeft }. */
+export async function mfaVerify(mfaToken, { code = null, recoveryCode = null }) {
+  const { data } = await axios.post('/api/auth/mfa/verify', { mfaToken, code, recoveryCode })
+  return data
 }
 
 export async function authStatus() {
@@ -253,9 +308,11 @@ export async function listUsers() {
   return data
 }
 
-/** Админ заводит только других админов — пользователи регистрируются сами. */
-export async function createAdmin(username, password) {
-  const { data } = await api.post('/admin/users', { username, password, role: 'ADMIN' })
+/** Admin sign-ins and actions, newest first; before = id of the last entry seen. */
+export async function listAdminAudit(limit = 50, before = null) {
+  const params = new URLSearchParams({ limit })
+  if (before != null) params.set('before', before)
+  const { data } = await api.get(`/admin/audit?${params}`)
   return data
 }
 

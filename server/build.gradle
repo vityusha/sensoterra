@@ -74,6 +74,11 @@ application {
     mainClass.set("ru.sensoterra.server.Application")
 }
 
+// `./gradlew run --args="admin create <name>"` reads the password from stdin (no terminal under Gradle).
+tasks.named("run") {
+    standardInput = System.in
+}
+
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21

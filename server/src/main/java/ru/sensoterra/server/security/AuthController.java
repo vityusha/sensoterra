@@ -10,6 +10,7 @@ import ru.sensoterra.server.service.ExternalAccountService.SignIn;
 import ru.sensoterra.server.service.GoogleIdentityVerifier;
 import ru.sensoterra.server.service.GoogleIdentityVerifier.GoogleIdentity;
 import ru.sensoterra.server.service.YandexOAuthClient;
+import ru.sensoterra.server.service.AdminAuditService;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
@@ -19,9 +20,7 @@ import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import io.micronaut.security.annotation.Secured;
 import io.micronaut.security.authentication.Authentication;
-import io.micronaut.security.authentication.ServerAuthentication;
 import io.micronaut.security.rules.SecurityRule;
-import io.micronaut.security.token.generator.TokenGenerator;
 import io.micronaut.serde.annotation.Serdeable;
 import jakarta.inject.Singleton;
 import jakarta.transaction.Transactional;
@@ -30,8 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.security.Principal;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 
 @Controller("/api/auth")
@@ -40,19 +38,12 @@ public class AuthController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
-    /** Минимум для нового пароля при смене. */
-
-    /** JWT lifetime: an idle session expires after this; active clients refresh before it. */
-    public static final int TOKEN_TTL_SECONDS = 24 * 3600;
-    /** Absolute session limit counted from the login, however active the user is. */
-    public static final long MAX_SESSION_SECONDS = 30L * 24 * 3600;
-    /** Claim with the original login time (epoch seconds), kept across refreshes. */
-    public static final String AUTH_TIME_CLAIM = "auth_time";
-
     private final AppUserRepository userRepository;
     private final ru.sensoterra.server.service.UserPrefService prefs;
     private final PasswordEncoder passwordEncoder;
-    private final TokenGenerator tokenGenerator;
+    private final SessionTokens tokens;
+    private final AdminMfaService mfa;
+    private final AdminAuditService audit;
     private final DeviceAccessService access;
     private final DeviceKeyService deviceKeys;
     private final GoogleIdentityVerifier googleVerifier;
@@ -61,7 +52,9 @@ public class AuthController {
 
     public AuthController(AppUserRepository userRepository,
                           PasswordEncoder passwordEncoder,
-                          TokenGenerator tokenGenerator,
+                          SessionTokens tokens,
+                          AdminMfaService mfa,
+                          AdminAuditService audit,
                           DeviceAccessService access,
                           DeviceKeyService deviceKeys,
                           GoogleIdentityVerifier googleVerifier,
@@ -70,7 +63,9 @@ public class AuthController {
                           ru.sensoterra.server.service.UserPrefService prefs) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.tokenGenerator = tokenGenerator;
+        this.tokens = tokens;
+        this.mfa = mfa;
+        this.audit = audit;
         this.access = access;
         this.deviceKeys = deviceKeys;
         this.googleVerifier = googleVerifier;
@@ -100,8 +95,11 @@ public class AuthController {
             log.warn("Login rejected: account disabled username='{}'", username);
             throw new HttpStatusException(HttpStatus.FORBIDDEN, "Account is disabled");
         }
-        String token = generateToken(user);
-        return HttpResponse.ok(Map.of("token", token,
+        AdminMfaService.SignInStep step = mfa.afterFirstFactor(user, AdminAuditService.LOGIN_PASSWORD_OK);
+        if (!step.complete()) {
+            return HttpResponse.ok(challengeOf(step));
+        }
+        return HttpResponse.ok(Map.of("token", step.token(),
                 "user", responseOf(user)));
     }
 
@@ -186,7 +184,7 @@ public class AuthController {
             deviceKeys.claim(request.chipId(), request.key(), user.getId());
         }
         // Сразу отдаём токен: покупатель после регистрации не должен вводить пароль второй раз.
-        return HttpResponse.ok(RegisterResponse.of(user, generateToken(user), claimsDevice));
+        return HttpResponse.ok(RegisterResponse.of(user, tokens.issue(user, false), claimsDevice));
     }
 
     /**
@@ -201,8 +199,7 @@ public class AuthController {
                 new ExternalIdentity(GoogleIdentityVerifier.provider(), identity.subject(),
                         identity.email(), identity.email()),
                 request.chipId(), request.key());
-        return HttpResponse.ok(RegisterResponse.of(result.user(), generateToken(result.user()),
-                result.deviceBound()));
+        return externalSession(result);
     }
 
     /**
@@ -216,8 +213,16 @@ public class AuthController {
     public HttpResponse<?> loginWithYandex(@Body YandexLoginRequest request) {
         ExternalIdentity identity = yandexClient.identify(request.code(), request.codeVerifier());
         SignIn result = externalAccounts.signIn(identity, request.chipId(), request.key());
-        return HttpResponse.ok(RegisterResponse.of(result.user(), generateToken(result.user()),
-                result.deviceBound()));
+        return externalSession(result);
+    }
+
+    /** An admin signing in through Google/Yandex still has to pass the TOTP step. */
+    private HttpResponse<?> externalSession(SignIn result) {
+        AdminMfaService.SignInStep step = mfa.afterFirstFactor(result.user(), AdminAuditService.LOGIN_EXTERNAL_OK);
+        if (!step.complete()) {
+            return HttpResponse.ok(challengeOf(step));
+        }
+        return HttpResponse.ok(RegisterResponse.of(result.user(), step.token(), result.deviceBound()));
     }
 
     @Get("/status")
@@ -225,35 +230,38 @@ public class AuthController {
     public Map<String, Object> status() {
         // client_id Google публичный и виден в коде страницы, поэтому отдаём его
         // вместе с флагом: фронту не нужно знать про Vite-переменные и .env.
-        return Map.of("bootstrapNeeded", userRepository.count() == 0,
-                "googleEnabled", googleVerifier.isEnabled(),
+        return Map.of("googleEnabled", googleVerifier.isEnabled(),
                 "googleClientId", googleVerifier.clientId(),
                 "yandexEnabled", yandexClient.isEnabled(),
                 "yandexClientId", yandexClient.clientId());
     }
 
     /**
-     * Первичная настройка: аккаунт администратора. Доступен, только пока в базе никого нет.
+     * Admin second step, enrollment 1/2: secret and otpauth:// URI for the QR code.
+     * Admins are created only by the server CLI and enroll on their first sign-in.
      */
-    @Post("/bootstrap")
+    @Post("/mfa/setup")
     @Secured(SecurityRule.IS_ANONYMOUS)
-    public HttpResponse<?> bootstrap(@Body BootstrapRequest request) {
-        if (userRepository.count() > 0) {
-            throw new HttpStatusException(HttpStatus.FORBIDDEN, "Admin user already exists");
-        }
-        String username = CredentialsPolicy.requireUsername(request.username());
-        CredentialsPolicy.requirePassword(request.password(), username);
-        AppUser admin = new AppUser();
-        admin.setUsername(username);
-        admin.setPasswordHash(passwordEncoder.encode(request.password()));
-        admin.setRole("ADMIN");
-        admin.setEnabled(Boolean.TRUE);
-        admin.setCreatedAt(Instant.now());
-        userRepository.save(admin);
-        prefs.seedDefaults(admin.getId());
-        String token = generateToken(admin);
-        return HttpResponse.ok(Map.of("token", token,
-                "user", responseOf(admin)));
+    public AdminMfaService.Setup mfaSetup(@Body MfaRequest request) {
+        return mfa.setup(request.mfaToken());
+    }
+
+    /** Enrollment 2/2: the first code from the app; returns the session and the recovery codes once. */
+    @Post("/mfa/enroll")
+    @Secured(SecurityRule.IS_ANONYMOUS)
+    public Map<String, Object> mfaEnroll(@Body MfaRequest request) {
+        AdminMfaService.Enrolled enrolled = mfa.enroll(request.mfaToken(), request.code());
+        return Map.of("token", enrolled.token(), "user", responseOf(enrolled.user()),
+                "recoveryCodes", enrolled.recoveryCodes());
+    }
+
+    /** Regular second step: TOTP code or a one-time recovery code. Wrong code -> 401. */
+    @Post("/mfa/verify")
+    @Secured(SecurityRule.IS_ANONYMOUS)
+    public Map<String, Object> mfaVerify(@Body MfaRequest request) {
+        AdminMfaService.Verified verified = mfa.verify(request.mfaToken(), request.code(), request.recoveryCode());
+        return Map.of("token", verified.token(), "user", responseOf(verified.user()),
+                "recoveryCodesLeft", verified.recoveryCodesLeft());
     }
 
     /**
@@ -262,8 +270,8 @@ public class AuthController {
      * token lifetime expires. DbAccountSecurityRule has already checked that the account
      * exists and is enabled.
      * <p>
-     * The original login time travels in the auth_time claim; after MAX_SESSION_SECONDS the
-     * refresh is refused (401) and the user must sign in again — a stolen token can't be
+     * The original login time travels in the auth_time claim; after
+     * SessionTokens.maxSessionSeconds (30 days, 12 h for admins) the refresh is refused (401) and the user must sign in again — a stolen token can't be
      * kept alive forever.
      */
     @Post("/refresh")
@@ -271,23 +279,20 @@ public class AuthController {
     public HttpResponse<?> refresh(Authentication authentication) {
         AppUser user = userRepository.findByUsername(authentication.getName())
                 .orElseThrow(() -> new HttpStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
-        long authTime = authTimeOf(authentication);
-        if (Instant.now().getEpochSecond() - authTime > MAX_SESSION_SECONDS) {
+        long authTime = SessionTokens.authTimeOf(authentication);
+        boolean admin = SessionTokens.isAdmin(user);
+        // The limit follows the current role: an account promoted to ADMIN gets the admin one.
+        if (Instant.now().getEpochSecond() - authTime > SessionTokens.maxSessionSeconds(user)) {
+            if (admin) {
+                audit.record(user, AdminAuditService.SESSION_REFUSED, "session limit");
+            }
             throw new HttpStatusException(HttpStatus.UNAUTHORIZED, "Session expired");
         }
-        return HttpResponse.ok(Map.of("token", generateToken(user, authTime), "user", responseOf(user)));
-    }
-
-    /** Login time of the session; tokens issued before auth_time existed count from now. */
-    private static long authTimeOf(Authentication authentication) {
-        Object value = authentication.getAttributes().get(AUTH_TIME_CLAIM);
-        if (value instanceof Number n) {
-            return n.longValue();
+        // DbAccountSecurityRule already refuses an admin token without the claim; keep it explicit.
+        if (admin && !SessionTokens.hasMfa(authentication)) {
+            throw new HttpStatusException(HttpStatus.UNAUTHORIZED, "Session expired");
         }
-        if (value instanceof java.util.Date d) {
-            return d.getTime() / 1000;
-        }
-        return Instant.now().getEpochSecond();
+        return HttpResponse.ok(Map.of("token", tokens.issue(user, authTime, admin), "user", responseOf(user)));
     }
 
     private AppUser principalUser(Principal principal) {
@@ -304,17 +309,12 @@ public class AuthController {
                 user.getAuthProvider());
     }
 
-    private String generateToken(AppUser user) {
-        return generateToken(user, Instant.now().getEpochSecond());
-    }
-
-    private String generateToken(AppUser user, long authTime) {
-        List<String> roles = Collections.singletonList(user.getRole());
-        ServerAuthentication auth = new ServerAuthentication(
-                user.getUsername(), roles, Map.of("sub", user.getUsername(), "roles", roles,
-                        AUTH_TIME_CLAIM, authTime));
-        return tokenGenerator.generateToken(auth, TOKEN_TTL_SECONDS).orElseThrow(
-                () -> new HttpStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Token generation failed"));
+    /** Response of a first factor that needs the TOTP step: no session yet, only the challenge. */
+    private static Map<String, Object> challengeOf(AdminMfaService.SignInStep step) {
+        Map<String, Object> body = new HashMap<>();
+        body.put(step.setupRequired() ? "mfaSetupRequired" : "mfaRequired", true);
+        body.put("mfaToken", step.mfaToken());
+        return body;
     }
 
     @Serdeable
@@ -331,8 +331,9 @@ public class AuthController {
     @Serdeable
     public record YandexLoginRequest(String code, String codeVerifier, Long chipId, String key) {}
 
+    /** Admin second step: code from the app, or recoveryCode instead when the phone is lost. */
     @Serdeable
-    public record BootstrapRequest(String username, String password) {}
+    public record MfaRequest(String mfaToken, String code, String recoveryCode) {}
 
     @Serdeable
     public record ChangePasswordRequest(String currentPassword, String newPassword) {}

@@ -9,6 +9,7 @@ import ru.sensoterra.server.repository.DeviceRepository;
 import ru.sensoterra.server.repository.RelayRepository;
 import ru.sensoterra.server.repository.SensorRegistrationRepository;
 import ru.sensoterra.server.repository.SensorRepository;
+import ru.sensoterra.server.service.AdminAuditService;
 import ru.sensoterra.server.service.BlockPaymentService;
 import ru.sensoterra.server.service.DeviceAccessService;
 import ru.sensoterra.server.service.InviteService;
@@ -48,6 +49,7 @@ public class DeviceController {
     private final BlockPaymentService payments;
     private final InviteService invites;
     private final MqttClientService mqttClientService;
+    private final AdminAuditService audit;
 
     public DeviceController(DeviceRepository deviceRepository,
                             RelayRepository relayRepository,
@@ -59,7 +61,8 @@ public class DeviceController {
                             DeviceKeyService deviceKeys,
                             BlockPaymentService payments,
                             InviteService invites,
-                            MqttClientService mqttClientService) {
+                            MqttClientService mqttClientService,
+                            AdminAuditService audit) {
         this.deviceRepository = deviceRepository;
         this.relayRepository = relayRepository;
         this.sensorRepository = sensorRepository;
@@ -71,6 +74,7 @@ public class DeviceController {
         this.payments = payments;
         this.invites = invites;
         this.mqttClientService = mqttClientService;
+        this.audit = audit;
     }
 
     @Get
@@ -266,6 +270,7 @@ public class DeviceController {
         if (!deviceRepository.existsById(chipId)) {
             throw new HttpStatusException(HttpStatus.NOT_FOUND, "Device not found");
         }
+        audit.action(AdminAuditService.DEVICE_KEY_READ, "chip=" + chipId);
         return HttpResponse.ok(new DeviceKeyResponse(chipId, deviceKeys.keyOf(chipId)));
     }
 
@@ -274,7 +279,9 @@ public class DeviceController {
     @Secured("ADMIN")
     public HttpResponse<DeviceKeyResponse> regenerateDeviceKey(Long chipId) {
         access.requireAdmin();
-        return HttpResponse.ok(new DeviceKeyResponse(chipId, deviceKeys.regenerate(chipId)));
+        String key = deviceKeys.regenerate(chipId);
+        audit.action(AdminAuditService.DEVICE_KEY_REGENERATED, "chip=" + chipId);
+        return HttpResponse.ok(new DeviceKeyResponse(chipId, key));
     }
 
     @Delete("/{chipId}")
@@ -283,7 +290,9 @@ public class DeviceController {
         if (!deviceRepository.existsById(chipId)) {
             throw new HttpStatusException(HttpStatus.NOT_FOUND, "Device not found");
         }
-        return HttpResponse.ok(deviceDeletionService.deleteDevice(chipId));
+        DeviceDeletionService.DeletionResult result = deviceDeletionService.deleteDevice(chipId);
+        audit.action(AdminAuditService.DEVICE_DELETED, "chip=" + chipId);
+        return HttpResponse.ok(result);
     }
 
     private List<Device> visibleDevices() {

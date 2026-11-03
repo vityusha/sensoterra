@@ -50,7 +50,7 @@ class RolesAccessTest {
         return (String) resp.body().get("token");
     }
 
-    /** Админ может быть ещё не создан (тесты делят одну БД) — тогда делаем bootstrap. */
+    /** The admin may not exist yet (tests share one DB): then create it via the test endpoint. */
     private void ensureAdmin() {
         if (adminToken != null) {
             return;
@@ -64,7 +64,7 @@ class RolesAccessTest {
             return;
         } catch (HttpClientResponseException e) {
             adminToken = (String) client.toBlocking().exchange(
-                    HttpRequest.POST("/api/auth/bootstrap", creds)
+                    HttpRequest.POST("/api/test/admin", creds)
                             .contentType(MediaType.APPLICATION_JSON),
                     Argument.of(Map.class)).body().get("token");
         }

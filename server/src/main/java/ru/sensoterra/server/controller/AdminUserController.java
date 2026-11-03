@@ -6,6 +6,7 @@ import ru.sensoterra.server.repository.AppUserRepository;
 import ru.sensoterra.server.repository.DeviceRepository;
 import ru.sensoterra.server.security.CredentialsPolicy;
 import ru.sensoterra.server.security.PasswordEncoder;
+import ru.sensoterra.server.service.AdminAuditService;
 import ru.sensoterra.server.service.DeviceAccessService;
 import ru.sensoterra.server.service.BlockPaymentService;
 import io.micronaut.http.HttpResponse;
@@ -21,7 +22,6 @@ import io.micronaut.security.annotation.Secured;
 import io.micronaut.serde.annotation.Serdeable;
 import jakarta.transaction.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 
 @Controller("/api/admin/users")
@@ -29,24 +29,24 @@ import java.util.List;
 public class AdminUserController {
 
     private final AppUserRepository userRepository;
-    private final ru.sensoterra.server.service.UserPrefService prefs;
     private final DeviceRepository deviceRepository;
     private final PasswordEncoder passwordEncoder;
     private final DeviceAccessService access;
     private final BlockPaymentService payments;
+    private final AdminAuditService audit;
 
     public AdminUserController(AppUserRepository userRepository,
                                DeviceRepository deviceRepository,
                                PasswordEncoder passwordEncoder,
                                DeviceAccessService access,
                                BlockPaymentService payments,
-                               ru.sensoterra.server.service.UserPrefService prefs) {
+                               AdminAuditService audit) {
         this.userRepository = userRepository;
         this.deviceRepository = deviceRepository;
         this.passwordEncoder = passwordEncoder;
         this.access = access;
         this.payments = payments;
-        this.prefs = prefs;
+        this.audit = audit;
     }
 
     @Get
@@ -60,43 +60,27 @@ public class AdminUserController {
         return UserResponse.of(find(id));
     }
 
-    /**
-     * Заводит только администраторов. USER заводит сам пользователь через самостоятельную
-     * регистрацию и подтверждает свой блок ключом с комплектного листа, поэтому создавать
-     * ему аккаунт со стороны сервера незачем, а VIEWER — не роль аккаунта, а доступ
-     * «только чтение» к конкретному устройству.
+    /*
+     * No account creation here: users register themselves, and admins are created (and
+     * promoted) only by the server CLI (`sensoterra-server admin ...`), which needs SSH access
+     * to the VPS. A stolen admin session therefore can't mint more admins.
      */
-    @Post
-    public HttpResponse<UserResponse> create(@Body UserCreateRequest request) {
-        String username = CredentialsPolicy.requireUsername(request.username());
-        CredentialsPolicy.requirePassword(request.password(), username);
-        if (userRepository.findByUsername(username).isPresent()) {
-            throw new HttpStatusException(HttpStatus.CONFLICT, "Username already exists");
-        }
-        String role = access.normalizeRole(request.role());
-        if (!"ADMIN".equals(role)) {
-            throw new HttpStatusException(HttpStatus.FORBIDDEN,
-                    "Admin creates only ADMIN accounts; users register themselves");
-        }
-        AppUser user = new AppUser();
-        user.setUsername(username);
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setRole(role);
-        user.setEnabled(Boolean.TRUE);
-        AppUser saved = userRepository.save(user);
-        prefs.seedDefaults(saved.getId());
-        return HttpResponse.ok(UserResponse.of(saved));
-    }
 
     @Put("/{id}")
     public HttpResponse<UserResponse> update(Long id, @Body UserUpdateRequest request) {
         AppUser user = find(id);
+        StringBuilder changes = new StringBuilder();
         if (request.password() != null && !request.password().isBlank()) {
             CredentialsPolicy.requirePassword(request.password(), user.getUsername());
             user.setPasswordHash(passwordEncoder.encode(request.password()));
+            changes.append(" password");
         }
         if (request.role() != null && !request.role().isBlank()) {
             String role = access.normalizeRole(request.role());
+            if ("ADMIN".equals(role) && !"ADMIN".equals(user.getRole())) {
+                throw new HttpStatusException(HttpStatus.BAD_REQUEST,
+                        "Admins are created only via the server CLI");
+            }
             if ("ADMIN".equals(user.getRole()) && !"ADMIN".equals(role)) {
                 long admins = userRepository.findAll().stream()
                         .filter(u -> "ADMIN".equals(u.getRole()))
@@ -104,6 +88,9 @@ public class AdminUserController {
                 if (admins <= 1) {
                     throw new HttpStatusException(HttpStatus.BAD_REQUEST, "The last admin cannot be demoted");
                 }
+            }
+            if (!role.equals(user.getRole())) {
+                changes.append(" role=").append(role);
             }
             user.setRole(role);
         }
@@ -117,8 +104,11 @@ public class AdminUserController {
                 }
             }
             user.setEnabled(request.enabled());
+            changes.append(" enabled=").append(request.enabled());
         }
-        return HttpResponse.ok(UserResponse.of(userRepository.update(user)));
+        AppUser saved = userRepository.update(user);
+        audit.action(AdminAuditService.USER_UPDATED, describe(saved) + changes);
+        return HttpResponse.ok(UserResponse.of(saved));
     }
 
     @Delete("/{id}")
@@ -140,6 +130,7 @@ public class AdminUserController {
         // иначе блок остался бы оплаченным до конца несуществующим пользователем.
         payments.resetClocksOf(id);
         userRepository.delete(user);
+        audit.action(AdminAuditService.USER_DELETED, describe(user));
         return HttpResponse.noContent();
     }
 
@@ -179,12 +170,15 @@ public class AdminUserController {
             access.forceAccessRole(user.getId(), device.getChipId(),
                     request.accessRole() != null ? request.accessRole() : DeviceAccessService.ACCESS_USER);
         }
+        audit.action(AdminAuditService.DEVICE_GRANTED, describe(user) + " chip=" + device.getChipId()
+                + " access=" + request.accessRole());
         return HttpResponse.ok(device);
     }
 
     @Delete("/{id}/devices/{chipId}")
     public HttpResponse<?> unassignDevice(Long id, Long chipId) {
         access.revoke(id, chipId);
+        audit.action(AdminAuditService.DEVICE_REVOKED, "user id=" + id + " chip=" + chipId);
         return HttpResponse.noContent();
     }
 
@@ -196,6 +190,10 @@ public class AdminUserController {
     private AppUser find(Long id) {
         access.requireAdmin();
         return byId(id);
+    }
+
+    private static String describe(AppUser user) {
+        return "user id=" + user.getId() + " '" + user.getUsername() + "'";
     }
 
     private AppUser byId(Long id) {
@@ -218,10 +216,6 @@ public class AdminUserController {
                     u.getRole(),
                     !Boolean.FALSE.equals(u.getEnabled()));
         }
-    }
-
-    @Serdeable
-    public record UserCreateRequest(String username, String password, String role) {
     }
 
     @Serdeable

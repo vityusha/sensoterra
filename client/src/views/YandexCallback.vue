@@ -16,7 +16,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { acceptInvite, loginWithYandex, setToken } from '../api/auth'
+import { acceptInvite, loginWithYandex, needsMfa, savePendingMfa, setToken } from '../api/auth'
 import { enterSession, userFromAuthResponse } from '../store/auth'
 import { pushNotification } from '../store/notifications'
 import { takeYandexContext } from '../utils/yandexOAuth'
@@ -62,6 +62,12 @@ onMounted(async () => {
   } catch (e) {
     error.value = serverMessage(e)
       || (context.chipId ? 'ID или ключ не подошли — аккаунт не создан' : 'Не удалось войти через Яндекс')
+    return
+  }
+  if (needsMfa(data)) {
+    // Admin account: the TOTP step is on the login page.
+    savePendingMfa(data)
+    router.replace('/login?mfa=1')
     return
   }
   setToken(data.token)

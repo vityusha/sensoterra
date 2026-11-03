@@ -1,5 +1,6 @@
 package ru.sensoterra.server.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import io.micronaut.serde.annotation.Serdeable;
 import lombok.Data;
@@ -48,4 +49,14 @@ public class AppUser {
 
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
+
+    /** Base32 TOTP secret of an admin; null until enrolled. Never serialized. */
+    @JsonIgnore
+    @Column(name = "totp_secret", length = 64)
+    private String totpSecret;
+
+    /** Last accepted TOTP time step: a code is accepted only once. */
+    @JsonIgnore
+    @Column(name = "totp_last_step")
+    private Long totpLastStep;
 }

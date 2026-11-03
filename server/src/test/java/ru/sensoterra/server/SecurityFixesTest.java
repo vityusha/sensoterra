@@ -155,15 +155,14 @@ class SecurityFixesTest {
     @DisplayName("A demoted or disabled admin's old token no longer passes ADMIN endpoints")
     void staleAdminToken() {
         String name = "sec-admin-" + run;
-        Map created = body(exchange(HttpRequest.POST("/api/admin/users",
-                Map.of("username", name, "password", PASSWORD, "role", "ADMIN")), adminToken));
-        Long id = ((Number) created.get("id")).longValue();
+        Map created = body(client.toBlocking().exchange(HttpRequest.POST("/api/test/admin",
+                Map.of("username", name, "password", PASSWORD)), Map.class));
+        Long id = ((Number) ((Map) created.get("user")).get("id")).longValue();
         String oldToken = login(name);
         assertEquals(200, status(HttpRequest.GET("/api/admin/users"), oldToken));
 
         exchange(HttpRequest.PUT("/api/admin/users/" + id, Map.of("role", "USER")), adminToken);
-        assertEquals(403, status(HttpRequest.POST("/api/admin/users",
-                Map.of("username", name + "-x", "password", PASSWORD, "role", "ADMIN")), oldToken));
+        assertEquals(403, status(HttpRequest.GET("/api/admin/users"), oldToken));
 
         exchange(HttpRequest.PUT("/api/admin/users/" + id, Map.of("enabled", false)), adminToken);
         int disabled = status(HttpRequest.GET("/api/devices"), oldToken);
@@ -200,7 +199,7 @@ class SecurityFixesTest {
             return (String) body(client.toBlocking().exchange(HttpRequest.POST("/api/auth/login", creds), Map.class))
                     .get("token");
         } catch (HttpClientResponseException e) {
-            return (String) body(client.toBlocking().exchange(HttpRequest.POST("/api/auth/bootstrap", creds),
+            return (String) body(client.toBlocking().exchange(HttpRequest.POST("/api/test/admin", creds),
                     Map.class)).get("token");
         }
     }

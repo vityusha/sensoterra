@@ -57,6 +57,12 @@ Generate a JWT secret with `openssl rand -base64 32`. Keep `.env` private; it is
 docker compose up -d --build
 ```
 
+Create the first admin once the server is up (see [Admin accounts](#admin-accounts)):
+
+```bash
+docker compose exec server /app/bin/sensoterra-server admin create admin
+```
+
 The app is available at `http://localhost:3000` (change with `APP_PORT`). The compose file sets the server's database connection itself, so `DB_URL`/`DB_USER`/`DB_PASSWORD` in `.env` are only used when running the server on the host. The database port (`POSTGRES_PORT`) stays published for local development. Follow logs with `docker compose logs -f server`. `http://localhost:3000/health` reports the service status (`UP`, `DEGRADED` without MQTT, `DOWN` without the database); the Vite dev server proxies it too.
 
 ### Production
@@ -88,6 +94,32 @@ npm run dev
 ```
 
 The client is available at `http://localhost:3000`; the server listens on port `8080`. Vite proxies `/api` and the `/ws` WebSocket to the server.
+
+Create an admin with the server's CLI (same environment variables as the server; under Gradle the password is read from stdin, twice):
+
+```bash
+cd server
+./gradlew run --args="admin create admin"
+```
+
+## Admin accounts
+
+There is no sign-up or web form for admins: they are managed only with the server CLI, which talks to the database directly (having a shell next to the server is the authority). Regular users register themselves.
+
+```text
+sensoterra-server admin create <username>          create an ADMIN (asks for the password)
+sensoterra-server admin promote <username>         make an existing account ADMIN
+sensoterra-server admin demote <username>          make an ADMIN a regular USER
+sensoterra-server admin reset-password <username>  set a new password
+sensoterra-server admin reset-2fa <username>       forget the authenticator; set up again on next sign-in
+sensoterra-server admin list                       list admins and their 2FA state
+```
+
+Run it as `docker compose exec server /app/bin/sensoterra-server admin ...` or `./gradlew run --args="admin ..."`. The database schema must exist (start the server once so Flyway runs).
+
+Every admin signs in with a second factor (TOTP): on the first sign-in the login page shows a QR code for an authenticator app (Google Authenticator, Yandex Key, Aegis, 1Password, ...) and then ten one-time recovery codes. Google/Yandex sign-in of an admin asks for the code too. Admin sessions are short: a token lives 1 hour (renewed while active) and the session ends 12 hours after sign-in. Admin sign-ins and admin actions are listed at the bottom of the users page.
+
+For local development the second factor can be switched off with `SENSOTERRA_ADMIN_MFA=false`; the `prod` profile ignores it and refuses to start if 2FA is disabled any other way.
 
 ## Build
 
@@ -128,7 +160,7 @@ Retention drops whole 7-day chunks, so the oldest raw data is up to a week older
 
 ## Configuration
 
-Database settings use `DB_URL`, `DB_USER`, and `DB_PASSWORD`. MQTT settings can be overridden with `SENSOTERRA_MQTT_BROKER`, `SENSOTERRA_MQTT_CLIENT_ID`, `SENSOTERRA_MQTT_USERNAME`, and `SENSOTERRA_MQTT_PASSWORD`. Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with the same ID keep disconnecting each other on the broker.
+Database settings use `DB_URL`, `DB_USER`, and `DB_PASSWORD`. `SENSOTERRA_ADMIN_MFA=false` disables the admin second factor for local development (see [Admin accounts](#admin-accounts)); never in production. MQTT settings can be overridden with `SENSOTERRA_MQTT_BROKER`, `SENSOTERRA_MQTT_CLIENT_ID`, `SENSOTERRA_MQTT_USERNAME`, and `SENSOTERRA_MQTT_PASSWORD`. Each running server needs its own `SENSOTERRA_MQTT_CLIENT_ID`; two clients with the same ID keep disconnecting each other on the broker.
 
 Google sign-in is disabled by default. Enable it with `GOOGLE_OAUTH_ENABLED=true` and set `GOOGLE_CLIENT_ID`.
 

@@ -129,7 +129,7 @@ class UserPrefTest {
             adminToken = tokenForAdmin(creds);
         } catch (HttpClientResponseException e) {
             adminToken = (String) client.toBlocking().exchange(
-                    HttpRequest.POST("/api/auth/bootstrap", creds)
+                    HttpRequest.POST("/api/test/admin", creds)
                             .contentType(MediaType.APPLICATION_JSON),
                     Argument.of(Map.class)).body().get("token");
         }

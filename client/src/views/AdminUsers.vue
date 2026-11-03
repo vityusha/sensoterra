@@ -5,16 +5,15 @@
       <h2>Пользователи</h2>
     </div>
 
-    <!-- Админ заводит только других админов. Покупатели регистрируются сами и подтверждают
-         свой блок ключом с комплектного листа, поэтому заводить их отсюда незачем. -->
-    <form @submit.prevent="create" class="create-form">
-      <input v-model="form.username" placeholder="Логин админа" required />
-      <input v-model="form.password" placeholder="Пароль" type="password" required />
-      <button type="submit" class="btn">Создать админа</button>
-    </form>
+    <!-- Accounts are not created here: buyers register themselves, admins are created only
+         by the server CLI (needs SSH to the server), so a stolen admin session can't add admins. -->
     <p class="hint">
       Покупатель регистрируется сам: логин, пароль и пара «ID + ключ» с листа, идущего
       вместе с блоком. Права «только чтение» выдаёт владелец устройства — в карточке блока.
+    </p>
+    <p class="hint">
+      Администраторы создаются только на сервере:
+      <code>docker compose exec server /app/bin/sensoterra-server admin create &lt;логин&gt;</code>
     </p>
 
     <!-- Срок по умолчанию для всех блоков без своего плана. Конкретный блок настраивается
@@ -78,8 +77,8 @@
             <button @click="toggleEnabled(u)" class="btn small">
               {{ u.enabled === false ? 'Включить' : 'Отключить' }}
             </button>
-            <button v-if="u.role === 'ADMIN'" @click="changeRole(u)" class="btn small">
-              {{ nextRole(u) }}
+            <button v-if="u.role === 'ADMIN'" @click="demote(u)" class="btn small">
+              Снять админа
             </button>
             <button @click="remove(u)" class="btn small danger">Удалить</button>
           </template>
@@ -114,14 +113,35 @@
       </div>
     </div>
     <Paginator v-if="userPages > 1" v-model:page="userPage" :pages="userPages" label="Страницы пользователей" />
+
+    <!-- Admin sign-ins (incl. failed 2FA codes) and admin actions. -->
+    <section class="card audit">
+      <div class="defaults-head">
+        <h3>Журнал администраторов</h3>
+        <button class="btn small" @click="toggleAudit">{{ auditOpen ? 'Скрыть' : 'Показать' }}</button>
+      </div>
+      <template v-if="auditOpen">
+        <div v-if="!audit.length && !auditBusy" class="empty">Записей нет</div>
+        <div class="audit-row" v-for="a in audit" :key="a.id">
+          <span class="audit-time">{{ fmtDateTime(a.createdAt) }}</span>
+          <span class="audit-event" :class="{ bad: a.event === 'MFA_FAIL' }">{{ a.event }}</span>
+          <span class="audit-user">{{ a.username || '—' }}</span>
+          <span v-if="a.detail" class="audit-detail">{{ a.detail }}</span>
+          <span v-if="a.ip" class="audit-ip">{{ a.ip }}</span>
+        </div>
+        <button v-if="auditMore" class="btn small" :disabled="auditBusy" @click="loadAudit(false)">
+          {{ auditBusy ? '...' : 'Ещё' }}
+        </button>
+      </template>
+    </section>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import {
-  listUsers, getUserDevices, createAdmin, deleteUser, assignDevice, unassignDevice,
-  updateUser, listDeviceAccess, getBlockPaymentDefaults, setBlockPaymentDefaults
+  listUsers, getUserDevices, deleteUser, assignDevice, unassignDevice,
+  updateUser, listDeviceAccess, getBlockPaymentDefaults, setBlockPaymentDefaults, listAdminAudit
 } from '../api/auth'
 
 /** Права пользователя на его устройства — одним запросом на устройство. */
@@ -137,12 +157,10 @@ async function listDeviceAccessChip(userId, devices) {
 import Paginator from '../components/Paginator.vue'
 import { usePager } from '../composables/usePager'
 import { pushNotification } from '../store/notifications'
-import { credentialsErrorText, passwordProblem, usernameProblem } from '../utils/credentials'
 import { auth } from '../store/auth'
 
 const users = ref([])
 const devicesByUser = reactive({})
-const form = reactive({ username: '', password: '' })
 const editing = ref(null)
 const assignForm = reactive({ chipId: '', deviceType: 'BLOCK', accessRole: 'USER' })
 const accessRoles = reactive({})
@@ -156,9 +174,6 @@ const {
 } = usePager(users, userSearch, (u, q) =>
   u.username.toLowerCase().includes(q)
   || (devicesByUser[u.id] || []).some(d => String(d.chipId).includes(q)))
-
-/** Роль аккаунта: либо админ, либо обычный пользователь. */
-const ROLES = ['ADMIN', 'USER']
 
 /**
  * Видимая роль в списке: у не-админа зависит от прав на его устройствах.
@@ -210,35 +225,45 @@ async function load() {
 
 onMounted(load)
 
-async function create() {
-  const problem = usernameProblem(form.username) || passwordProblem(form.password, form.username)
-  if (problem) {
-    pushNotification(problem, 'error')
-    return
-  }
+/** Demotion only: making someone ADMIN is done with the server CLI (`admin promote`). */
+async function demote(u) {
+  if (!confirm(`Снять права администратора с ${u.username}? Вернуть их можно только командой на сервере.`)) return
   try {
-    await createAdmin(form.username.trim(), form.password)
+    await updateUser(u.id, { role: 'USER' })
   } catch (e) {
-    pushNotification(credentialsErrorText(e) || 'Не удалось создать админа', 'error')
+    pushNotification(e.response?.data?.message || 'Не удалось снять админа', 'error')
     return
   }
-  form.username = ''
-  form.password = ''
-  pushNotification('Админ создан')
   await load()
 }
 
-function nextRole(u) {
-  const i = ROLES.indexOf(u.role)
-  return `Роль: ${ROLES[(i + 1) % ROLES.length]}`
+const AUDIT_PAGE = 50
+const audit = ref([])
+const auditOpen = ref(false)
+const auditBusy = ref(false)
+const auditMore = ref(false)
+
+function fmtDateTime(value) {
+  return value ? new Date(value).toLocaleString('ru-RU') : '—'
 }
 
-async function changeRole(u) {
-  const i = ROLES.indexOf(u.role)
-  const role = ROLES[(i + 1) % ROLES.length]
-  if (!confirm(`Сменить роль ${u.username} на ${role}?`)) return
-  await updateUser(u.id, { role })
-  await load()
+async function toggleAudit() {
+  auditOpen.value = !auditOpen.value
+  if (auditOpen.value) await loadAudit(true)
+}
+
+async function loadAudit(reset) {
+  auditBusy.value = true
+  try {
+    const before = reset || !audit.value.length ? null : audit.value[audit.value.length - 1].id
+    const page = await listAdminAudit(AUDIT_PAGE, before)
+    audit.value = reset ? page : [...audit.value, ...page]
+    auditMore.value = page.length === AUDIT_PAGE
+  } catch {
+    pushNotification('Не удалось загрузить журнал', 'error')
+  } finally {
+    auditBusy.value = false
+  }
 }
 
 async function toggleEnabled(u) {
@@ -278,8 +303,13 @@ async function setAccessRole(u, chipId) {
 h2 { color: var(--text-strong); margin-bottom: 1rem; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; margin: 0; }
-.create-form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-.create-form input, .create-form select { padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem; }
+.hint code { font-size: 0.72rem; word-break: break-all; }
+.audit { margin-top: 1.25rem; }
+.audit-row { display: flex; flex-wrap: wrap; gap: 0.25rem 0.6rem; padding: 0.45rem 0; border-top: 1px solid var(--border-soft); font-size: 0.75rem; color: var(--text-muted); }
+.audit-time { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.audit-event { color: var(--text-strong); font-weight: 500; }
+.audit-event.bad { color: var(--danger); }
+.audit-detail, .audit-ip { color: var(--text-faint); word-break: break-all; }
 .card { background: var(--bg-card); border-radius: 12px; padding: 1rem; }
 .defaults { margin-bottom: 1rem; }
 .defaults-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.7rem; }

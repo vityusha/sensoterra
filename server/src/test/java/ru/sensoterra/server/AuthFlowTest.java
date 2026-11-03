@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @MicronautTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@DisplayName("Auth flow: bootstrap -> login -> me -> register -> role access")
+@DisplayName("Auth flow: admin -> login -> me -> register -> role access")
 class AuthFlowTest {
 
     @Inject
@@ -29,10 +29,10 @@ class AuthFlowTest {
 
     @Test
     @Order(1)
-    @DisplayName("Bootstrap creates admin user and returns token")
-    void bootstrap() {
+    @DisplayName("Test fixture creates admin user and returns token")
+    void createAdmin() {
         HttpResponse<Map> resp = client.toBlocking().exchange(
-                HttpRequest.POST("/api/auth/bootstrap",
+                HttpRequest.POST("/api/test/admin",
                         Map.of("username", "admin", "password", "admin-pass-123")),
                 Argument.of(Map.class));
         assertEquals(200, resp.getStatus().getCode());
@@ -102,13 +102,21 @@ class AuthFlowTest {
 
     @Test
     @Order(6)
-    @DisplayName("Duplicate bootstrap fails with 403")
-    void duplicateBootstrap() {
+    @DisplayName("There is no HTTP bootstrap any more: admins come only from the server CLI")
+    void noHttpBootstrap() {
         HttpClientResponseException ex = assertThrows(HttpClientResponseException.class, () ->
                 client.toBlocking().exchange(
                         HttpRequest.POST("/api/auth/bootstrap",
-                                Map.of("username", "admin", "password", "other"))));
-        assertEquals(403, ex.getStatus().getCode());
+                                Map.of("username", "intruder", "password", "intruder-pass-1"))));
+        int code = ex.getStatus().getCode();
+        assertTrue(code == 401 || code == 404, "bootstrap -> " + code);
+        // ... and the admin API can't create accounts either.
+        HttpClientResponseException create = assertThrows(HttpClientResponseException.class, () ->
+                client.toBlocking().exchange(
+                        HttpRequest.POST("/api/admin/users",
+                                        Map.of("username", "intruder", "password", "intruder-pass-1", "role", "ADMIN"))
+                                .header("Authorization", "Bearer " + adminToken)));
+        assertTrue(create.getStatus().getCode() >= 400, "admin create -> " + create.getStatus().getCode());
     }
 
     @Test

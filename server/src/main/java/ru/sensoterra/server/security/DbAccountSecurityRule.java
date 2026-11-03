@@ -29,6 +29,9 @@ import java.util.List;
  * token until it expires (create admins, delete devices). Here:
  * <ul>
  *   <li>authenticated request, account missing or disabled → 401;</li>
+ *   <li>ADMIN account, token issued without the second factor ({@link SessionTokens#MFA_CLAIM})
+ *       → 401: covers a user promoted while holding a USER token, and every admin power
+ *       outside {@code @Secured("ADMIN")} routes (all devices, payments, keys);</li>
  *   <li>route requires ADMIN, role in the database is not ADMIN → REJECTED;</li>
  *   <li>otherwise UNKNOWN: the regular rules ({@link SecuredAnnotationRule}) decide.</li>
  * </ul>
@@ -51,12 +54,13 @@ public class DbAccountSecurityRule implements SecurityRule<HttpRequest<?>> {
         if (authentication == null) {
             return Mono.just(SecurityRuleResult.UNKNOWN);
         }
-        return Mono.fromCallable(() -> decide(request, authentication.getName()));
+        return Mono.fromCallable(() -> decide(request, authentication));
     }
 
-    private SecurityRuleResult decide(HttpRequest<?> request, String username) {
-        AppUser user = userRepository.findByUsername(username).orElse(null);
-        if (user == null || Boolean.FALSE.equals(user.getEnabled())) {
+    private SecurityRuleResult decide(HttpRequest<?> request, Authentication authentication) {
+        AppUser user = userRepository.findByUsername(authentication.getName()).orElse(null);
+        if (user == null || Boolean.FALSE.equals(user.getEnabled())
+                || (SessionTokens.isAdmin(user) && !SessionTokens.hasMfa(authentication))) {
             // The token no longer stands for a usable account: 401 like an invalid token
             // (REJECTED would give 403 for an authenticated request).
             throw new AuthorizationException(null);
