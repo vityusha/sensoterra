@@ -44,9 +44,9 @@ body {
   --text: #eee;
   --text-strong: #e0e0e0;
   --text-sub: #d4d4d4;
-  --text-muted: #b8b8b8;
-  --text-dim: #9a9a9a;
-  --text-faint: #808080;
+  --text-muted: #cfcfcf;
+  --text-dim: #bdbdbd;
+  --text-faint: #a8a8a8;
   --on-accent: #ffdddd;
   --border: #555;
   --border-soft: #444;
@@ -63,7 +63,7 @@ body {
   --banner-text: #a8d8ff;
   --banner-border: #1f4d7a;
   --divider: #3a3a52;
-  --muted-fg: #9090a8;
+  --muted-fg: #b6b6cc;
   --chart-grid: #2a2a3e;
   --card-shadow: none;
   --btn-bg: #3a3a50;
@@ -90,9 +90,9 @@ body {
   --text: #1a1a1a;
   --text-strong: #222222;
   --text-sub: #333333;
-  --text-muted: #4d4d4d;
-  --text-dim: #5c5c5c;
-  --text-faint: #767676;
+  --text-muted: #3a3a3a;
+  --text-dim: #454545;
+  --text-faint: #575757;
   --on-accent: #7a1010;
   --border: #d0d0d0;
   --border-soft: #c6c6c6;
@@ -109,7 +109,7 @@ body {
   --banner-text: #1864ab;
   --banner-border: #90c2e6;
   --divider: #c0c0c8;
-  --muted-fg: #5c5c6a;
+  --muted-fg: #454553;
   --chart-grid: #e0e0e6;
   --card-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05);
   --btn-bg: #e6e6ec;
