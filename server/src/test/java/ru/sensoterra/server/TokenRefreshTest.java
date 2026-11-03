@@ -11,7 +11,7 @@ import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import ru.sensoterra.server.security.AuthController;
+import ru.sensoterra.server.security.SessionTokens;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -58,14 +58,14 @@ class TokenRefreshTest {
     @DisplayName("Refresh returns a new working token that keeps the original login time")
     void refreshKeepsAuthTime() throws Exception {
         String token = register();
-        Number authTime = (Number) claims(token).get(AuthController.AUTH_TIME_CLAIM);
+        Number authTime = (Number) claims(token).get(SessionTokens.AUTH_TIME_CLAIM);
         assertNotNull(authTime, "login tokens carry auth_time");
 
         Thread.sleep(1100); // exp/iat have second precision
         Map body = client.toBlocking().retrieve(refreshRequest(token), Map.class);
         String fresh = (String) body.get("token");
         assertNotEquals(token, fresh);
-        assertEquals(authTime.longValue(), ((Number) claims(fresh).get(AuthController.AUTH_TIME_CLAIM)).longValue());
+        assertEquals(authTime.longValue(), ((Number) claims(fresh).get(SessionTokens.AUTH_TIME_CLAIM)).longValue());
         assertTrue(((Number) claims(fresh).get("exp")).longValue() > ((Number) claims(token).get("exp")).longValue());
 
         Map me = client.toBlocking().retrieve(HttpRequest.GET("/api/auth/me")
@@ -78,9 +78,9 @@ class TokenRefreshTest {
     void refreshLimits() {
         String token = register();
         String username = (String) claims(token).get("sub");
-        long tooOld = Instant.now().getEpochSecond() - AuthController.MAX_SESSION_SECONDS - 60;
+        long tooOld = Instant.now().getEpochSecond() - SessionTokens.MAX_SESSION_SECONDS - 60;
         String old = tokenGenerator.generateToken(new ServerAuthentication(username, List.of("USER"),
-                Map.of("sub", username, "roles", List.of("USER"), AuthController.AUTH_TIME_CLAIM, tooOld)), 3600)
+                Map.of("sub", username, "roles", List.of("USER"), SessionTokens.AUTH_TIME_CLAIM, tooOld)), 3600)
                 .orElseThrow();
 
         var ex = assertThrows(HttpClientResponseException.class, () -> client.toBlocking().exchange(refreshRequest(old)));

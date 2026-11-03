@@ -41,7 +41,7 @@ class AdminUserTest {
     @BeforeAll
     void bootstrapAdmin() {
         try {
-            client.toBlocking().exchange(HttpRequest.POST("/api/auth/bootstrap",
+            client.toBlocking().exchange(HttpRequest.POST("/api/test/admin",
                     Map.of("username", "admin", "password", "admin-pass-123")));
         } catch (HttpClientResponseException ignored) {
         }
@@ -85,7 +85,7 @@ class AdminUserTest {
 
     @Test
     @Order(2)
-    @DisplayName("Админ создаёт только админов: попытка завести USER даёт 403")
+    @DisplayName("Admin API creates no accounts and can't promote to ADMIN")
     void adminCannotCreateUser() {
         HttpClientResponseException ex = assertThrows(HttpClientResponseException.class, () ->
                 client.toBlocking().exchange(
@@ -94,18 +94,28 @@ class AdminUserTest {
                                                 "role", "USER"))
                                 .header("Authorization", "Bearer " + adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)));
-        assertEquals(403, ex.getStatus().getCode());
+        assertTrue(ex.getStatus().getCode() >= 400);
 
-        HttpResponse<Map> admin = client.toBlocking().exchange(
-                HttpRequest.POST("/api/admin/users",
-                                Map.of("username", "admin-assistant", "password", "pw-123456", "role", "ADMIN"))
-                        .header("Authorization", "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON),
-                Argument.of(Map.class));
-        assertEquals("ADMIN", admin.body().get("role"));
-        Long created = ((Number) admin.body().get("id")).longValue();
+        // Admins come only from the server CLI: no create, no promotion over HTTP.
+        HttpClientResponseException adminCreate = assertThrows(HttpClientResponseException.class, () ->
+                client.toBlocking().exchange(
+                        HttpRequest.POST("/api/admin/users",
+                                        Map.of("username", "admin-assistant", "password", "pw-123456", "role", "ADMIN"))
+                                .header("Authorization", "Bearer " + adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)));
+        assertTrue(adminCreate.getStatus().getCode() >= 400);
+
+        Map user = client.toBlocking().retrieve(HttpRequest.POST("/api/auth/register",
+                Map.of("username", "would-be-admin", "password", "pw-123456")), Map.class);
+        Long id = ((Number) user.get("id")).longValue();
+        HttpClientResponseException promote = assertThrows(HttpClientResponseException.class, () ->
+                client.toBlocking().exchange(
+                        HttpRequest.PUT("/api/admin/users/" + id, Map.of("role", "ADMIN"))
+                                .header("Authorization", "Bearer " + adminToken)
+                                .contentType(MediaType.APPLICATION_JSON)));
+        assertEquals(400, promote.getStatus().getCode());
         client.toBlocking().exchange(
-                HttpRequest.DELETE("/api/admin/users/" + created)
+                HttpRequest.DELETE("/api/admin/users/" + id)
                         .header("Authorization", "Bearer " + adminToken));
     }
 
@@ -176,7 +186,7 @@ class AdminUserTest {
     void clientCannotSeeOtherDevice() {
         HttpResponse<?> assignResp = client.toBlocking().exchange(
                 HttpRequest.POST("/api/admin/users/" + clientId + "/devices",
-                                Map.of("chipId", 999999L, "deviceType", "BLOCK"))
+                                Map.of("chipId", 999999L, "deviceType", "BLOCK", "accessRole", "VIEWER"))
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON));
         assertEquals(200, assignResp.getStatus().getCode());
@@ -199,18 +209,19 @@ class AdminUserTest {
 
     @Test
     @Order(8)
-    @DisplayName("Unassign device")
-    void unassignDevice() {
-        HttpResponse<?> resp = client.toBlocking().exchange(
-                HttpRequest.DELETE("/api/admin/users/" + clientId + "/devices/111111")
-                        .header("Authorization", "Bearer " + adminToken));
-        assertEquals(204, resp.getStatus().getCode());
+    @DisplayName("Admin can't unassign the owner of a device (only reset registrations removes it)")
+    void unassignOwnedDevice() {
+        HttpClientResponseException ex = assertThrows(HttpClientResponseException.class, () ->
+                client.toBlocking().exchange(
+                        HttpRequest.DELETE("/api/admin/users/" + clientId + "/devices/111111")
+                                .header("Authorization", "Bearer " + adminToken)));
+        assertEquals(403, ex.getStatus().getCode());
 
         HttpResponse<List<Map>> userDevices = client.toBlocking().exchange(
                 HttpRequest.GET("/api/admin/users/" + clientId + "/devices")
                         .header("Authorization", "Bearer " + adminToken),
                 Argument.listOf(Map.class));
-        assertEquals(0, userDevices.body().size());
+        assertEquals(1, userDevices.body().size());
     }
 
     @Test

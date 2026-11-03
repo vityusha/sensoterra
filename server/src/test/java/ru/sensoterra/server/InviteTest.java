@@ -65,7 +65,7 @@ class InviteTest {
                     Argument.of(Map.class)).body().get("token");
         } catch (HttpClientResponseException e) {
             adminToken = (String) client.toBlocking().exchange(
-                    HttpRequest.POST("/api/auth/bootstrap", creds)
+                    HttpRequest.POST("/api/test/admin", creds)
                             .contentType(MediaType.APPLICATION_JSON),
                     Argument.of(Map.class)).body().get("token");
         }
@@ -91,7 +91,7 @@ class InviteTest {
 
     private void assign(Long userId, Map<String, Object> request) {
         client.toBlocking().exchange(
-                HttpRequest.POST("/api/admin/users/" + userId + "/devices", request)
+                HttpRequest.POST("/api/test/admin/users/" + userId + "/devices", request)
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON));
     }

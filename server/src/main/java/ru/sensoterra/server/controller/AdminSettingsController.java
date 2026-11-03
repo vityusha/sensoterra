@@ -1,5 +1,6 @@
 package ru.sensoterra.server.controller;
 
+import ru.sensoterra.server.service.AdminAuditService;
 import ru.sensoterra.server.service.BlockPaymentService;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
@@ -20,9 +21,11 @@ import io.micronaut.serde.annotation.Serdeable;
 public class AdminSettingsController {
 
     private final BlockPaymentService payments;
+    private final AdminAuditService audit;
 
-    public AdminSettingsController(BlockPaymentService payments) {
+    public AdminSettingsController(BlockPaymentService payments, AdminAuditService audit) {
         this.payments = payments;
+        this.audit = audit;
     }
 
     @Get("/block-payment")
@@ -32,7 +35,10 @@ public class AdminSettingsController {
 
     @Put("/block-payment")
     public BlockPaymentService.Defaults setBlockPayment(@Body BlockPaymentRequest request) {
-        return payments.setDefaults(request.days(), request.unlimited());
+        BlockPaymentService.Defaults result = payments.setDefaults(request.days(), request.unlimited());
+        audit.action(AdminAuditService.SETTINGS_CHANGED,
+                "block-payment days=" + request.days() + " unlimited=" + request.unlimited());
+        return result;
     }
 
     @Serdeable

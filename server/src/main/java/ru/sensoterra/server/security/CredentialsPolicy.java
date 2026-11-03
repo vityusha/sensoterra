@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 
 /**
  * Rules for usernames and passwords of local accounts, shared by every place that sets one:
- * self-registration, registration by invite, first-admin bootstrap, admin create/update and
+ * self-registration, registration by invite, the admin CLI (AdminCli), admin password reset and
  * password change. The client mirrors them in {@code client/src/utils/credentials.js}, so the
  * user sees the reason before submitting; keep both in sync.
  * <p>

@@ -2,6 +2,7 @@ package ru.sensoterra.server.mqtt;
 
 import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.repository.DeviceRepository;
+import ru.sensoterra.server.service.AlarmService;
 import ru.sensoterra.server.service.DeviceStateStore;
 import ru.sensoterra.server.service.DeviceZoneService;
 import ru.sensoterra.server.service.MqttMessageProcessor;
@@ -55,6 +56,7 @@ public class MqttClientService {
     private final DeviceStateStore stateStore;
     private final DeviceRepository deviceRepository;
     private final DeviceZoneService deviceZoneService;
+    private final AlarmService alarmService;
 
     private final Map<Long, Set<String>> knownTopics = new ConcurrentHashMap<>();
     /** Retained-сообщения, реально пришедшие от брокера: по ним судим, было ли что снимать. */
@@ -78,12 +80,14 @@ public class MqttClientService {
                              MqttMessageProcessor messageProcessor,
                              DeviceStateStore stateStore,
                              DeviceRepository deviceRepository,
-                             DeviceZoneService deviceZoneService) {
+                             DeviceZoneService deviceZoneService,
+                             AlarmService alarmService) {
         this.config = config;
         this.messageProcessor = messageProcessor;
         this.stateStore = stateStore;
         this.deviceRepository = deviceRepository;
         this.deviceZoneService = deviceZoneService;
+        this.alarmService = alarmService;
     }
 
     /**
@@ -194,11 +198,13 @@ public class MqttClientService {
                     // Before subscribing, so the leftover retained message is not delivered to us.
                     clearRetained(LEGACY_STATUS_TOPIC);
                     subscribe();
+                    alarmService.mqttConnected();
                 }
 
                 @Override
                 public void connectionLost(Throwable cause) {
                     log.warn("MQTT connection lost: {}", cause.getMessage());
+                    alarmService.mqttLost();
                 }
 
                 @Override

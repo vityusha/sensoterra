@@ -66,7 +66,7 @@ Only SSH, 80 and 443 are open to the internet. Everything else listens on loopba
 fail2ban jails ([`deploy/host/fail2ban/`](../deploy/host/fail2ban/)):
 
 - **`sshd`**: 5 failed SSH logins in 10 minutes. Reads `/var/log/auth.log`, or journald where there is no rsyslog (Debian 12). The deploy key logs in on the first try, so GitHub Actions is never banned.
-- **`sensoterra-auth`**: 10 failed app logins in 10 minutes. It matches `401`/`403`/`429` on `/api/auth/login`, `/oauth/google`, `/oauth/yandex`, `/password` and `/bootstrap` in the host nginx access log. `429` means the nginx `limit_req` (5/min) already fired; fail2ban then blocks the whole IP, not just the login endpoint.
+- **`sensoterra-auth`**: 10 failed app logins in 10 minutes. It matches `401`/`403`/`429` on `/api/auth/login`, `/oauth/google`, `/oauth/yandex`, `/password` and the admin 2FA steps `/api/auth/mfa/*` in the host nginx access log. `429` means the nginx `limit_req` (5/min) already fired; fail2ban then blocks the whole IP, not just the login endpoint.
 - **Ban length**: 1 hour, doubling for repeat offenders up to 1 week (`bantime.increment`). Loopback is never banned; add your own addresses with `IGNOREIP`.
 
 The bans use the client address nginx sees (`$remote_addr`). That is correct while host nginx faces the internet directly. Behind a CDN or proxy (e.g. Cloudflare), nginx needs `real_ip` set up first, otherwise fail2ban would ban the proxy.
@@ -159,6 +159,25 @@ All commands run on the VPS as `deploy` in `/opt/sensoterra`; `COMPOSE` below me
 - The same endpoint drives the server's Docker healthcheck and the `deploy.sh` check. `DEGRADED` stays HTTP 200 on purpose: an unreachable broker must not roll a deploy back.
 - **External monitoring:** add an HTTP monitor in UptimeRobot, Better Stack, healthchecks.io or similar for `https://<domain>/health`, alerting on non-200. To be told about MQTT outages too, add a keyword check for `"UP"`. Without one, nobody notices an outage: the Docker healthcheck alerts no one, and `restart: unless-stopped` does not restart an unhealthy container.
 
+### Admin accounts
+
+Admins exist only through the server CLI (there is no web form and no first-run page); the commands are listed in the [README](../README.md#admin-accounts). On the VPS:
+
+```bash
+COMPOSE exec -e JAVA_OPTS=-Xmx128m server /app/bin/sensoterra-server admin create <username>
+```
+
+- `-e JAVA_OPTS=...` matters: the CLI is a second JVM inside the server container, and the server's own `-Xmx512m` would not fit into the container's memory limit twice.
+- **First install:** after the first successful deploy, create the admin with the command above, then sign in at `https://<domain>`. The login page asks to set up the authenticator app (QR code) and shows ten recovery codes once — keep them outside the phone (password manager, paper).
+- **Lost phone:** sign in with a recovery code; if none is left, `admin reset-2fa <username>` and set the app up again on the next sign-in. Forgotten password: `admin reset-password <username>`.
+- **Promote / demote:** `admin promote <username>` / `admin demote <username>`. The web UI can only demote, disable or delete admins; it cannot create or promote one.
+- 2FA is always on in production: the `prod` profile pins `sensoterra.security.admin-mfa: true` and the server refuses to start with it off. Admin sessions last 1 h (renewed while active), 12 h at most.
+- Every admin sign-in step (including wrong codes) and admin action is in the "Журнал администраторов" section of the users page (table `admin_audit`); CLI changes are logged there with ip `cli`.
+
+### Admin 2FA rollout (migration `V4__admin_mfa.sql`)
+
+Existing admins keep their accounts and passwords. On their next sign-in they are asked to set up the authenticator app before getting a session, and all their open sessions end at once (the old tokens have no 2FA mark). Re-install the host nginx site from `deploy/nginx-host.conf` (new rate-limited `location /api/auth/mfa/`) and the fail2ban filter with `sudo ./deploy/host/setup-fail2ban.sh`.
+
 ### Sign-in with Google and Yandex ID
 
 Both are off until enabled in `/opt/sensoterra/.env` (variables in the [README](../README.md)); apply with `COMPOSE up -d --no-build server`.
@@ -201,4 +220,4 @@ Once the release with migration `V3__device_owner.sql` is deployed, do these on 
 3. **Check owners.** The migration made the earliest account with full control the owner of each device. Fix exceptions on the admin users page ("владелец" in the access selector transfers ownership).
 4. **Broker ACLs (recommended).** The server subscribes to `#` and trusts every topic, so anyone with publish rights on the broker can impersonate any device (fake states, wipe a block's sensor list). If the broker supports it, give each device its own credentials limited to `<chipId>/#`, and keep the server's credentials separate.
 5. **Update the host nginx site.** `deploy/nginx-host.conf` no longer logs URLs with invite tokens and one-time OAuth codes (`/invite/`, `/api/invites/`, `/oauth/yandex`). The deploy does not touch host nginx, so re-install the site from the template (see the top of the file: replace the domain, `sudo nginx -t && sudo systemctl reload nginx`). Old lines with tokens stay in `/var/log/nginx/access.log*` until logrotate removes them; delete them sooner with `sudo sed -i -E '/ \/(invite|api\/invites)\//d' /var/log/nginx/access.log` if that matters.
-6. **Weak passwords of existing accounts.** The password policy applies to new passwords only (registration, invites, password change, admin create/reset). Accounts created earlier keep their passwords until they change them.
+6. **Weak passwords of existing accounts.** The password policy applies to new passwords only (registration, invites, password change, CLI admin create/reset). Accounts created earlier keep their passwords until they change them.

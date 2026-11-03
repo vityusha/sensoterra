@@ -4,9 +4,9 @@ import ru.sensoterra.server.entity.AppUser;
 import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.entity.DeviceInvite;
 import ru.sensoterra.server.repository.AppUserRepository;
-import ru.sensoterra.server.security.AuthController;
 import ru.sensoterra.server.security.CredentialsPolicy;
 import ru.sensoterra.server.security.PasswordEncoder;
+import ru.sensoterra.server.security.SessionTokens;
 import ru.sensoterra.server.service.DeviceAccessService;
 import ru.sensoterra.server.service.InviteService;
 import io.micronaut.http.HttpResponse;
@@ -18,14 +18,11 @@ import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.security.annotation.Secured;
-import io.micronaut.security.authentication.ServerAuthentication;
 import io.micronaut.security.rules.SecurityRule;
-import io.micronaut.security.token.generator.TokenGenerator;
 import io.micronaut.serde.annotation.Serdeable;
 
 import java.security.Principal;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -47,19 +44,19 @@ public class InviteController {
     private final AppUserRepository userRepository;
     private final ru.sensoterra.server.service.UserPrefService prefs;
     private final PasswordEncoder passwordEncoder;
-    private final TokenGenerator tokenGenerator;
+    private final SessionTokens tokens;
 
     public InviteController(InviteService invites,
                             DeviceAccessService access,
                             AppUserRepository userRepository,
                             PasswordEncoder passwordEncoder,
-                            TokenGenerator tokenGenerator,
+                            SessionTokens tokens,
                             ru.sensoterra.server.service.UserPrefService prefs) {
         this.invites = invites;
         this.access = access;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.tokenGenerator = tokenGenerator;
+        this.tokens = tokens;
         this.prefs = prefs;
     }
 
@@ -154,18 +151,9 @@ public class InviteController {
 
         invites.accept(token, user);
         return HttpResponse.ok(Map.of(
-                "token", generateToken(user),
+                "token", tokens.issue(user, false),
                 "user", Map.of("id", user.getId(), "username", user.getUsername(),
                         "role", user.getRole())));
-    }
-
-    private String generateToken(AppUser user) {
-        List<String> roles = Collections.singletonList(user.getRole());
-        ServerAuthentication authentication = new ServerAuthentication(
-                user.getUsername(), roles, Map.of("sub", user.getUsername(), "roles", roles,
-                        AuthController.AUTH_TIME_CLAIM, java.time.Instant.now().getEpochSecond()));
-        return tokenGenerator.generateToken(authentication, AuthController.TOKEN_TTL_SECONDS).orElseThrow(
-                () -> new HttpStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Token generation failed"));
     }
 
     private InviteView view(DeviceInvite i) {

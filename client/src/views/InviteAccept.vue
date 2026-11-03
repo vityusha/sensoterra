@@ -65,7 +65,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getInvite, acceptInvite, authStatus, loginWithGoogle, registerByInvite } from '../api/auth'
+import { getInvite, acceptInvite, authStatus, loginWithGoogle, needsMfa, registerByInvite, savePendingMfa } from '../api/auth'
 import { getToken, setToken } from '../api/auth'
 import { auth, enterSession, userFromAuthResponse } from '../store/auth'
 import GoogleAuthButton from '../components/GoogleAuthButton.vue'
@@ -193,6 +193,12 @@ async function onGoogle(idToken) {
   actionError.value = ''
   try {
     const res = await loginWithGoogle(idToken)
+    if (needsMfa(res)) {
+      // Admin account: finish the sign-in on the login page (admins don't accept invites).
+      savePendingMfa(res)
+      router.push('/login?mfa=1')
+      return
+    }
     setToken(res.token)
     await enterSession(userFromAuthResponse(res))
     await acceptInvite(token.value)

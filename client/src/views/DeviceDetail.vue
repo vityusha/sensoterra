@@ -4,7 +4,7 @@
       <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>
         <template v-if="editingName && canControl">
-          <input class="name-input" v-model="editNameVal" @click.stop @keyup.enter="saveName" @keyup.esc="editingName=false" />
+          <input class="name-input" v-model="editNameVal" @click.stop @keyup.enter="saveName" @blur="saveName" @keyup.esc="editingName=false" />
         </template>
         <template v-else>
           <span :class="canControl ? 'editable' : ''" @click="canControl && startEditName()">{{ displayName }}</span>
@@ -13,10 +13,20 @@
       <span v-if="device?.deviceType === 'BLOCK'" class="status-tag" :class="isOnline ? 'online' : 'offline'">
         {{ isOnline ? 'online' : 'offline' }}
       </span>
+      <AlarmBell />
     </div>
 
     <!-- Оплата блока: срок один на всех, кто имеет доступ, и он общий, а не «мой». -->
     <div v-if="isBlock" class="pay-line" :class="payClass">{{ paymentText(payment) }}</div>
+
+    <!-- Admin trust (main menu of the owner): visible on both sides. -->
+    <div v-if="adminTrusted" class="trust-line">
+      Владелец <b>{{ device.ownerUsername }}</b> дал администраторам полный доступ: управление,
+      настройки и доступы открыты.
+    </div>
+    <div v-else-if="ownerGrantedAdmins" class="trust-line">
+      <b>Администратор имеет полный доступ</b> к этому устройству. Отозвать — в меню на главной странице.
+    </div>
 
     <!-- Закрытый блок: состояние, графики и настройки недоступны до оплаты. -->
     <section v-if="isBlock && payment && !payment.paid" class="section paywall">
@@ -103,6 +113,10 @@
     <!-- Кто ещё имеет доступ к этому устройству и на каких условиях. -->
     <section v-if="accessList.length" class="section">
       <div class="section-head"><h3>Доступ</h3></div>
+      <p v-if="adminLocked" class="muted admin-locked">
+        У устройства есть владелец ({{ device.ownerUsername }}): управлять им, его настройками и
+        доступом может только владелец. Админу остаются просмотр и сервисные операции.
+      </p>
       <div class="invite-list access-list">
         <div class="invite-row access-row" v-for="a in accessList" :key="a.userId">
           <code class="access-username">{{ a.username }}</code>
@@ -325,6 +339,7 @@
 </template>
 
 <script setup>
+import AlarmBell from '../components/AlarmBell.vue'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, api, getDeviceStatuses, getBlockTelemetry, getDeviceStatusLog, getRelayTelemetry, getServerUptimeHistory, listInvites, createInvite, revokeInvite, clearFinishedInvites, clearAllInvites, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, getDeviceKey, regenerateDeviceKey, getDevicePayment, setDevicePayment, extendDevicePayment, resetDeviceRegistrations, getMoistureScale, getSensorScales } from '../api/auth'
@@ -332,7 +347,7 @@ import { getBlockName, setBlockName, getFieldName, getFieldUnit, isFieldHidden, 
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
 import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
-import { auth, rememberDeviceAccess, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
+import { auth, rememberDeviceAccess, rememberDeviceOwner, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
@@ -753,14 +768,22 @@ async function doReset() {
 // Права живут на устройстве: один и тот же человек на своём блоке — хозяин,
 // на чужом — наблюдатель. Роль аккаунта (ADMIN/USER) тут ни при чём.
 const myAccessRole = computed(() => accessList.value.find(a => a.userId === auth.user?.id)?.accessRole)
-const canControl = computed(() =>
-  isAdmin.value || (canControlRole(myAccessRole.value) && isDevicePaid(chipId)))
+// An admin controls and manages access only while the device has no owner (or owns it).
+const othersDevice = computed(() => !!device.value?.ownerUsername
+  && device.value.ownerUsername !== auth.user?.username)
+// The owner may grant admins full access to all their devices (main menu).
+const adminTrusted = computed(() => isAdmin.value && othersDevice.value && !!device.value.ownerAdminAccess)
+const adminLocked = computed(() => isAdmin.value && othersDevice.value && !device.value.ownerAdminAccess)
+const ownerGrantedAdmins = computed(() => !isAdmin.value && !!auth.user?.adminAccess
+  && device.value?.ownerUsername === auth.user?.username)
+const canControl = computed(() => (isAdmin.value && !adminLocked.value)
+  || (canControlRole(myAccessRole.value) && isDevicePaid(chipId)))
 // Поделиться устройством может только владелец (OWNER); оплата для
 // этого не нужна — приглашение открывает доступ, а не возможность управлять. Админу
 // приглашение не показываем: у него другие механизмы (ключ комплектного листа, доступ).
 const canShare = computed(() => !isAdmin.value && isOwnerRole(myAccessRole.value))
 // Changing or revoking other accounts' access: the owner or an admin (server enforces it too).
-const canManageAccess = computed(() => isAdmin.value || isOwnerRole(myAccessRole.value))
+const canManageAccess = computed(() => (isAdmin.value && !adminLocked.value) || isOwnerRole(myAccessRole.value))
 
 function accessRoleLabel(role) {
   if (role === 'OWNER') return 'владелец'
@@ -1085,6 +1108,7 @@ async function load() {
     return
   }
   device.value = await getDevice(Number(chipId))
+  rememberDeviceOwner(device.value)
   relays.value = await getDeviceRelays(Number(chipId))
   sensors.value = await getDeviceSensors(Number(chipId))
   // Калибровки влажности: нужны для показа % и предупреждения о погружении.
@@ -1183,7 +1207,7 @@ function startEditName() {
 }
 
 function saveName() {
-  if (!canControl.value) return
+  if (!canControl.value || !editingName.value) return
   if (device.value?.deviceType === 'BLOCK') setBlockName(chipId, editNameVal.value)
   else device.value.name = editNameVal.value || null
   editingName.value = false
@@ -1509,6 +1533,9 @@ async function shiftBlockRange(direction) {
 .sensor-card.linked { border: 1px solid var(--success); }
 .telemetry-row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .telemetry-row.muted { color: var(--text-faint); }
+.trust-line { font-size: 0.82rem; line-height: 1.45; margin: 0 0 0.8rem; padding: 0.5rem 0.75rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 8px; }
+.trust-line b { color: var(--warn); }
+.admin-locked { font-size: 0.78rem; line-height: 1.45; color: var(--text-dim); margin: 0 0 0.6rem; }
 .t-item { font-size: 0.85rem; color: var(--text-muted); }
 .t-item b { color: var(--text); }
 .vacc-toggle { display: inline-flex; align-items: center; gap: 0.45rem; margin-bottom: 0.75rem; cursor: pointer; }

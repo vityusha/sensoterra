@@ -1,5 +1,6 @@
 package ru.sensoterra.server.ws;
 
+import ru.sensoterra.server.security.SessionTokens;
 import ru.sensoterra.server.service.DeviceAccessService;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.security.annotation.Secured;
@@ -90,7 +91,15 @@ public class DeviceStatusWebSocket {
             return;
         }
         String username = auth.getName();
-        SessionInfo info = new SessionInfo(username, () -> access.isAdmin(username),
+        // Same rule as DbAccountSecurityRule: an admin token without the second factor is refused,
+        // and admin visibility needs it even if the account is promoted while connected.
+        boolean mfa = SessionTokens.hasMfa(auth);
+        if (!mfa && access.isAdmin(username)) {
+            log.warn("WebSocket rejected (admin token without 2FA): {} user={}", session.getId(), username);
+            session.close(CloseReason.POLICY_VIOLATION);
+            return;
+        }
+        SessionInfo info = new SessionInfo(username, () -> mfa && access.isAdmin(username),
                 () -> access.visibleChipIdsFor(username), () -> access.accountActive(username));
         info.refresh();
         infos.put(session.getId(), info);

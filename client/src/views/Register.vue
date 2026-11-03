@@ -70,7 +70,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { authStatus, loginWithGoogle, register, setToken } from '../api/auth'
+import { authStatus, loginWithGoogle, needsMfa, register, savePendingMfa, setToken } from '../api/auth'
 import { enterSession, userFromAuthResponse } from '../store/auth'
 import { pushNotification } from '../store/notifications'
 import { PASSWORD_HINT, credentialsErrorText, passwordProblem, usernameProblem } from '../utils/credentials'
@@ -126,6 +126,12 @@ async function onGoogle(idToken) {
   busy.value = true
   try {
     const data = await loginWithGoogle(idToken, pair.chipId, pair.key)
+    if (needsMfa(data)) {
+      // An existing admin account: the code step lives on the login page.
+      savePendingMfa(data)
+      router.push('/login?mfa=1')
+      return
+    }
     setToken(data.token)
     await enterSession(userFromAuthResponse(data))
     pushNotification(data.deviceBound ? 'Аккаунт создан, блок привязан' : 'Аккаунт создан')

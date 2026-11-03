@@ -9,6 +9,7 @@ import ru.sensoterra.server.repository.DeviceRepository;
 import ru.sensoterra.server.repository.RelayRepository;
 import ru.sensoterra.server.repository.SensorRegistrationRepository;
 import ru.sensoterra.server.repository.SensorRepository;
+import ru.sensoterra.server.service.AdminAuditService;
 import ru.sensoterra.server.service.BlockPaymentService;
 import ru.sensoterra.server.service.DeviceAccessService;
 import ru.sensoterra.server.service.InviteService;
@@ -48,6 +49,7 @@ public class DeviceController {
     private final BlockPaymentService payments;
     private final InviteService invites;
     private final MqttClientService mqttClientService;
+    private final AdminAuditService audit;
 
     public DeviceController(DeviceRepository deviceRepository,
                             RelayRepository relayRepository,
@@ -59,7 +61,8 @@ public class DeviceController {
                             DeviceKeyService deviceKeys,
                             BlockPaymentService payments,
                             InviteService invites,
-                            MqttClientService mqttClientService) {
+                            MqttClientService mqttClientService,
+                            AdminAuditService audit) {
         this.deviceRepository = deviceRepository;
         this.relayRepository = relayRepository;
         this.sensorRepository = sensorRepository;
@@ -71,18 +74,25 @@ public class DeviceController {
         this.payments = payments;
         this.invites = invites;
         this.mqttClientService = mqttClientService;
+        this.audit = audit;
     }
 
     @Get
     @Secured(SecurityRule.IS_AUTHENTICATED)
     public List<Device> list() {
         List<Device> devices = visibleDevices();
-        Map<Long, String> owners = access.ownerUsernames(
+        Map<Long, DeviceAccessService.OwnerInfo> owners = access.owners(
                 devices.stream().map(Device::getChipId).toList());
         for (Device device : devices) {
-            device.setOwnerUsername(owners.get(device.getChipId()));
+            setOwner(device, owners.get(device.getChipId()));
         }
         return devices;
+    }
+
+    /** Owner login and admin trust: the client shows trusted / read-only devices from these. */
+    private static void setOwner(Device device, DeviceAccessService.OwnerInfo owner) {
+        device.setOwnerUsername(owner == null ? null : owner.username());
+        device.setOwnerAdminAccess(owner != null && owner.adminAccess());
     }
 
     @Get("/status")
@@ -100,7 +110,10 @@ public class DeviceController {
     @Secured(SecurityRule.IS_AUTHENTICATED)
     public Device get(Long chipId) {
         access.requireView(chipId);
-        return access.device(chipId);
+        Device device = access.device(chipId);
+        // The client uses it to show an admin's owned devices as read-only.
+        setOwner(device, access.owners(List.of(chipId)).get(chipId));
+        return device;
     }
 
     /**
@@ -247,8 +260,9 @@ public class DeviceController {
             }
         } else {
             access.requireManageAccess(chipId);
-            if (DeviceAccessService.ACCESS_OWNER.equals(access.accessRoleOf(userId, chipId)) && !access.isAdmin()) {
-                throw new HttpStatusException(HttpStatus.FORBIDDEN, "Only an admin can remove the owner");
+            if (DeviceAccessService.ACCESS_OWNER.equals(access.accessRoleOf(userId, chipId))) {
+                // Only "reset registrations" (admin) removes an owner, never a single revoke.
+                throw new HttpStatusException(HttpStatus.FORBIDDEN, "The owner can't be removed");
             }
         }
         access.revoke(userId, chipId);
@@ -266,6 +280,7 @@ public class DeviceController {
         if (!deviceRepository.existsById(chipId)) {
             throw new HttpStatusException(HttpStatus.NOT_FOUND, "Device not found");
         }
+        audit.action(AdminAuditService.DEVICE_KEY_READ, "chip=" + chipId);
         return HttpResponse.ok(new DeviceKeyResponse(chipId, deviceKeys.keyOf(chipId)));
     }
 
@@ -274,7 +289,9 @@ public class DeviceController {
     @Secured("ADMIN")
     public HttpResponse<DeviceKeyResponse> regenerateDeviceKey(Long chipId) {
         access.requireAdmin();
-        return HttpResponse.ok(new DeviceKeyResponse(chipId, deviceKeys.regenerate(chipId)));
+        String key = deviceKeys.regenerate(chipId);
+        audit.action(AdminAuditService.DEVICE_KEY_REGENERATED, "chip=" + chipId);
+        return HttpResponse.ok(new DeviceKeyResponse(chipId, key));
     }
 
     @Delete("/{chipId}")
@@ -283,7 +300,9 @@ public class DeviceController {
         if (!deviceRepository.existsById(chipId)) {
             throw new HttpStatusException(HttpStatus.NOT_FOUND, "Device not found");
         }
-        return HttpResponse.ok(deviceDeletionService.deleteDevice(chipId));
+        DeviceDeletionService.DeletionResult result = deviceDeletionService.deleteDevice(chipId);
+        audit.action(AdminAuditService.DEVICE_DELETED, "chip=" + chipId);
+        return HttpResponse.ok(result);
     }
 
     private List<Device> visibleDevices() {

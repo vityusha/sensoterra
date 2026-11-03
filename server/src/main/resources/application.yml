@@ -90,6 +90,10 @@ jpa:
         show_sql: false
 
 sensoterra:
+  security:
+    # TOTP second factor for every ADMIN account. false = no code step (local development only);
+    # the prod environment refuses to start with false (AdminMfaService).
+    admin-mfa: ${SENSOTERRA_ADMIN_MFA:true}
   oauth:
     # Вход через Google. Выключен по умолчанию: без client-id и без HTTPS кнопка
     # на фронте не показывается (см. /api/auth/status -> googleEnabled).

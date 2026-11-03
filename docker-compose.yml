@@ -33,6 +33,8 @@ services:
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      # Admin 2FA; false only for local development (the prod profile forces it on).
+      SENSOTERRA_ADMIN_MFA: ${SENSOTERRA_ADMIN_MFA:-true}
       # Client ID должен быть уникален на брокере: два клиента с одним ID выбивают друг друга.
       # Unset in .env = the same default broker as in application.yml.
       SENSOTERRA_MQTT_BROKER: ${SENSOTERRA_MQTT_BROKER:-ssl://m6.wqtt.ru:19395}

@@ -69,7 +69,7 @@ class DeviceDeletionTest {
     @BeforeAll
     void bootstrap() throws Exception {
         try {
-            client.toBlocking().exchange(HttpRequest.POST("/api/auth/bootstrap",
+            client.toBlocking().exchange(HttpRequest.POST("/api/test/admin",
                     Map.of("username", "admin", "password", "admin-pass-123")));
         } catch (HttpClientResponseException ignored) {
         }

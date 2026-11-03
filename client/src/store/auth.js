@@ -105,10 +105,40 @@ export function isOwnerRole(accessRole) {
   return accessRole === 'OWNER'
 }
 
-/** Права на конкретный блок: ADMIN — всегда, иначе роль из device_access. */
+/**
+ * Owner per device (from GET /devices and /devices/{id}): { username, adminAccess }. An admin
+ * only views devices that have an owner, unless that owner granted admins full access.
+ * Missing = not loaded yet; username '' = loaded, no owner.
+ */
+export const deviceOwners = reactive({})
+
+export function rememberDeviceOwner(device) {
+  if (device?.chipId != null) {
+    deviceOwners[device.chipId] = { username: device.ownerUsername || '', adminAccess: !!device.ownerAdminAccess }
+  }
+}
+
+function someoneElsesDevice(chipId) {
+  const owner = deviceOwners[chipId]
+  return !!owner?.username && owner.username !== auth.user?.username
+}
+
+/** An admin on someone else's owned device: read-only (the server refuses changes anyway). */
+export function adminLockedDevice(chipId) {
+  if (auth.user?.role !== 'ADMIN') return false
+  return someoneElsesDevice(chipId) && !deviceOwners[chipId].adminAccess
+}
+
+/** An admin on a device whose owner granted admins full access: shown highlighted. */
+export function adminTrustedDevice(chipId) {
+  if (auth.user?.role !== 'ADMIN') return false
+  return someoneElsesDevice(chipId) && deviceOwners[chipId].adminAccess
+}
+
+/** Права на конкретный блок: ADMIN — если у блока нет владельца, иначе роль из device_access. */
 export function canControlDevice(chipId) {
   if (!auth.user) return false
-  if (auth.user.role === 'ADMIN') return true
+  if (auth.user.role === 'ADMIN') return !adminLockedDevice(chipId)
   return canControlRole(deviceAccess[chipId])
 }
 

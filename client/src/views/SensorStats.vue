@@ -4,6 +4,7 @@
       <div class="header-top">
         <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
         <h2>{{ displayName }} ({{ chipId }})</h2>
+        <AlarmBell />
         <div v-if="catalogEntry && canEditPrefs" class="menu-wrap" ref="menuRef">
           <button
             class="menu-toggle"
@@ -187,6 +188,7 @@
 </template>
 
 <script setup>
+import AlarmBell from '../components/AlarmBell.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getDeviceKey, regenerateDeviceKey } from '../api/auth'
@@ -878,6 +880,8 @@ onUnmounted(() => {
 .header-meta { display: flex; justify-content: flex-start; margin-top: 0.35rem; }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg); color: var(--tag-text); }
 .menu-wrap { position: relative; flex: none; margin-left: auto; }
+/* The bell sits right next to the menu button. */
+.alarm-bell + .menu-wrap { margin-left: -0.6rem; }
 .menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
 .menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text-strong); }
 .menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 200px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }

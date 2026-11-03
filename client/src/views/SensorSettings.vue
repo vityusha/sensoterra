@@ -124,7 +124,7 @@ import { getDevice, getDeviceSensors, getDeviceStatuses, sendSensorParams, clear
 import { getIndividualName } from '../store/settings'
 import { fmtEventTimeWithZone } from '../utils/datetime'
 import { pushNotification } from '../store/notifications'
-import { canControlDevice, isAdmin } from '../store/auth'
+import { canControlDevice, isAdmin, rememberDeviceOwner } from '../store/auth'
 
 const route = useRoute()
 
@@ -356,6 +356,7 @@ async function load(silent = false) {
       getDeviceStatuses(),
     ])
     device.value = dev
+    rememberDeviceOwner(dev)
     sensor.value = sensors.find(x => isBlock ? Number(x.sensorNumber) === slot : x.sensorNumber == null) || sensors[0] || null
 
 

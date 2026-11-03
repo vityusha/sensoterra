@@ -42,13 +42,13 @@ class YandexOAuthTest {
     @BeforeEach
     void ensureAdmin() {
         yandex.setDown(false);
-        Map status = client.toBlocking().exchange(
-                HttpRequest.GET("/api/auth/status"), Argument.of(Map.class)).body();
-        if (Boolean.TRUE.equals(status.get("bootstrapNeeded"))) {
+        try {
             client.toBlocking().exchange(
-                    HttpRequest.POST("/api/auth/bootstrap", Map.of("username", "admin", "password", "admin-pass-123"))
+                    HttpRequest.POST("/api/test/admin", Map.of("username", "admin", "password", "admin-pass-123"))
                             .contentType(MediaType.APPLICATION_JSON),
                     Argument.of(Map.class));
+        } catch (HttpClientResponseException alreadyThere) {
+            // 409: the admin exists already.
         }
     }
 
