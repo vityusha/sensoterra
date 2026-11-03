@@ -100,6 +100,8 @@ onBeforeUnmount(() => rendered?.cancel?.())
 
 <style scoped>
 .google-auth { margin-top: 0.75rem; }
-.button-slot { display: flex; justify-content: center; min-height: 44px; }
+/* Google renders the button in an iframe whose page is light; with the app's dark
+   color-scheme inherited, the browser paints an opaque white backdrop behind it. */
+.button-slot { display: flex; justify-content: center; min-height: 44px; color-scheme: light; }
 .note { color: var(--muted-fg); font-size: 0.75rem; text-align: center; }
 </style>
