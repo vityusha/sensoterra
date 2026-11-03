@@ -140,7 +140,7 @@
               <div class="device-info">
                 <div class="device-name">
                   <template v-if="editing === d.chipId">
-                    <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveBlockName(d.chipId)" @keyup.esc="editing=null" />
+                    <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveBlockName(d.chipId)" @blur="saveBlockName(d.chipId)" @keyup.esc="editing=null" />
                   </template>
                   <template v-else>
                     <span @click.stop="startEdit(d.chipId, 'block')">{{ getBlockName(d.chipId) || 'Имя блока' }}</span>
@@ -230,7 +230,7 @@
               <div class="device-info">
                 <div class="device-name">
                   <template v-if="editing === s.chipId">
-                    <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveIndividualName(s.chipId)" @keyup.esc="editing=null" />
+                    <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveIndividualName(s.chipId)" @blur="saveIndividualName(s.chipId)" @keyup.esc="editing=null" />
                   </template>
                   <template v-else>
                     <span @click.stop="startEdit(s.chipId, 'individual')">{{ individualSensorName(s) }}</span>
@@ -307,7 +307,7 @@ import { auth, logout, devicePayment, rememberPayment, rememberDeviceOwner, admi
 import { paymentLabel } from '../utils/payment'
 import { getBlockName, setBlockName, getIndividualName, setIndividualName } from '../store/settings'
 import { connection, pushNotification, onWsMessage, connectWs } from '../store/notifications'
-import { initMissedTimings, prefetchRelayNames } from '../store/notifications'
+import { initMissedTimings } from '../store/notifications'
 
 const router = useRouter()
 const route = useRoute()
@@ -554,7 +554,6 @@ async function refreshAll() {
   }).catch(() => { /* счётчик просто не покажем */ })
   catalog.value = cats
   initMissedTimings(cats)
-  prefetchRelayNames(devs)
   const map = {}
   for (const s of statuses) map[s.chipId] = s
   statusMap.value = map
@@ -678,11 +677,13 @@ function startEdit(chipId, type) {
 }
 
 function saveBlockName(chipId) {
+  if (editing.value !== chipId) return
   setBlockName(chipId, editName.value)
   editing.value = null
 }
 
 function saveIndividualName(chipId) {
+  if (editing.value !== chipId) return
   setIndividualName(chipId, editName.value)
   editing.value = null
 }

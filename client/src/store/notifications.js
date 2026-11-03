@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { getDeviceRelays, sessionExpired } from '../api/auth'
+import { sessionExpired } from '../api/auth'
 import { getBlockName, getIndividualName, areAlertsEnabled } from './settings'
 
 let nextId = 0
@@ -26,7 +26,7 @@ export function pushNotification(text, type = 'info') {
   return item.id
 }
 
-// Событийные уведомления (оффлайн блока, реле, серверные предупреждения,
+// Событийные уведомления (оффлайн блока, серверные предупреждения,
 // «датчик не передаёт данные»). Гасятся переключателем в Настройках.
 // Отклик о действиях («настройки отправлены», ошибки) идёт через pushNotification
 // и показывается всегда.
@@ -150,7 +150,6 @@ export function refreshEventNotifications() {
   checkMissedNow()
 }
 
-let relayNameCache = {}
 let blockStatusCache = {}
 let ws = null
 let reconnectTimer = null
@@ -225,54 +224,6 @@ export function connectWs() {
   }
 }
 
-function relayName(deviceId, relay) {
-  const key = deviceId + ':' + relay
-  if (relayNameCache[key] !== undefined) return relayNameCache[key]
-  relayNameCache[key] = null
-  const done = () => {
-    if (relayNameCache[key] === null) delete relayNameCache[key]
-    updateRelayToast(key)
-  }
-  getDeviceRelays(deviceId).then(list => {
-    const r = (list || []).find(x => String(x.relayNumber) === String(relay))
-    relayNameCache[key] = (r && r.name) ? r.name : null
-    done()
-  }).catch(done)
-  return null
-}
-
-export function prefetchRelayNames(devices) {
-  for (const d of devices || []) {
-    if (d.deviceType !== 'BLOCK') continue
-    const deviceId = d.chipId
-    getDeviceRelays(deviceId).then(list => {
-      for (const r of list || []) {
-        const key = deviceId + ':' + r.relayNumber
-        relayNameCache[key] = r.name || null
-      }
-    }).catch(() => { /* ignore */ })
-  }
-}
-
-function updateRelayToast(key) {
-  const parts = key.split(':')
-  for (const n of notifications) {
-    if (n._relayKey === key) {
-      n.text = relayText(Number(parts[0]), Number(parts[1]), n._state)
-      return
-    }
-  }
-}
-
-function relayText(deviceId, relay, state) {
-  const name = relayNameCache[deviceId + ':' + relay]
-  const rn = name ? `${relay} (${name})` : String(relay)
-  const blockName = getBlockName(deviceId)
-  const bid = blockName ? `${blockName} (${deviceId})` : String(deviceId)
-  const verb = state === 1 ? 'включен' : 'выключен'
-  return `Канал R${rn} блока ${bid} ${verb}`
-}
-
 function handleMessage(msg) {
   if (msg.type === 'status' && (msg.deviceId === undefined || msg.deviceId === null)) {
     return
@@ -287,13 +238,6 @@ function handleMessage(msg) {
         msg.status === 'offline' ? 'error' : 'success'
       )
     }
-  }
-  if (msg.type === 'relayEvent' && areAlertsEnabled()) {
-    const toastId = pushNotification(relayText(msg.deviceId, msg.relay, msg.state === 1 ? 1 : 0), 'info')
-    const key = msg.deviceId + ':' + msg.relay
-    const n = notifications.find(x => x.id === toastId)
-    if (n) { n._relayKey = key; n._state = msg.state === 1 ? 1 : 0 }
-    relayName(msg.deviceId, msg.relay)
   }
   if (msg.type === 'notify') {
     pushEventNotification(msg.message, 'warn')
