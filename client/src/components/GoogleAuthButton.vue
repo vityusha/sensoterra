@@ -79,29 +79,55 @@ async function render() {
       ux_mode: 'popup',
       cancel_on_tap_outside: false
     })
-    id.renderButton(button.value, {
-      theme: props.text === 'signup_with' ? 'outline' : 'filled_black',
-      size: 'large',
-      shape: 'pill',
-      text: props.text,
-      width: 320
-    })
+    drawButton()
   } catch {
     unavailable.value = 'Не удалось загрузить вход через Google'
   }
 }
 
-onMounted(render)
+// Google draws a fixed pixel width, so match the slot (the form's width) to line up with
+// the other buttons; GIS accepts 200..400 px.
+function drawButton() {
+  if (!rendered || !button.value) return
+  const width = Math.round(button.value.clientWidth)
+  if (!width || width === drawnWidth) return
+  drawnWidth = width
+  rendered.renderButton(button.value, {
+    theme: props.text === 'signup_with' ? 'outline' : 'filled_black',
+    size: 'large',
+    shape: 'pill',
+    text: props.text,
+    width: Math.min(400, Math.max(200, width))
+  })
+}
+
+let drawnWidth = 0
+let resizeObserver = null
+let resizeTimer = null
+
+onMounted(() => {
+  render()
+  resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(drawButton, 150)
+  })
+  if (button.value) resizeObserver.observe(button.value)
+})
 watch(() => props.disabled, value => {
   if (button.value) button.value.style.pointerEvents = value ? 'none' : ''
 })
-onBeforeUnmount(() => rendered?.cancel?.())
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  clearTimeout(resizeTimer)
+  rendered?.cancel?.()
+})
 </script>
 
 <style scoped>
 .google-auth { margin-top: 0.75rem; }
 /* Google renders the button in an iframe whose page is light; with the app's dark
    color-scheme inherited, the browser paints an opaque white backdrop behind it. */
-.button-slot { display: flex; justify-content: center; min-height: 44px; color-scheme: light; }
+.button-slot { display: flex; justify-content: center; width: 100%; max-width: 320px; min-height: 44px;
+  margin: 0 auto; color-scheme: light; }
 .note { color: var(--muted-fg); font-size: 0.75rem; text-align: center; }
 </style>
