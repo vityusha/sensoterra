@@ -51,4 +51,8 @@ public class Device {
     /** Owner login for the device list; filled per request, never persisted. */
     @Transient
     private String ownerUsername;
+
+    /** The owner granted admins full access (AppUser.adminAccess); filled per request. */
+    @Transient
+    private Boolean ownerAdminAccess;
 }

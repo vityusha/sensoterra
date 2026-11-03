@@ -36,6 +36,9 @@ public class AdminAuditService {
     public static final String DEVICE_KEY_READ = "DEVICE_KEY_READ";
     public static final String DEVICE_KEY_REGENERATED = "DEVICE_KEY_REGENERATED";
     public static final String DEVICE_DELETED = "DEVICE_DELETED";
+    /** An owner granted / revoked admins' full access to their devices (user = the owner). */
+    public static final String OWNER_ADMIN_ACCESS_GRANTED = "OWNER_ADMIN_ACCESS_ON";
+    public static final String OWNER_ADMIN_ACCESS_REVOKED = "OWNER_ADMIN_ACCESS_OFF";
 
     public static final int MAX_PAGE = 200;
 

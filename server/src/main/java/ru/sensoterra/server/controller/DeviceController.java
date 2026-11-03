@@ -81,12 +81,18 @@ public class DeviceController {
     @Secured(SecurityRule.IS_AUTHENTICATED)
     public List<Device> list() {
         List<Device> devices = visibleDevices();
-        Map<Long, String> owners = access.ownerUsernames(
+        Map<Long, DeviceAccessService.OwnerInfo> owners = access.owners(
                 devices.stream().map(Device::getChipId).toList());
         for (Device device : devices) {
-            device.setOwnerUsername(owners.get(device.getChipId()));
+            setOwner(device, owners.get(device.getChipId()));
         }
         return devices;
+    }
+
+    /** Owner login and admin trust: the client shows trusted / read-only devices from these. */
+    private static void setOwner(Device device, DeviceAccessService.OwnerInfo owner) {
+        device.setOwnerUsername(owner == null ? null : owner.username());
+        device.setOwnerAdminAccess(owner != null && owner.adminAccess());
     }
 
     @Get("/status")
@@ -106,7 +112,7 @@ public class DeviceController {
         access.requireView(chipId);
         Device device = access.device(chipId);
         // The client uses it to show an admin's owned devices as read-only.
-        device.setOwnerUsername(access.ownerUsernames(List.of(chipId)).get(chipId));
+        setOwner(device, access.owners(List.of(chipId)).get(chipId));
         return device;
     }
 

@@ -57,6 +57,7 @@
           <div class="user-name">{{ u.username }}</div>
           <span class="role-badge" :class="effectiveRole(u).toLowerCase()">{{ effectiveRole(u) }}</span>
           <span v-if="u.enabled === false" class="disabled-badge">отключён</span>
+          <span v-if="u.adminAccess" class="trust-badge" title="Владелец дал администраторам полный доступ к своим устройствам">полный доступ</span>
           <button @click="editing = editing === u.id ? null : u.id" class="btn small arrow">
             {{ editing === u.id ? '▲' : '▼' }}
           </button>
@@ -325,6 +326,7 @@ h2 { color: var(--text-strong); margin-bottom: 1rem; }
 .header-row h2 { color: var(--text-strong); flex: 1; margin: 0; }
 .hint code { font-size: 0.72rem; word-break: break-all; }
 .audit { margin-top: 1.25rem; }
+.trust-badge { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--warn); color: var(--warn); white-space: nowrap; }
 .audit-row { display: flex; flex-wrap: wrap; gap: 0.25rem 0.6rem; padding: 0.45rem 0; border-top: 1px solid var(--border-soft); font-size: 0.75rem; color: var(--text-muted); }
 .audit-time { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .audit-event { color: var(--text-strong); font-weight: 500; }

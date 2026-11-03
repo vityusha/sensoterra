@@ -28,9 +28,10 @@ import java.util.Set;
  * устройство живут в device_access: OWNER (owner: control + managing access and invites),
  * USER (управление) или VIEWER (только чтение).
  *
- * ADMIN — видит все устройства и управляет теми, у которых нет владельца (OWNER). На
- *         устройстве с владельцем админ только смотрит: управление, настройки и доступы —
- *         дело владельца. Сервисные операции (ключ, оплата, сброс регистраций, удаление,
+ * ADMIN — видит все устройства и управляет теми, у которых нет владельца (OWNER), а также
+ *         устройствами владельцев, доверивших админам полный доступ (AppUser.adminAccess).
+ *         На остальных устройствах с владельцем админ только смотрит: управление,
+ *         настройки и доступы — дело владельца. Сервисные операции (ключ, оплата, сброс регистраций, удаление,
  *         передача владения, заводская калибровка) остаются за админом, их проверяют
  *         отдельные @Secured("ADMIN") эндпоинты, а не canControl.
  * USER  — видит и управляет теми, к которым у него доступ с правом USER. Право «только
@@ -212,8 +213,8 @@ public class DeviceAccessService {
         if (canControlRole(accessRoleOf(chipId))) {
             return true;
         }
-        // An admin controls only devices nobody owns; an owned one belongs to its owner.
-        return isAdmin() && !hasOwner(chipId);
+        // An admin controls devices nobody owns, or whose owner trusted the admins.
+        return isAdmin() && adminMayManage(chipId);
     }
 
     public boolean isOwner(Long chipId) {
@@ -238,14 +239,35 @@ public class DeviceAccessService {
 
     /**
      * Admin changing who has access to a device (admin users page or the device card):
-     * refused once the device has an owner — then only the owner manages its guests.
-     * Ownership transfer (setOwner) is the admin's recovery tool and is not checked here.
+     * refused once the device has an owner, unless that owner trusted the admins — then only
+     * the owner manages its guests. Ownership transfer (setOwner) is the admin's recovery tool
+     * and is not checked here.
      */
     public void requireAdminMayManage(Long chipId) {
-        if (hasOwner(chipId)) {
+        if (!adminMayManage(chipId)) {
             throw new HttpStatusException(HttpStatus.FORBIDDEN,
-                    "The device has an owner: only the owner manages its access");
+                    "The device has an owner: only the owner manages it");
         }
+    }
+
+    /** No owner, or the owner granted admins full access to their devices. */
+    public boolean adminMayManage(Long chipId) {
+        for (DeviceAccess a : accessRepository.findByChipId(chipId)) {
+            if (ACCESS_OWNER.equals(a.getAccessRole())) {
+                return userRepository.findById(a.getUserId())
+                        .map(owner -> Boolean.TRUE.equals(owner.getAdminAccess()))
+                        .orElse(true);
+            }
+        }
+        return true;
+    }
+
+    /** Owner of the device, if any. */
+    public java.util.Optional<Long> ownerId(Long chipId) {
+        return accessRepository.findByChipId(chipId).stream()
+                .filter(a -> ACCESS_OWNER.equals(a.getAccessRole()))
+                .map(DeviceAccess::getUserId)
+                .findFirst();
     }
 
     public void requireView(Long chipId) {
@@ -383,8 +405,19 @@ public class DeviceAccessService {
                 .anyMatch(a -> chipId.equals(a.getChipId()));
     }
 
+    /** Owner of a device for the device list: login and whether admins are trusted. */
+    public record OwnerInfo(String username, boolean adminAccess) {
+    }
+
     /** Owner logins for the device list: chipId -> username. */
     public Map<Long, String> ownerUsernames(Collection<Long> chipIds) {
+        Map<Long, String> result = new HashMap<>();
+        owners(chipIds).forEach((chipId, owner) -> result.put(chipId, owner.username()));
+        return result;
+    }
+
+    /** Owners of the devices: chipId -> owner info; devices without an owner are absent. */
+    public Map<Long, OwnerInfo> owners(Collection<Long> chipIds) {
         if (chipIds == null || chipIds.isEmpty()) {
             return Map.of();
         }
@@ -398,15 +431,15 @@ public class DeviceAccessService {
         for (DeviceAccess owner : owners) {
             userIds.add(owner.getUserId());
         }
-        Map<Long, String> usernames = new HashMap<>();
+        Map<Long, OwnerInfo> byUser = new HashMap<>();
         for (AppUser user : userRepository.findByIdIn(userIds)) {
-            usernames.put(user.getId(), user.getUsername());
+            byUser.put(user.getId(), new OwnerInfo(user.getUsername(), Boolean.TRUE.equals(user.getAdminAccess())));
         }
-        Map<Long, String> result = new HashMap<>();
+        Map<Long, OwnerInfo> result = new HashMap<>();
         for (DeviceAccess owner : owners) {
-            String username = usernames.get(owner.getUserId());
-            if (username != null) {
-                result.put(owner.getChipId(), username);
+            OwnerInfo info = byUser.get(owner.getUserId());
+            if (info != null) {
+                result.put(owner.getChipId(), info);
             }
         }
         return result;

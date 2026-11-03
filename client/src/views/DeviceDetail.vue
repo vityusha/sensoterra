@@ -18,6 +18,15 @@
     <!-- Оплата блока: срок один на всех, кто имеет доступ, и он общий, а не «мой». -->
     <div v-if="isBlock" class="pay-line" :class="payClass">{{ paymentText(payment) }}</div>
 
+    <!-- Admin trust (main menu of the owner): visible on both sides. -->
+    <div v-if="adminTrusted" class="trust-line">
+      Владелец <b>{{ device.ownerUsername }}</b> дал администраторам полный доступ: управление,
+      настройки и доступы открыты.
+    </div>
+    <div v-else-if="ownerGrantedAdmins" class="trust-line">
+      <b>Администратор имеет полный доступ</b> к этому устройству. Отозвать — в меню на главной странице.
+    </div>
+
     <!-- Закрытый блок: состояние, графики и настройки недоступны до оплаты. -->
     <section v-if="isBlock && payment && !payment.paid" class="section paywall">
       <h3>Блок закрыт</h3>
@@ -758,8 +767,13 @@ async function doReset() {
 // на чужом — наблюдатель. Роль аккаунта (ADMIN/USER) тут ни при чём.
 const myAccessRole = computed(() => accessList.value.find(a => a.userId === auth.user?.id)?.accessRole)
 // An admin controls and manages access only while the device has no owner (or owns it).
-const adminLocked = computed(() => isAdmin.value && !!device.value?.ownerUsername
+const othersDevice = computed(() => !!device.value?.ownerUsername
   && device.value.ownerUsername !== auth.user?.username)
+// The owner may grant admins full access to all their devices (main menu).
+const adminTrusted = computed(() => isAdmin.value && othersDevice.value && !!device.value.ownerAdminAccess)
+const adminLocked = computed(() => isAdmin.value && othersDevice.value && !device.value.ownerAdminAccess)
+const ownerGrantedAdmins = computed(() => !isAdmin.value && !!auth.user?.adminAccess
+  && device.value?.ownerUsername === auth.user?.username)
 const canControl = computed(() => (isAdmin.value && !adminLocked.value)
   || (canControlRole(myAccessRole.value) && isDevicePaid(chipId)))
 // Поделиться устройством может только владелец (OWNER); оплата для
@@ -1517,6 +1531,8 @@ async function shiftBlockRange(direction) {
 .sensor-card.linked { border: 1px solid var(--success); }
 .telemetry-row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .telemetry-row.muted { color: var(--text-faint); }
+.trust-line { font-size: 0.82rem; line-height: 1.45; margin: 0 0 0.8rem; padding: 0.5rem 0.75rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 8px; }
+.trust-line b { color: var(--warn); }
 .admin-locked { font-size: 0.78rem; line-height: 1.45; color: var(--text-dim); margin: 0 0 0.6rem; }
 .t-item { font-size: 0.85rem; color: var(--text-muted); }
 .t-item b { color: var(--text); }

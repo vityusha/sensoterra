@@ -42,6 +42,14 @@
               </svg>
               Добавить устройство
             </button>
+            <!-- Owner: trust the admins with full control of all my devices, or take it back. -->
+            <button v-if="showAdminAccessItem" role="menuitem" @click="toggleAdminAccess"
+              :class="{ 'menu-warn': auth.user?.adminAccess }">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+              </svg>
+              {{ auth.user?.adminAccess ? 'Отозвать доступ администратора' : 'Доступ администратора к устройствам' }}
+            </button>
             <button v-if="auth.user?.role === 'ADMIN'" role="menuitem" @click="go('/admin/users')">
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
@@ -89,6 +97,16 @@
       <div v-if="claimError" class="activation-error">{{ claimError }}</div>
     </div>
 
+    <!-- Owner side: impossible to miss while admins have full control of my devices. -->
+    <div v-if="auth.user?.adminAccess" class="admin-access-banner" role="status">
+      <span class="admin-access-text">
+        <b>Администратор имеет полный доступ</b> к вашим устройствам: может управлять ими,
+        менять настройки и доступы других пользователей.
+        <template v-if="auth.user.adminAccessSince">Открыт с {{ fmtSince(auth.user.adminAccessSince) }}.</template>
+      </span>
+      <button class="btn small" :disabled="adminAccessBusy" @click="toggleAdminAccess">Отозвать</button>
+    </div>
+
     <div v-if="viewedUserId" class="user-filter-banner">
       <span class="user-filter-text">
         Устройства пользователя <b>{{ viewedUser?.username ?? '...' }}</b>
@@ -113,7 +131,8 @@
           <div v-if="filteredBlocks.length === 0" class="empty small">По ID ничего не найдено</div>
           <div class="device-list" v-else>
             <div class="device-card" v-for="d in pagedBlocks" :key="d.chipId"
-              :class="{ locked: isLocked(d.chipId) }" @click="$router.push(`/device/${d.chipId}`)">
+              :class="{ locked: isLocked(d.chipId), trusted: adminTrustedDevice(d.chipId) }"
+              @click="$router.push(`/device/${d.chipId}`)">
               <div class="device-icon block">
                 <span class="status-dot" :class="isOnline(d.chipId) ? 'online' : 'offline'"></span>
                 B
@@ -131,6 +150,8 @@
                 <div class="device-type block"></div>
                 <!-- Оплата у блока своя: у одного истёк, у другого впереди. -->
                 <div class="pay-badge" :class="payClass(d.chipId)">{{ payLabel(d.chipId) }}</div>
+                <div v-if="adminTrustedDevice(d.chipId)" class="trust-badge trusted">полный доступ от владельца</div>
+                <div v-else-if="adminLockedDevice(d.chipId)" class="trust-badge view">только просмотр</div>
               </div>
               <div class="device-chip">{{ d.chipId }}</div>
               <button
@@ -203,7 +224,8 @@
           </div>
           <div v-if="filteredIndividualSensors.length === 0" class="empty small">По ID ничего не найдено</div>
           <div class="device-list" v-else>
-            <div class="device-card" v-for="s in pagedIndividualSensors" :key="s.chipId" @click="router.push(`/sensor/${s.chipId}`)">
+            <div class="device-card" v-for="s in pagedIndividualSensors" :key="s.chipId"
+              :class="{ trusted: adminTrustedDevice(s.chipId) }" @click="router.push(`/sensor/${s.chipId}`)">
               <div class="device-icon sensor">SA</div>
               <div class="device-info">
                 <div class="device-name">
@@ -218,6 +240,8 @@
                 <div class="device-tags">
                   <span class="tag">автономный</span>
                 </div>
+                <div v-if="adminTrustedDevice(s.chipId)" class="trust-badge trusted">полный доступ от владельца</div>
+                <div v-else-if="adminLockedDevice(s.chipId)" class="trust-badge view">только просмотр</div>
                 <div class="sensor-config" v-if="sensorConfigText(s)">
                   <span class="config-text">{{ sensorConfigText(s) }}</span>
                 </div>
@@ -278,8 +302,8 @@ import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Paginator from '../components/Paginator.vue'
 import { usePager } from '../composables/usePager'
-import { getUser, getUserDevices, listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments } from '../api/auth'
-import { auth, logout, devicePayment, rememberPayment } from '../store/auth'
+import { getUser, getUserDevices, listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments, setAdminAccess } from '../api/auth'
+import { auth, logout, devicePayment, rememberPayment, rememberDeviceOwner, adminLockedDevice, adminTrustedDevice } from '../store/auth'
 import { paymentLabel } from '../utils/payment'
 import { getBlockName, setBlockName, getIndividualName, setIndividualName } from '../store/settings'
 import { connection, pushNotification, onWsMessage, connectWs } from '../store/notifications'
@@ -454,6 +478,40 @@ const {
   pages: individualPages,
   paged: pagedIndividualSensors,
 } = useDevicePager(individualSensors, individualSearch)
+
+// Owner and admin trust of every listed device: badges here, read-only pages for admins.
+watch(devices, list => list.forEach(rememberDeviceOwner), { immediate: true })
+
+// The menu item: for owners of at least one device, and always while access is granted.
+const showAdminAccessItem = computed(() => auth.user?.role === 'USER' && (auth.user.adminAccess
+  || devices.value.some(d => d.ownerUsername === auth.user.username)))
+const adminAccessBusy = ref(false)
+
+function fmtSince(value) {
+  return new Date(value).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+async function toggleAdminAccess() {
+  menuOpen.value = false
+  const enable = !auth.user?.adminAccess
+  const question = enable
+    ? 'Дать администратору полный доступ ко всем вашим устройствам?\n\n'
+      + 'Он сможет управлять ими, менять их настройки, выдавать и отзывать доступ другим '
+      + 'пользователям. Отозвать доступ можно в любой момент в этом же меню.'
+    : 'Отозвать у администратора полный доступ к вашим устройствам? Он сможет только просматривать их.'
+  if (!window.confirm(question)) return
+  adminAccessBusy.value = true
+  try {
+    const me = await setAdminAccess(enable)
+    auth.user = { ...auth.user, adminAccess: me.adminAccess, adminAccessSince: me.adminAccessSince }
+    pushNotification(enable ? 'Администратор получил полный доступ к вашим устройствам'
+      : 'Полный доступ администратора отозван')
+  } catch (e) {
+    pushNotification(e.response?.data?.message || 'Не удалось изменить доступ администратора', 'error')
+  } finally {
+    adminAccessBusy.value = false
+  }
+}
 
 const ownerByChip = computed(() => {
   const map = {}
@@ -767,6 +825,14 @@ h2 { color: var(--text-strong); margin: 0; }
 .pay-badge.no { color: var(--danger); }
 .pay-badge.free { color: var(--text-faint); }
 .device-card.locked { opacity: 0.75; }
+/* Admin view: the owner granted full access — highlighted, all controls available. */
+.device-card.trusted { border: 1px solid var(--warn); border-left: 6px solid var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--bg-card)); }
+.trust-badge { font-size: 0.72rem; margin-top: 2px; }
+.trust-badge.trusted { color: var(--warn); font-weight: 600; }
+.trust-badge.view { color: var(--text-faint); }
+.admin-access-banner { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 12px; padding: 0.7rem 1rem; margin-bottom: 1rem; background: var(--bg-card); font-size: 0.85rem; line-height: 1.45; }
+.admin-access-text b { color: var(--warn); }
+.menu-dropdown .menu-warn { color: var(--warn); }
 .device-card.locked .device-name { color: var(--warn); }
 .empty.small { padding: 1rem; font-size: 0.85rem; }
 .section { margin-bottom: 2rem; }

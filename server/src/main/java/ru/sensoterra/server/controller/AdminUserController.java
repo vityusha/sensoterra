@@ -166,9 +166,12 @@ public class AdminUserController {
             // Admin-only ownership transfer: the previous owner stays with USER rights.
             access.setOwner(user.getId(), device.getChipId());
         } else {
-            // Guests of an owned device are the owner's business, not the admin's.
+            // Guests of an owned device are the owner's business, unless the owner trusted admins.
             access.requireAdminMayManage(device.getChipId());
-            // Admin may also downgrade the owner (forceAccessRole); guests and invites can't.
+            // Even a trusting owner keeps ownership: it moves only through accessRole OWNER.
+            if (access.ownerId(device.getChipId()).filter(user.getId()::equals).isPresent()) {
+                throw new HttpStatusException(HttpStatus.CONFLICT, "The owner's access can't be changed");
+            }
             access.forceAccessRole(user.getId(), device.getChipId(),
                     request.accessRole() != null ? request.accessRole() : DeviceAccessService.ACCESS_USER);
         }
@@ -210,7 +213,8 @@ public class AdminUserController {
      * карточке пользователя платных полей нет.
      */
     @Serdeable
-    public record UserResponse(Long id, String username, String email, String role, boolean enabled) {
+    public record UserResponse(Long id, String username, String email, String role, boolean enabled,
+                               boolean adminAccess) {
 
         static UserResponse of(AppUser u) {
             return new UserResponse(
@@ -218,7 +222,8 @@ public class AdminUserController {
                     u.getUsername(),
                     u.getEmail(),
                     u.getRole(),
-                    !Boolean.FALSE.equals(u.getEnabled()));
+                    !Boolean.FALSE.equals(u.getEnabled()),
+                    Boolean.TRUE.equals(u.getAdminAccess()));
         }
     }
 

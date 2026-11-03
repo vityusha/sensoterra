@@ -142,6 +142,49 @@ class OwnedDeviceAdminTest {
     }
 
     @Test
+    @DisplayName("Owner grants admins full access and takes it back; ownership stays with the owner")
+    void ownerGrantsAdminAccess() {
+        Map me = client.toBlocking().retrieve(auth(HttpRequest.PUT("/api/auth/admin-access",
+                Map.of("enabled", true)), ownerToken), Map.class);
+        assertEquals(Boolean.TRUE, me.get("adminAccess"));
+        assertNotNull(me.get("adminAccessSince"));
+        Map device = client.toBlocking().retrieve(auth(HttpRequest.GET("/api/devices/" + chipId), adminToken), Map.class);
+        assertEquals(Boolean.TRUE, device.get("ownerAdminAccess"));
+
+        // Full control and access management for the admin now...
+        assertNotEquals(403, status(HttpRequest.POST("/api/devices/" + chipId + "/retained/clear", Map.of()), adminToken));
+        assertEquals(200, status(HttpRequest.POST("/api/admin/users/" + guestId + "/devices",
+                Map.of("chipId", chipId, "accessRole", "VIEWER")), adminToken));
+        assertEquals(200, status(HttpRequest.POST("/api/devices/" + chipId + "/access",
+                Map.of("userId", guestId, "accessRole", "USER")), adminToken));
+        assertEquals(204, status(HttpRequest.DELETE("/api/devices/" + chipId + "/access/" + guestId), adminToken));
+        // ...but not over the owner: no downgrade, no removal.
+        assertEquals(409, status(HttpRequest.POST("/api/admin/users/" + ownerId + "/devices",
+                Map.of("chipId", chipId, "accessRole", "VIEWER")), adminToken));
+        assertEquals(403, status(HttpRequest.DELETE("/api/devices/" + chipId + "/access/" + ownerId), adminToken));
+        assertEquals("OWNER", ownerRole());
+
+        // Taken back: read-only again at once.
+        client.toBlocking().exchange(auth(HttpRequest.PUT("/api/auth/admin-access", Map.of("enabled", false)), ownerToken));
+        assertEquals(403, status(HttpRequest.POST("/api/devices/" + chipId + "/retained/clear", Map.of()), adminToken));
+        assertEquals(403, status(HttpRequest.POST("/api/admin/users/" + guestId + "/devices",
+                Map.of("chipId", chipId, "accessRole", "VIEWER")), adminToken));
+
+        java.util.List<Map> audit = client.toBlocking().retrieve(auth(HttpRequest.GET("/api/admin/audit?limit=200"),
+                adminToken), io.micronaut.core.type.Argument.listOf(Map.class));
+        String owner = (String) client.toBlocking().retrieve(auth(HttpRequest.GET("/api/auth/me"), ownerToken), Map.class)
+                .get("username");
+        assertEquals(java.util.List.of("OWNER_ADMIN_ACCESS_OFF", "OWNER_ADMIN_ACCESS_ON"), audit.stream()
+                .filter(e -> owner.equals(e.get("username"))).map(e -> e.get("event")).toList());
+    }
+
+    @Test
+    @DisplayName("Admins can't grant admin access to themselves")
+    void adminCantSelfGrant() {
+        assertEquals(400, status(HttpRequest.PUT("/api/auth/admin-access", Map.of("enabled", true)), adminToken));
+    }
+
+    @Test
     @DisplayName("Without an owner the admin keeps full control")
     void ownerlessDevice() {
         long free = chipId + 1;

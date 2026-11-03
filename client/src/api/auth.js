@@ -180,6 +180,12 @@ export async function me() {
   return data
 }
 
+/** Owner: let admins fully control and manage all my devices (or take it back). Returns /me. */
+export async function setAdminAccess(enabled) {
+  const { data } = await api.put('/auth/admin-access', { enabled })
+  return data
+}
+
 /**
  * Смена собственного пароля. Текущий пароль сервер проверяет сам: без него утёкший токен
  * позволил бы перехватить аккаунт.

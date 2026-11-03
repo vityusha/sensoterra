@@ -50,6 +50,16 @@ public class AppUser {
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 
+    /**
+     * The owner lets admins fully control and manage all of their devices (granted and
+     * revoked by the owner from the main menu). Off: admins only view the owner's devices.
+     */
+    @Column(name = "admin_access")
+    private Boolean adminAccess = Boolean.FALSE;
+
+    @Column(name = "admin_access_since")
+    private Instant adminAccessSince;
+
     /** Base32 TOTP secret of an admin; null until enrolled. Never serialized. */
     @JsonIgnore
     @Column(name = "totp_secret", length = 64)

@@ -110,6 +110,30 @@ public class AuthController {
     }
 
     /**
+     * The owner lets admins fully control and manage all of their devices, or takes it back.
+     * Takes effect at once (DeviceAccessService reads the flag per request) and is logged in
+     * the admin audit so admins see who trusted them and when.
+     */
+    @Put("/admin-access")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
+    public UserResponse setAdminAccess(Principal principal, @Body AdminAccessRequest request) {
+        AppUser user = principalUser(principal);
+        if (SessionTokens.isAdmin(user)) {
+            throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Admins don't grant admin access");
+        }
+        boolean enabled = request.enabled();
+        if (enabled != Boolean.TRUE.equals(user.getAdminAccess())) {
+            user.setAdminAccess(enabled);
+            user.setAdminAccessSince(enabled ? Instant.now() : null);
+            userRepository.update(user);
+            audit.record(user, enabled ? AdminAuditService.OWNER_ADMIN_ACCESS_GRANTED
+                    : AdminAuditService.OWNER_ADMIN_ACCESS_REVOKED, null);
+        }
+        return responseOf(user);
+    }
+
+    /**
      * Смена собственного пароля.
      *
      * Текущий пароль спрашиваем обязательно: иначе утёкший токен дал бы не только доступ
@@ -306,7 +330,7 @@ public class AuthController {
 
     private static UserResponse responseOf(AppUser user) {
         return new UserResponse(user.getId(), user.getUsername(), user.getEmail(), user.getRole(),
-                user.getAuthProvider());
+                user.getAuthProvider(), Boolean.TRUE.equals(user.getAdminAccess()), user.getAdminAccessSince());
     }
 
     /** Response of a first factor that needs the TOTP step: no session yet, only the challenge. */
@@ -346,7 +370,11 @@ public class AuthController {
      * пароля и объясняет, где пароль на самом деле.
      */
     @Serdeable
-    public record UserResponse(Long id, String username, String email, String role, String authProvider) {}
+    public record UserResponse(Long id, String username, String email, String role, String authProvider,
+                               boolean adminAccess, Instant adminAccessSince) {}
+
+    @Serdeable
+    public record AdminAccessRequest(boolean enabled) {}
 
     /** Ответ регистрации: профиль аккаунта плюс токен и факт привязки устройства. */
     @Serdeable
