@@ -219,7 +219,7 @@ class SecurityFixesTest {
     }
 
     private void assign(Long userId, String accessRole) {
-        exchange(HttpRequest.POST("/api/admin/users/" + userId + "/devices",
+        exchange(HttpRequest.POST("/api/test/admin/users/" + userId + "/devices",
                 Map.of("chipId", chipId, "deviceType", "BLOCK", "accessRole", accessRole)), adminToken);
     }
 

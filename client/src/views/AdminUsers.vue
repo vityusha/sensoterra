@@ -277,14 +277,29 @@ async function remove(u) {
   await load()
 }
 
+/** Owned devices: the server refuses guest changes (only the owner manages them). */
+function accessError(e) {
+  pushNotification(e.response?.data?.message || 'Не удалось изменить доступ', 'error')
+}
+
 async function assign(u) {
-  await assignDevice(u.id, Number(assignForm.chipId), assignForm.deviceType, assignForm.accessRole)
+  try {
+    await assignDevice(u.id, Number(assignForm.chipId), assignForm.deviceType, assignForm.accessRole)
+  } catch (e) {
+    accessError(e)
+    return
+  }
   assignForm.chipId = ''
   devicesByUser[u.id] = await getUserDevices(u.id)
 }
 
 async function unassign(u, chipId) {
-  await unassignDevice(u.id, chipId)
+  try {
+    await unassignDevice(u.id, chipId)
+  } catch (e) {
+    accessError(e)
+    return
+  }
   devicesByUser[u.id] = await getUserDevices(u.id)
 }
 
@@ -292,7 +307,12 @@ async function unassign(u, chipId) {
 async function setAccessRole(u, chipId) {
   const key = `${u.id}:${chipId}`
   const next = accessRoles[key] === 'VIEWER' ? 'USER' : 'VIEWER'
-  await assignDevice(u.id, chipId, undefined, next)
+  try {
+    await assignDevice(u.id, chipId, undefined, next)
+  } catch (e) {
+    accessError(e)
+    return
+  }
   accessRoles[key] = next
   pushNotification(`${u.username}: ${next === 'VIEWER' ? 'только чтение' : 'управление'}`)
 }

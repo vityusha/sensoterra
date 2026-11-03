@@ -231,7 +231,7 @@ import { useRoute } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, getDeviceStatuses, sendRelayParams, getMoistureScale, getSensorScale } from '../api/auth'
 import { getBlockName, getFieldName, getFieldUnit } from '../store/settings'
 import { pushNotification } from '../store/notifications'
-import { canControlDevice, isAdmin } from '../store/auth'
+import { canControlDevice, isAdmin, rememberDeviceOwner } from '../store/auth'
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, percentToAdc } from '../utils/moisture'
 import { moistureGradientCss } from '../utils/gradient'
@@ -810,6 +810,7 @@ onMounted(async () => {
       getDeviceRegisteredSensors(chipId),
     ])
     device.value = dev
+    rememberDeviceOwner(dev)
     relay.value = relays.find(r => Number(r.relayNumber) === relayNumber) || null
     sensors.value = devSensors
     registered.value = reg

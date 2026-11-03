@@ -79,14 +79,14 @@ class RolesAccessTest {
 
         blockId = 777000L + Math.abs((long) java.util.UUID.randomUUID().getLeastSignificantBits() % 100000);
         client.toBlocking().exchange(
-                HttpRequest.POST("/api/admin/users/" + userId + "/devices",
+                HttpRequest.POST("/api/test/admin/users/" + userId + "/devices",
                                 Map.of("chipId", blockId, "deviceType", "BLOCK"))
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON));
 
         for (Long id : List.of(userId, viewerId)) {
             client.toBlocking().exchange(
-                    HttpRequest.POST("/api/admin/users/" + id + "/devices",
+                    HttpRequest.POST("/api/test/admin/users/" + id + "/devices",
                                     Map.of("chipId", blockId, "deviceType", "BLOCK"))
                             .header("Authorization", "Bearer " + adminToken)
                             .contentType(MediaType.APPLICATION_JSON));
@@ -94,7 +94,7 @@ class RolesAccessTest {
         // roles-viewer получает на этот блок права «только чтение»: VIEWER — это не роль
         // аккаунта, а доступ к конкретному устройству.
         client.toBlocking().exchange(
-                HttpRequest.POST("/api/admin/users/" + viewerId + "/devices",
+                HttpRequest.POST("/api/test/admin/users/" + viewerId + "/devices",
                                 Map.of("chipId", blockId, "deviceType", "BLOCK",
                                         "accessRole", "VIEWER"))
                         .header("Authorization", "Bearer " + adminToken)
@@ -259,7 +259,7 @@ class RolesAccessTest {
     void accessDowngradeAppliesImmediately() {
         // Роль аккаунта одна (ADMIN или USER), а права на устройство меняются отдельно.
         client.toBlocking().exchange(
-                HttpRequest.POST("/api/admin/users/" + userId + "/devices",
+                HttpRequest.POST("/api/test/admin/users/" + userId + "/devices",
                                 Map.of("chipId", blockId, "deviceType", "BLOCK", "accessRole", "VIEWER"))
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON));
@@ -275,7 +275,7 @@ class RolesAccessTest {
 
         // Возвращаем права владельца, чтобы следующие тесты не зависели от порядка.
         client.toBlocking().exchange(
-                HttpRequest.POST("/api/admin/users/" + userId + "/devices",
+                HttpRequest.POST("/api/test/admin/users/" + userId + "/devices",
                                 Map.of("chipId", blockId, "deviceType", "BLOCK", "accessRole", "USER"))
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON));

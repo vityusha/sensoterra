@@ -120,7 +120,7 @@ class BlockPaymentTest {
 
     private void assign(Long chipId, String type) {
         client.toBlocking().exchange(
-                HttpRequest.POST("/api/admin/users/" + buyerId + "/devices",
+                HttpRequest.POST("/api/test/admin/users/" + buyerId + "/devices",
                                 Map.of("chipId", chipId, "deviceType", type))
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON));
@@ -420,10 +420,10 @@ class BlockPaymentTest {
                 Argument.of(Map.class));
     }
 
+    /** Fixture: a guest on a claimed (owned) block — the admin API refuses that now. */
     private void grant(Long chipId, Long userId) {
         client.toBlocking().exchange(
-                HttpRequest.POST("/api/devices/" + chipId + "/access", Map.of("userId", userId))
-                        .header("Authorization", "Bearer " + adminToken)
+                HttpRequest.POST("/api/test/admin/users/" + userId + "/devices", Map.of("chipId", chipId))
                         .contentType(MediaType.APPLICATION_JSON));
     }
 

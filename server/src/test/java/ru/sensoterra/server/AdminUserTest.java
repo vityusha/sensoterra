@@ -186,7 +186,7 @@ class AdminUserTest {
     void clientCannotSeeOtherDevice() {
         HttpResponse<?> assignResp = client.toBlocking().exchange(
                 HttpRequest.POST("/api/admin/users/" + clientId + "/devices",
-                                Map.of("chipId", 999999L, "deviceType", "BLOCK"))
+                                Map.of("chipId", 999999L, "deviceType", "BLOCK", "accessRole", "VIEWER"))
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON));
         assertEquals(200, assignResp.getStatus().getCode());
@@ -209,18 +209,19 @@ class AdminUserTest {
 
     @Test
     @Order(8)
-    @DisplayName("Unassign device")
-    void unassignDevice() {
-        HttpResponse<?> resp = client.toBlocking().exchange(
-                HttpRequest.DELETE("/api/admin/users/" + clientId + "/devices/111111")
-                        .header("Authorization", "Bearer " + adminToken));
-        assertEquals(204, resp.getStatus().getCode());
+    @DisplayName("Admin can't unassign the owner of a device (only reset registrations removes it)")
+    void unassignOwnedDevice() {
+        HttpClientResponseException ex = assertThrows(HttpClientResponseException.class, () ->
+                client.toBlocking().exchange(
+                        HttpRequest.DELETE("/api/admin/users/" + clientId + "/devices/111111")
+                                .header("Authorization", "Bearer " + adminToken)));
+        assertEquals(403, ex.getStatus().getCode());
 
         HttpResponse<List<Map>> userDevices = client.toBlocking().exchange(
                 HttpRequest.GET("/api/admin/users/" + clientId + "/devices")
                         .header("Authorization", "Bearer " + adminToken),
                 Argument.listOf(Map.class));
-        assertEquals(0, userDevices.body().size());
+        assertEquals(1, userDevices.body().size());
     }
 
     @Test

@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getToken, tokenExpiresAt, wasSessionExpired } from '../api/auth'
-import { auth, deviceAccess, logout } from '../store/auth'
+import { adminLockedDevice, auth, deviceAccess, logout } from '../store/auth'
 
 const isAdminRole = () => auth.user?.role === 'ADMIN'
 import Login from '../views/Login.vue'
@@ -90,7 +90,7 @@ const routes = [
     path: '/sensor/:chipId/calibrate',
     name: 'sensor-calibrate',
     component: () => import('../views/SensorCalibrate.vue'),
-    meta: { requiresAuth: true, requiresControl: true }
+    meta: { requiresAuth: true, requiresControl: true, adminOnOwned: true }
   },
   {
     path: '/sensor/:chipId/settings',
@@ -130,6 +130,12 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresControl && !isAdminRole() && to.params.chipId
     && deviceAccess[to.params.chipId] === 'VIEWER') {
     next('/')
+    return
+  }
+  // An admin only views devices that have an owner (factory calibration stays allowed).
+  if (to.meta.requiresControl && !to.meta.adminOnOwned && to.params.chipId
+    && adminLockedDevice(to.params.chipId)) {
+    next(`/device/${to.params.chipId}`)
     return
   }
   next()

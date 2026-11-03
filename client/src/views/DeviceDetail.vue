@@ -103,6 +103,10 @@
     <!-- Кто ещё имеет доступ к этому устройству и на каких условиях. -->
     <section v-if="accessList.length" class="section">
       <div class="section-head"><h3>Доступ</h3></div>
+      <p v-if="adminLocked" class="muted admin-locked">
+        У устройства есть владелец ({{ device.ownerUsername }}): управлять им, его настройками и
+        доступом может только владелец. Админу остаются просмотр и сервисные операции.
+      </p>
       <div class="invite-list access-list">
         <div class="invite-row access-row" v-for="a in accessList" :key="a.userId">
           <code class="access-username">{{ a.username }}</code>
@@ -332,7 +336,7 @@ import { getBlockName, setBlockName, getFieldName, getFieldUnit, isFieldHidden, 
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
 import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
-import { auth, rememberDeviceAccess, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
+import { auth, rememberDeviceAccess, rememberDeviceOwner, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
@@ -753,14 +757,17 @@ async function doReset() {
 // Права живут на устройстве: один и тот же человек на своём блоке — хозяин,
 // на чужом — наблюдатель. Роль аккаунта (ADMIN/USER) тут ни при чём.
 const myAccessRole = computed(() => accessList.value.find(a => a.userId === auth.user?.id)?.accessRole)
-const canControl = computed(() =>
-  isAdmin.value || (canControlRole(myAccessRole.value) && isDevicePaid(chipId)))
+// An admin controls and manages access only while the device has no owner (or owns it).
+const adminLocked = computed(() => isAdmin.value && !!device.value?.ownerUsername
+  && device.value.ownerUsername !== auth.user?.username)
+const canControl = computed(() => (isAdmin.value && !adminLocked.value)
+  || (canControlRole(myAccessRole.value) && isDevicePaid(chipId)))
 // Поделиться устройством может только владелец (OWNER); оплата для
 // этого не нужна — приглашение открывает доступ, а не возможность управлять. Админу
 // приглашение не показываем: у него другие механизмы (ключ комплектного листа, доступ).
 const canShare = computed(() => !isAdmin.value && isOwnerRole(myAccessRole.value))
 // Changing or revoking other accounts' access: the owner or an admin (server enforces it too).
-const canManageAccess = computed(() => isAdmin.value || isOwnerRole(myAccessRole.value))
+const canManageAccess = computed(() => (isAdmin.value && !adminLocked.value) || isOwnerRole(myAccessRole.value))
 
 function accessRoleLabel(role) {
   if (role === 'OWNER') return 'владелец'
@@ -1085,6 +1092,7 @@ async function load() {
     return
   }
   device.value = await getDevice(Number(chipId))
+  rememberDeviceOwner(device.value)
   relays.value = await getDeviceRelays(Number(chipId))
   sensors.value = await getDeviceSensors(Number(chipId))
   // Калибровки влажности: нужны для показа % и предупреждения о погружении.
@@ -1509,6 +1517,7 @@ async function shiftBlockRange(direction) {
 .sensor-card.linked { border: 1px solid var(--success); }
 .telemetry-row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .telemetry-row.muted { color: var(--text-faint); }
+.admin-locked { font-size: 0.78rem; line-height: 1.45; color: var(--text-dim); margin: 0 0 0.6rem; }
 .t-item { font-size: 0.85rem; color: var(--text-muted); }
 .t-item b { color: var(--text); }
 .vacc-toggle { display: inline-flex; align-items: center; gap: 0.45rem; margin-bottom: 0.75rem; cursor: pointer; }

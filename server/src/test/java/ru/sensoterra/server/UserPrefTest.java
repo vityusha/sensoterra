@@ -160,7 +160,7 @@ class UserPrefTest {
 
     private void assign(Long userId, Map<String, Object> request) {
         client.toBlocking().exchange(
-                HttpRequest.POST("/api/admin/users/" + userId + "/devices", request)
+                HttpRequest.POST("/api/test/admin/users/" + userId + "/devices", request)
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON));
     }
@@ -391,8 +391,7 @@ class UserPrefTest {
         // Доступ отбирают и зовут снова: старые настройки остались у пользователя при себе,
         // и повторный перенос не должен их затирать.
         client.toBlocking().exchange(
-                HttpRequest.DELETE("/api/devices/" + blockId + "/access/" + otherId)
-                        .header("Authorization", "Bearer " + adminToken));
+                HttpRequest.DELETE("/api/test/admin/users/" + otherId + "/devices/" + blockId));
         acceptInvite();
 
         assertEquals("Моё", devicePref(prefs(otherToken), blockId).get("name"));

@@ -166,6 +166,8 @@ public class AdminUserController {
             // Admin-only ownership transfer: the previous owner stays with USER rights.
             access.setOwner(user.getId(), device.getChipId());
         } else {
+            // Guests of an owned device are the owner's business, not the admin's.
+            access.requireAdminMayManage(device.getChipId());
             // Admin may also downgrade the owner (forceAccessRole); guests and invites can't.
             access.forceAccessRole(user.getId(), device.getChipId(),
                     request.accessRole() != null ? request.accessRole() : DeviceAccessService.ACCESS_USER);
@@ -177,6 +179,8 @@ public class AdminUserController {
 
     @Delete("/{id}/devices/{chipId}")
     public HttpResponse<?> unassignDevice(Long id, Long chipId) {
+        access.requireAdmin();
+        access.requireAdminMayManage(chipId);
         access.revoke(id, chipId);
         audit.action(AdminAuditService.DEVICE_REVOKED, "user id=" + id + " chip=" + chipId);
         return HttpResponse.noContent();

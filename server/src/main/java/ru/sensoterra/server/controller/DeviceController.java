@@ -104,7 +104,10 @@ public class DeviceController {
     @Secured(SecurityRule.IS_AUTHENTICATED)
     public Device get(Long chipId) {
         access.requireView(chipId);
-        return access.device(chipId);
+        Device device = access.device(chipId);
+        // The client uses it to show an admin's owned devices as read-only.
+        device.setOwnerUsername(access.ownerUsernames(List.of(chipId)).get(chipId));
+        return device;
     }
 
     /**
@@ -251,8 +254,9 @@ public class DeviceController {
             }
         } else {
             access.requireManageAccess(chipId);
-            if (DeviceAccessService.ACCESS_OWNER.equals(access.accessRoleOf(userId, chipId)) && !access.isAdmin()) {
-                throw new HttpStatusException(HttpStatus.FORBIDDEN, "Only an admin can remove the owner");
+            if (DeviceAccessService.ACCESS_OWNER.equals(access.accessRoleOf(userId, chipId))) {
+                // Only "reset registrations" (admin) removes an owner, never a single revoke.
+                throw new HttpStatusException(HttpStatus.FORBIDDEN, "The owner can't be removed");
             }
         }
         access.revoke(userId, chipId);
