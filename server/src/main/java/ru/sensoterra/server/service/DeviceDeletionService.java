@@ -208,6 +208,11 @@ public class DeviceDeletionService {
                 DELETE FROM automation_condition WHERE sensor_chip_id IN (:chips)
                 """, onlyChips, deleted);
         delete("automation_action", "DELETE FROM automation_action WHERE block_id IN (:chips)", onlyChips, deleted);
+        delete("alarm_read", """
+                DELETE FROM alarm_read
+                WHERE alarm_id IN (SELECT id FROM alarm WHERE device_id IN (:chips) OR chip_id IN (:chips))
+                """, onlyChips, deleted);
+        delete("alarm", "DELETE FROM alarm WHERE device_id IN (:chips) OR chip_id IN (:chips)", onlyChips, deleted);
         delete("sensor_registration", "DELETE FROM sensor_registration WHERE device_id = :block", onlyBlock, deleted);
         delete("relay", "DELETE FROM relay WHERE device_id IN (:chips)", onlyChips, deleted);
         delete("command_log", "DELETE FROM command_log WHERE device_id IN (:chips)", onlyChips, deleted);

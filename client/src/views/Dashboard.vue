@@ -3,6 +3,7 @@
     <header class="page-header">
       <div class="header-top">
         <h2>Устройства</h2>
+        <AlarmBell class="header-bell" />
         <div class="menu-wrap" ref="menuRef">
           <button
             class="menu-toggle"
@@ -301,13 +302,13 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Paginator from '../components/Paginator.vue'
+import AlarmBell from '../components/AlarmBell.vue'
 import { usePager } from '../composables/usePager'
 import { getUser, getUserDevices, listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments, setAdminAccess } from '../api/auth'
 import { auth, logout, devicePayment, rememberPayment, rememberDeviceOwner, adminLockedDevice, adminTrustedDevice } from '../store/auth'
 import { paymentLabel } from '../utils/payment'
 import { getBlockName, setBlockName, getIndividualName, setIndividualName } from '../store/settings'
 import { connection, pushNotification, onWsMessage, connectWs } from '../store/notifications'
-import { initMissedTimings } from '../store/notifications'
 
 const router = useRouter()
 const route = useRoute()
@@ -553,7 +554,6 @@ async function refreshAll() {
     for (const info of list) rememberPayment(info)
   }).catch(() => { /* счётчик просто не покажем */ })
   catalog.value = cats
-  initMissedTimings(cats)
   const map = {}
   for (const s of statuses) map[s.chipId] = s
   statusMap.value = map
@@ -705,7 +705,6 @@ function scheduleCatalogRefresh() {
 async function refreshCatalog() {
   const cats = await getSensorCatalog()
   catalog.value = cats
-  initMissedTimings(cats)
 }
 
 async function refreshStatuses() {
@@ -798,6 +797,9 @@ async function removeBlock(d) {
 .dashboard { max-width: 600px; margin: 0 auto; padding: 1rem; }
 .page-header { position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 0.75rem 1rem 1rem; background: var(--bg); }
 .header-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+/* The bell sits right next to the menu button: the auto margin goes to the bell only. */
+.header-bell { margin-left: auto; }
+.header-bell + .menu-wrap { margin-left: -0.6rem; }
 h2 { color: var(--text-strong); margin: 0; }
 .header-meta { display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; margin-top: 0.35rem; overflow: hidden; white-space: nowrap; }
 .user-info { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); font-size: 0.8rem; }

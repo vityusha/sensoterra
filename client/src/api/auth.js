@@ -548,6 +548,42 @@ export async function getServerUptimeHistory() {
   return data
 }
 
+// --- Alarms (notifications page) ---
+
+export async function listAlarms(type, limit = 200) {
+  const { data } = await api.get('/alarms', { params: { type, limit } })
+  return data
+}
+
+export async function getAlarmSummary() {
+  const { data } = await api.get('/alarms/summary')
+  return data
+}
+
+export async function markAlarmsSeen() {
+  await api.post('/alarms/seen')
+}
+
+export async function markAlarmRead(id) {
+  await api.post(`/alarms/${id}/read`)
+}
+
+/** Marks every finished alarm of the type as read; active ones stay unread. */
+export async function markAllAlarmsRead(type) {
+  const { data } = await api.post('/alarms/read', null, { params: { type } })
+  return data
+}
+
+export async function deleteAlarm(id) {
+  await api.delete(`/alarms/${id}`)
+}
+
+/** Deletes the finished alarms the user has read (of one type, or all when type is null). */
+export async function deleteReadAlarms(type = null) {
+  const { data } = await api.delete('/alarms', { params: type ? { type } : {} })
+  return data
+}
+
 export { api }
 
 export async function getMoistureScale(chipId) {

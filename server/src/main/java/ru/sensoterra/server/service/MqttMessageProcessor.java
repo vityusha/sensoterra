@@ -38,17 +38,20 @@ public class MqttMessageProcessor {
     private final DeviceStatusWebSocketBroadcaster broadcaster;
     private final RelayCommandConfirmationService confirmationService;
     private final DeviceZoneService deviceZoneService;
+    private final AlarmService alarmService;
 
     public MqttMessageProcessor(TelemetryService telemetryService,
                                 DeviceStateStore deviceStateStore,
                                 DeviceStatusWebSocketBroadcaster broadcaster,
                                 RelayCommandConfirmationService confirmationService,
-                                DeviceZoneService deviceZoneService) {
+                                DeviceZoneService deviceZoneService,
+                                AlarmService alarmService) {
         this.telemetryService = telemetryService;
         this.deviceStateStore = deviceStateStore;
         this.broadcaster = broadcaster;
         this.confirmationService = confirmationService;
         this.deviceZoneService = deviceZoneService;
+        this.alarmService = alarmService;
     }
 
     public void process(String topic, String payload, boolean retained) {
@@ -122,6 +125,26 @@ public class MqttMessageProcessor {
                 "status", status,
                 "timestamp", System.currentTimeMillis()));
         log.info("Device {} status: {}", deviceId, status);
+        try {
+            alarmService.onDeviceStatus(deviceId, status);
+        } catch (Exception e) {
+            log.warn("Alarm update failed for device {} status {}: {}", deviceId, status, e.getMessage());
+        }
+    }
+
+    /**
+     * Alarms react to live data only: a retained message replayed on reconnect is old data and
+     * must neither end a gap nor judge the sensor's immersion.
+     */
+    private void updateSensorAlarms(Long deviceId, Long chipId, Integer moistureAdc, boolean retained) {
+        if (retained) {
+            return;
+        }
+        try {
+            alarmService.onSensorData(deviceId, chipId, moistureAdc);
+        } catch (Exception e) {
+            log.warn("Alarm update failed for sensor {}: {}", chipId, e.getMessage());
+        }
     }
 
     private void handleRelayEvent(Long deviceId, int relayIndex, String payload, boolean retained) {
@@ -263,6 +286,7 @@ public class MqttMessageProcessor {
         }
         telemetryService.upsertDevice(deviceId, "BLOCK");
         telemetryService.onSensorEvent(deviceId, chipId, data, time);
+        updateSensorAlarms(deviceId, chipId, data.moistureAdc, retained);
         telemetryService.saveBlockTelemetry(
                 deviceId,
                 data.rssiBlock,
@@ -360,6 +384,7 @@ public class MqttMessageProcessor {
         }
         telemetryService.upsertDevice(deviceId, "INDIVIDUAL_SENSOR");
         telemetryService.onSensorEvent(deviceId, chipId, data, parseTime(node.get("Time"), retained, deviceZoneService.zoneFor(deviceId)));
+        updateSensorAlarms(deviceId, chipId, data.moistureAdc, retained);
         confirmationService.confirmSensorParams(deviceId,
                 data.sleep, data.send, data.percentN != null ? data.percentN.intValue() : null,
                 data.percentS != null ? data.percentS.intValue() : null, data.minVoltage);

@@ -3,6 +3,7 @@
     <div class="header-row">
       <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>Настройки</h2>
+      <AlarmBell />
     </div>
 
     <section class="section">
@@ -35,8 +36,9 @@
         Показывать уведомления о событиях
       </label>
       <p class="hint">
-        Отключает: онлайн/оффлайн блоков, серверные предупреждения и сообщения
-        «датчик не передаёт данные». Подтверждения действий и ошибки показываются всегда.
+        Отключает всплывающие серверные предупреждения. Пропуски данных датчиков,
+        погружение и связь с блоками — на странице уведомлений (колокольчик в шапке).
+        Подтверждения действий и ошибки показываются всегда.
       </p>
     </section>
 
@@ -163,9 +165,10 @@
 </template>
 
 <script setup>
+import AlarmBell from '../components/AlarmBell.vue'
 import { reactive, ref, onMounted } from 'vue'
 import { settings, getChartTooltipMode, setChartTooltipMode, getTheme, setTheme, getBgColor, setBgColor, isVaccHidden, setVaccVisible, isFieldHidden, toggleField, getBlockName, getIndividualName, fieldKeys, fieldLabel, fieldUnit, defaultLabel, defaultUnit, setFields, saveDefaults, applyDefaults } from '../store/settings'
-import { clearEventNotifications, refreshEventNotifications, pushNotification } from '../store/notifications'
+import { clearEventNotifications, pushNotification } from '../store/notifications'
 import { isAdmin, auth, deviceAccess, rememberDeviceAccess } from '../store/auth'
 import { getSensorTypes, listDevices, getSensorCatalog, getCalibrationDefaults, saveCalibrationDefaults, listDeviceAccess } from '../api/auth'
 import { getFieldName, getFieldUnit } from '../store/settings'
@@ -402,8 +405,7 @@ function saveUnits(type) {
 function onAlertsChange(v) {
   alertsEnabled.value = v
   settings.alertsEnabled = v
-  if (v) refreshEventNotifications()
-  else clearEventNotifications()
+  if (!v) clearEventNotifications()
 }
 
 function defaultBgColor() {
