@@ -117,16 +117,18 @@
         У устройства есть владелец ({{ device.ownerUsername }}): управлять им, его настройками и
         доступом может только владелец. Админу остаются просмотр и сервисные операции.
       </p>
-      <div class="invite-list access-list">
-        <div class="invite-row access-row" v-for="a in accessList" :key="a.userId">
-          <code class="access-username">{{ a.username }}</code>
-          <span class="access-role">{{ accessRoleLabel(a.accessRole) }}</span>
+      <div class="relay-card access-card">
+        <div class="access-entry" v-for="a in accessList" :key="a.userId">
+          <span class="access-who">
+            {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
+          </span>
           <!-- The owner's row has no actions: ownership moves only through the admin page. -->
-          <button v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="btn small" @click="swapAccessRole(a)">
-            {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
-          </button>
-          <button v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="btn small danger"
-            @click="revokeAccess(a)">Отозвать</button>
+          <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
+            <button class="btn small" @click="swapAccessRole(a)">
+              {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
+            </button>
+            <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
+          </div>
         </div>
       </div>
     </section>
@@ -1475,10 +1477,12 @@ async function shiftBlockRange(direction) {
 .role-select { padding: 0.25rem 0.4rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.75rem; }
 .invite-role { color: var(--muted-fg); font-size: 0.7rem; }
 .invite-token { color: var(--text-dim); font-size: 0.75rem; }
-.access-list { gap: 0.5rem; }
-.access-row { flex-wrap: wrap; gap: 0.65rem; padding: 0.55rem 0.7rem; }
-.access-username { color: var(--text); font-size: 0.9rem; font-weight: 600; overflow-wrap: anywhere; }
-.access-role { color: var(--text-sub); font-size: 0.82rem; }
+.access-card { padding: 0.25rem 0.8rem; }
+.access-entry { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding: 0.45rem 0; }
+.access-entry + .access-entry { border-top: 1px solid var(--border-soft); }
+.access-who { flex: 1 1 auto; min-width: 0; color: var(--text); font-size: 0.85rem; overflow-wrap: anywhere; }
+.access-self { color: var(--text-faint); font-size: 0.75rem; }
+.access-actions { display: flex; flex: 1 0 100%; flex-wrap: wrap; gap: 0.4rem; }
 .invite-state { font-size: 0.7rem; flex: 1; }
 .invite-state.ok { color: var(--success); }
 .invite-state.no { color: var(--text-dim); }

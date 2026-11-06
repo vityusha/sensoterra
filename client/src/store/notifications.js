@@ -1,6 +1,5 @@
 import { reactive } from 'vue'
 import { sessionExpired } from '../api/auth'
-import { areAlertsEnabled } from './settings'
 
 let nextId = 0
 
@@ -26,22 +25,15 @@ export function pushNotification(text, type = 'info') {
   return item.id
 }
 
-// Event notifications (server warnings). Hidden by the switch in Settings.
-// Action feedback ("settings sent", errors) goes through pushNotification
-// and is always shown. Sensor gaps and block offline/online are alarms now (store/alarms.js).
+// Event notifications (server warnings). Sensor gaps and block offline/online are
+// alarms now (store/alarms.js), so only the remaining server warnings use this.
 export function pushEventNotification(text, type = 'info') {
-  if (!areAlertsEnabled()) return null
   return pushNotification(text, type)
 }
 
 export function dismissNotification(id) {
   const idx = notifications.findIndex(n => n.id === id)
   if (idx >= 0) notifications.splice(idx, 1)
-}
-
-// Switch in Settings turned off: drop the toasts already shown.
-export function clearEventNotifications() {
-  notifications.splice(0, notifications.length)
 }
 
 let ws = null

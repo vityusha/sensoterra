@@ -36,7 +36,7 @@
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
               </svg>
-              Калибровка влажности
+              Калибровка 0% влажности
             </button>
             <button role="menuitem" @click="openDisplaySettings">
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

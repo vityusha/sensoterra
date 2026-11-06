@@ -159,6 +159,19 @@ public class DeviceAccessService {
         return chipsOfUser(currentUser().getId());
     }
 
+    /** Devices with no OWNER row: the admin's default alarm scope. */
+    public Set<Long> ownerlessChipIds() {
+        Set<Long> owned = new LinkedHashSet<>();
+        for (DeviceAccess access : accessRepository.findAll()) {
+            if (ACCESS_OWNER.equals(access.getAccessRole())) {
+                owned.add(access.getChipId());
+            }
+        }
+        Set<Long> ids = allChipIds();
+        ids.removeAll(owned);
+        return ids;
+    }
+
     /**
      * Чипы, доступные конкретному аккаунту — без админ-исключения, даже если запрос
      * делает администратор (иначе в списке устройств чужого аккаунта были бы все блоки).

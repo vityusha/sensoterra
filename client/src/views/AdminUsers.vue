@@ -48,7 +48,7 @@
     </div>
     <div class="list-tools">
       <input v-model="userSearch" class="search-input" type="search" autocapitalize="none" spellcheck="false"
-        placeholder="Поиск по логину или ID устройства" aria-label="Поиск пользователей по логину или ID устройства" />
+        placeholder="Поиск по логину, роли или ID устройства" aria-label="Поиск пользователей по логину, роли или ID устройства" />
       <button v-if="userSearch" class="btn small" @click="userSearch = ''">Сброс</button>
     </div>
     <div v-if="users.length && filteredUsers.length === 0" class="empty">Ничего не найдено</div>
@@ -72,6 +72,9 @@
         </div>
 
         <div class="user-actions">
+          <button @click="$router.push({ path: '/alarms', query: { user: u.id } })" class="btn small">
+            Уведомления
+          </button>
           <button v-if="u.role !== 'ADMIN'" @click="$router.push({ path: '/', query: { user: u.id } })" class="btn small">
             Устройства
           </button>
@@ -176,6 +179,7 @@ const {
   paged: pagedUsers,
 } = usePager(users, userSearch, (u, q) =>
   u.username.toLowerCase().includes(q)
+  || effectiveRole(u).toLowerCase().includes(q)
   || (devicesByUser[u.id] || []).some(d => String(d.chipId).includes(q)))
 
 /**
