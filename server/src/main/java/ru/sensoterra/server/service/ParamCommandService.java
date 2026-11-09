@@ -1,5 +1,6 @@
 package ru.sensoterra.server.service;
 
+import ru.sensoterra.server.entity.BatteryType;
 import ru.sensoterra.server.entity.CommandLog;
 import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.entity.Relay;
@@ -97,6 +98,14 @@ public class ParamCommandService {
         requireSafeName(request.getName());
         Sensor sensor = sensorRepository.findById(sensorId)
                 .orElseThrow(() -> new HttpStatusException(HttpStatus.NOT_FOUND, "Sensor not found"));
+        BatteryType batteryType = null;
+        if (request.getBatteryType() != null && !request.getBatteryType().isBlank()) {
+            try {
+                batteryType = BatteryType.fromCode(request.getBatteryType());
+            } catch (IllegalArgumentException e) {
+                throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Unknown battery type");
+            }
+        }
 
         String topic;
         String payload;
@@ -131,6 +140,11 @@ public class ParamCommandService {
         }
 
         commandLogRepository.save(log(logDeviceId, "SENSOR_PARAM", payload, topic));
+        if (batteryType != null) {
+            sensor.setBatteryType(batteryType);
+            sensor.setWarningVoltage(batteryType.getWarningVoltageMv());
+            sensorRepository.update(sensor);
+        }
         return new CommandResult(logDeviceId, null, "SENSOR_PARAM", true);
     }
 
@@ -273,6 +287,7 @@ public class ParamCommandService {
         private Integer percentN;
         private Integer percentS;
         private Integer minVoltage;
+        private String batteryType;
 
         public String toBlockPayload(Sensor sensor, String timestr) {
             // Позиционный формат прошивки блока, ровно 7 полей через ';':
@@ -329,5 +344,7 @@ public class ParamCommandService {
         public void setPercentS(Integer percentS) { this.percentS = percentS; }
         public Integer getMinVoltage() { return minVoltage; }
         public void setMinVoltage(Integer minVoltage) { this.minVoltage = minVoltage; }
+        public String getBatteryType() { return batteryType; }
+        public void setBatteryType(String batteryType) { this.batteryType = batteryType; }
     }
 }

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import ru.sensoterra.server.entity.Alarm;
+import ru.sensoterra.server.entity.BatteryType;
 import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.entity.Sensor;
 import ru.sensoterra.server.mqtt.MqttClientService;
@@ -26,10 +27,12 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @MicronautTest(transactional = false)
-@DisplayName("Alarms: gaps, immersion level, block offline; list, read, delete")
+@DisplayName("Alarms: gaps, immersion level, battery, block offline; list, read, delete")
 class AlarmTest {
 
     @Inject
@@ -47,6 +50,9 @@ class AlarmTest {
 
     @Inject
     SensorRepository sensorRepository;
+
+    @Inject
+    MqttClientService mqttClientService;
 
     @MockBean(MqttClientService.class)
     MqttClientService mqttClientService() {
@@ -142,7 +148,7 @@ class AlarmTest {
                 .filter(a -> a.getChipId() == chipId && AlarmService.GAP.equals(a.getAlarmType())).count(),
                 "an open gap is not duplicated");
 
-        alarms.onSensorData(chipId, chipId, 1000);
+        alarms.onSensorData(chipId, chipId, 1000, null);
         assertNull(open(chipId, AlarmService.GAP));
     }
 
@@ -151,12 +157,58 @@ class AlarmTest {
     void level() {
         sensor(chipId, Instant.now(), 600);
         // Default calibration: air 1650, dry 1550 -> limit 1600.
-        alarms.onSensorData(chipId, chipId, 1620);
+        alarms.onSensorData(chipId, chipId, 1620, null);
         assertEquals(1620.0, open(chipId, AlarmService.LEVEL).getValue());
-        alarms.onSensorData(chipId, chipId, 1640);
+        alarms.onSensorData(chipId, chipId, 1640, null);
         assertEquals(1640.0, open(chipId, AlarmService.LEVEL).getValue());
-        alarms.onSensorData(chipId, chipId, 1200);
+        alarms.onSensorData(chipId, chipId, 1200, null);
         assertNull(open(chipId, AlarmService.LEVEL));
+    }
+
+    @Test
+    @DisplayName("Battery opens at the threshold, closes above +0.2 V or at 3.0 V")
+    void battery() {
+        Sensor sensor = sensor(chipId, Instant.now(), 600);
+
+        alarms.onSensorData(chipId, chipId, null, 2.50f);
+        Alarm alarm = open(chipId, AlarmService.BATTERY);
+        assertNotNull(alarm);
+        assertEquals(2.50, alarm.getValue(), 0.001);
+
+        alarms.onSensorData(chipId, chipId, null, 2.70f);
+        assertNotNull(open(chipId, AlarmService.BATTERY), "exactly +0.2 V keeps the alarm open");
+
+        alarms.onSensorData(chipId, chipId, null, 2.49f);
+        assertEquals(2.49, open(chipId, AlarmService.BATTERY).getValue(), 0.001);
+
+        alarms.onSensorData(chipId, chipId, null, 2.71f);
+        assertNull(open(chipId, AlarmService.BATTERY));
+
+        sensor.setBatteryType(BatteryType.LI_ION);
+        sensor.setWarningVoltage(BatteryType.LI_ION.getWarningVoltageMv());
+        sensorRepository.update(sensor);
+
+        alarms.onSensorData(chipId, chipId, null, 2.90f);
+        assertNotNull(open(chipId, AlarmService.BATTERY));
+        alarms.onSensorData(chipId, chipId, null, 3.00f);
+        assertNull(open(chipId, AlarmService.BATTERY), "3.0 V closes even above the 0.2 V rise");
+    }
+
+    @Test
+    @DisplayName("Sensor settings save the battery type and its derived threshold")
+    void batterySettings() {
+        Sensor sensor = sensor(chipId, Instant.now(), 600);
+        when(mqttClientService.isConnected()).thenReturn(true);
+        when(mqttClientService.publishRetained(anyString(), anyString())).thenReturn(true);
+
+        Map result = post("/api/sensors/" + sensor.getId() + "/params",
+                Map.of("sleep", 600, "send", 3600, "batteryType", "NI_CD"), ownerToken);
+        assertEquals(true, result.get("sent"));
+
+        Sensor updated = sensorRepository.findById(sensor.getId()).orElseThrow();
+        assertEquals(BatteryType.NI_CD, updated.getBatteryType());
+        assertEquals(2200, updated.getWarningVoltage().intValue());
+        assertNull(updated.getMinVoltage(), "standalone sensors without min voltage still save battery settings");
     }
 
     @Test

@@ -1,5 +1,6 @@
 package ru.sensoterra.server.controller;
 
+import ru.sensoterra.server.entity.BatteryType;
 import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.entity.Sensor;
 import ru.sensoterra.server.entity.SensorRegistration;
@@ -121,6 +122,8 @@ public class SensorCatalogController {
                     sensor != null ? sensor.getPercentS() : null,
                     sensor != null ? sensor.getMinVoltage() : null,
                     sensor != null ? sensor.getSensorType() : null,
+                    sensor != null ? sensor.getBatteryType() : null,
+                    sensor != null ? sensor.getWarningVoltage() : null,
                     serverNow));
         }
         return result;
@@ -220,7 +223,9 @@ public class SensorCatalogController {
                                      Integer send, Long lastTs,
                                      List<BlockRole> blockRoles, Boolean conflict,
                                      Integer sleep, Short percentN, Short percentS,
-                                     Integer minVoltage, Short sensorType, Long serverNow) {
+                                     Integer minVoltage, Short sensorType,
+                                     BatteryType batteryType, Integer warningVoltage,
+                                     Long serverNow) {
     }
 
     @Serdeable

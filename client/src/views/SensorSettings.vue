@@ -94,10 +94,18 @@
             <span class="field-hint">от 5 до 20 %</span>
           </div>
 
+          <div class="field" :class="{ disabled: !settable }">
+            <span class="field-label">Тип батарейки</span>
+            <select v-model="form.batteryType" :disabled="!settable" @change="onBatteryTypeChange">
+              <option v-for="type in BATTERY_TYPES" :key="type.value" :value="type.value">{{ type.label }}</option>
+            </select>
+            <span class="field-hint">Порог предупреждения: {{ batteryWarningV(form.batteryType) }} В (автоматически)</span>
+          </div>
+
           <div v-if="!oldStandalone" class="field" :class="{ disabled: !settable }">
-            <span class="field-label">Минимальное напряжение (2,0–2,9 В)</span>
+            <span class="field-label">Минимальное напряжение (1,8–2,9 В)</span>
             <span class="field-row">
-              <input class="half" type="number" min="2.0" max="2.9" step="0.1" v-model.number="form.minVoltageV" :disabled="!settable" />
+              <input class="half" type="number" min="1.8" max="2.9" step="0.1" v-model.number="form.minVoltageV" :disabled="!settable" />
               <span class="field-unit">В</span>
             </span>
           </div>
@@ -122,6 +130,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getDevice, getDeviceSensors, getDeviceStatuses, sendSensorParams, clearRetainedSettings } from '../api/auth'
 import { getIndividualName } from '../store/settings'
+import { BATTERY_TYPES, batteryLabel, batteryMinVoltageV, batteryWarningV } from '../utils/battery'
 import { fmtEventTimeWithZone } from '../utils/datetime'
 import { pushNotification } from '../store/notifications'
 import { canControlDevice, isAdmin, rememberDeviceOwner } from '../store/auth'
@@ -146,6 +155,7 @@ const form = reactive({
   percentN: 10,
   percentS: 15,
   minVoltageV: 2.5,
+  batteryType: 'ALKALINE',
 })
 
 // Правки пользователя не должны затираться фоновым обновлением с сервера.
@@ -166,9 +176,16 @@ function applyFromSensor(s) {
   form.sendMinutes = Math.round((sendS % 3600) / 60)
   form.percentN = s?.percentN ?? 10
   form.percentS = s?.percentS ?? 15
+  form.batteryType = s?.batteryType || 'ALKALINE'
   form.minVoltageV = s?.minVoltage != null ? Math.round(s.minVoltage) / 1000 : 2.5
   applying = false
   dirty.value = false
+}
+
+function onBatteryTypeChange() {
+  if (!oldStandalone.value) {
+    form.minVoltageV = batteryMinVoltageV(form.batteryType)
+  }
 }
 
 function roundHalf(v) {
@@ -237,10 +254,11 @@ const minSendText = computed(() => {
 const formValid = computed(() => {
   if (!sleepValid.value) return false
   if (!sendValid.value) return false
+  if (!BATTERY_TYPES.some(t => t.value === form.batteryType)) return false
   if (oldStandalone.value) return true
   if (!(form.percentN >= 5 && form.percentN <= 20)) return false
   if (!(form.percentS >= 5 && form.percentS <= 20)) return false
-  if (!(form.minVoltageV >= 2.0 && form.minVoltageV <= 2.9)) return false
+  if (!(form.minVoltageV >= 1.8 && form.minVoltageV <= 2.9)) return false
   return true
 })
 
@@ -252,6 +270,8 @@ const summary = computed(() => {
     { l: 'Название', v: s.name || '—' },
     { l: 'Интервал сна', v: sleepS != null ? `${sleepS} с (${roundHalf(sleepS / 60)} мин)` : '—' },
     { l: 'Интервал отправки', v: sendS != null ? fmtSend(sendS) : '—' },
+    { l: 'Тип батарейки', v: batteryLabel(s.batteryType) },
+    { l: 'Порог предупреждения', v: `${s.warningVoltage != null ? Math.round(s.warningVoltage) / 1000 : batteryWarningV(s.batteryType)} В` },
   ]
   if (!oldStandalone.value) {
     rows.push({ l: 'Предел отличия от соседнего измерения', v: s.percentN != null ? `${s.percentN} %` : '—' })
@@ -271,6 +291,7 @@ function buildRequest() {
   const req = {
     sleep: sleepSeconds.value,
     send: sendSeconds.value,
+    batteryType: form.batteryType,
   }
   if (isBlock) req.name = form.name
   if (!oldStandalone.value) {

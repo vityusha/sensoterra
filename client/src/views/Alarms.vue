@@ -130,7 +130,7 @@ import { fmtEventTime } from '../utils/datetime'
 const TABS = [
   { type: 'GAP', label: 'Пропуски', tracked: true },
   { type: 'LEVEL', label: 'Уровень', tracked: true },
-  { type: 'BATTERY', label: 'Батарейка', tracked: false },
+  { type: 'BATTERY', label: 'Батарейка', tracked: true },
   { type: 'OFFLINE', label: 'Офлайн', tracked: true },
   { type: 'THRESHOLD_V0', label: 'Порог V0', tracked: false },
   { type: 'THRESHOLD_V1', label: 'Порог V1', tracked: false },

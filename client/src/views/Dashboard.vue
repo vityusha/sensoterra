@@ -307,6 +307,7 @@ import { usePager } from '../composables/usePager'
 import { getUser, getUserDevices, listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments, setAdminAccess } from '../api/auth'
 import { auth, logout, devicePayment, rememberPayment, rememberDeviceOwner, adminLockedDevice, adminTrustedDevice } from '../store/auth'
 import { paymentLabel } from '../utils/payment'
+import { batteryLabel, batteryWarningV } from '../utils/battery'
 import { getBlockName, setBlockName, getIndividualName, setIndividualName } from '../store/settings'
 import { connection, pushNotification, onWsMessage, connectWs } from '../store/notifications'
 
@@ -667,6 +668,10 @@ function sensorConfigText(s) {
   if (s.send != null) parts.push(`отпр. ${fmtSend(s.send)}`)
   if (s.percentN != null || s.percentS != null) parts.push(`пределы ${s.percentN ?? 0}/${s.percentS ?? 0} %`)
   if (s.minVoltage != null) parts.push(`мин. напр. ${Math.round(s.minVoltage) / 1000} В`)
+  if (s.batteryType != null || s.warningVoltage != null) {
+    parts.push(`батарейка ${batteryLabel(s.batteryType)}`)
+    parts.push(`порог ${s.warningVoltage != null ? Math.round(s.warningVoltage) / 1000 : batteryWarningV(s.batteryType)} В`)
+  }
   return parts.join(' · ')
 }
 

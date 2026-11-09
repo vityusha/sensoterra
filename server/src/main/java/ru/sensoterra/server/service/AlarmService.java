@@ -5,6 +5,7 @@ import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.sensoterra.server.entity.Alarm;
+import ru.sensoterra.server.entity.BatteryType;
 import ru.sensoterra.server.entity.Device;
 import ru.sensoterra.server.entity.Sensor;
 import ru.sensoterra.server.entity.SensorCalibration;
@@ -33,7 +34,9 @@ import java.util.Set;
  *   <li>LEVEL — moisture ADC above the middle between air and dry soil (the sensor is not in the
  *       soil); value is the ADC reading; checked on every message of the sensor.</li>
  *   <li>OFFLINE — a block went offline; ends when it is online again.</li>
- *   <li>BATTERY, THRESHOLD_V0..V3 — reserved, not raised yet.</li>
+ *   <li>BATTERY — sensor battery at or below its warning threshold (derived from the battery
+ *       type); ends after recovering by more than 0.2 V or at 3.0 V.</li>
+ *   <li>THRESHOLD_V0..V3 — reserved, not raised yet.</li>
  * </ul>
  *
  * Every opened or closed episode is pushed over the WebSocket as {@code type: "alarm"}.
@@ -145,22 +148,42 @@ public class AlarmService {
 
     /**
      * Live (non-retained) data of a sensor: it transmits again, so a gap ends; the moisture
-     * reading decides the LEVEL alarm. deviceId is the device the data came through.
+     * reading decides the LEVEL alarm and the battery voltage the BATTERY alarm. deviceId is
+     * the device the data came through.
      */
-    public void onSensorData(Long deviceId, Long chipId, Integer moistureAdc) {
+    public void onSensorData(Long deviceId, Long chipId, Integer moistureAdc, Float battery) {
         if (deviceId == null || chipId == null) {
             return;
         }
         Instant now = Instant.now();
         clear(chipId, GAP, now);
         Sensor sensor = sensorRepository.findByDeviceIdAndSensorChipId(deviceId, chipId).orElse(null);
-        if (sensor == null || moistureAdc == null) {
+        if (sensor == null) {
             return;
         }
-        if (notImmersed(sensor, moistureAdc)) {
-            raise(chipId, deviceId, LEVEL, now, moistureAdc.doubleValue());
-        } else {
-            clear(chipId, LEVEL, now);
+        if (battery != null) {
+            updateBattery(sensor, deviceId, chipId, battery, now);
+        }
+        if (moistureAdc != null) {
+            if (notImmersed(sensor, moistureAdc)) {
+                raise(chipId, deviceId, LEVEL, now, moistureAdc.doubleValue());
+            } else {
+                clear(chipId, LEVEL, now);
+            }
+        }
+    }
+
+    private void updateBattery(Sensor sensor, Long deviceId, Long chipId, float battery, Instant now) {
+        int thresholdMv = sensor.getWarningVoltage() != null
+                ? sensor.getWarningVoltage()
+                : sensor.getBatteryType() != null
+                        ? sensor.getBatteryType().getWarningVoltageMv()
+                        : BatteryType.ALKALINE.getWarningVoltageMv();
+        int batteryMv = Math.round(battery * 1000f);
+        if (batteryMv <= thresholdMv) {
+            raise(chipId, deviceId, BATTERY, now, (double) battery);
+        } else if (batteryMv > thresholdMv + 200 || batteryMv >= 3000) {
+            clear(chipId, BATTERY, now);
         }
     }
 
@@ -281,7 +304,7 @@ public class AlarmService {
 
         // A sensor that is no longer registered anywhere can neither transmit nor be lifted
         // out of the soil any more: close what it left open.
-        for (String type : List.of(GAP, LEVEL)) {
+        for (String type : List.of(GAP, LEVEL, BATTERY)) {
             for (Alarm open : repository.findByAlarmTypeAndEndedAtIsNull(type)) {
                 if (!accessDevices.containsKey(open.getChipId())) {
                     clear(open.getChipId(), type, now);

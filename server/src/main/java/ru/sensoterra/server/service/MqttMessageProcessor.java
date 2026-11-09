@@ -136,12 +136,13 @@ public class MqttMessageProcessor {
      * Alarms react to live data only: a retained message replayed on reconnect is old data and
      * must neither end a gap nor judge the sensor's immersion.
      */
-    private void updateSensorAlarms(Long deviceId, Long chipId, Integer moistureAdc, boolean retained) {
+    private void updateSensorAlarms(Long deviceId, Long chipId, Integer moistureAdc,
+                                    Float battery, boolean retained) {
         if (retained) {
             return;
         }
         try {
-            alarmService.onSensorData(deviceId, chipId, moistureAdc);
+            alarmService.onSensorData(deviceId, chipId, moistureAdc, battery);
         } catch (Exception e) {
             log.warn("Alarm update failed for sensor {}: {}", chipId, e.getMessage());
         }
@@ -286,7 +287,7 @@ public class MqttMessageProcessor {
         }
         telemetryService.upsertDevice(deviceId, "BLOCK");
         telemetryService.onSensorEvent(deviceId, chipId, data, time);
-        updateSensorAlarms(deviceId, chipId, data.moistureAdc, retained);
+        updateSensorAlarms(deviceId, chipId, data.moistureAdc, data.battery, retained);
         telemetryService.saveBlockTelemetry(
                 deviceId,
                 data.rssiBlock,
@@ -384,7 +385,7 @@ public class MqttMessageProcessor {
         }
         telemetryService.upsertDevice(deviceId, "INDIVIDUAL_SENSOR");
         telemetryService.onSensorEvent(deviceId, chipId, data, parseTime(node.get("Time"), retained, deviceZoneService.zoneFor(deviceId)));
-        updateSensorAlarms(deviceId, chipId, data.moistureAdc, retained);
+        updateSensorAlarms(deviceId, chipId, data.moistureAdc, data.battery, retained);
         confirmationService.confirmSensorParams(deviceId,
                 data.sleep, data.send, data.percentN != null ? data.percentN.intValue() : null,
                 data.percentS != null ? data.percentS.intValue() : null, data.minVoltage);
