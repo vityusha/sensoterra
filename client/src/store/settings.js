@@ -46,7 +46,6 @@ function readThemeVars(root, theme) {
 
 function saveLocal(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    alertsEnabled: state.alertsEnabled,
     chartTooltips: state.chartTooltips,
     theme: state.theme,
     bgColors: state.bgColors,
@@ -57,7 +56,6 @@ const persisted = load()
 
 export const settings = reactive({
   // локальная часть
-  alertsEnabled: persisted.alertsEnabled !== false,
   chartTooltips: ['auto', 'always', 'off'].includes(persisted.chartTooltips) ? persisted.chartTooltips : 'auto',
   theme: (persisted.theme === 'light' || persisted.theme === 'dark') ? persisted.theme : 'dark',
   bgColors: {
@@ -74,7 +72,7 @@ export const settings = reactive({
   loaded: false,
 })
 
-watch(() => [settings.alertsEnabled, settings.chartTooltips, settings.theme, settings.bgColors, settings.moistureScales], () => saveLocal(settings), { deep: true })
+watch(() => [settings.chartTooltips, settings.theme, settings.bgColors, settings.moistureScales], () => saveLocal(settings), { deep: true })
 
 const fieldKeys = ['v0', 'v1', 'v2', 'v3']
 
@@ -363,14 +361,6 @@ export function toggleField(sensorChipId, field) {
     if (at >= 0) pref.hiddenFields.splice(at, 1)
     else pref.hiddenFields.push(field)
   })
-}
-
-export function areAlertsEnabled() {
-  return settings.alertsEnabled !== false
-}
-
-export function setAlertsEnabled(v) {
-  settings.alertsEnabled = !!v
 }
 
 // 'auto' — подсказки только при наведении мышью: на телефоне касание открывало

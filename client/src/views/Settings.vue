@@ -30,19 +30,6 @@
     </section>
 
     <section class="section">
-      <h3>Уведомления</h3>
-      <label class="field-check">
-        <input type="checkbox" :checked="alertsEnabled" @change="onAlertsChange($event.target.checked)" />
-        Показывать уведомления о событиях
-      </label>
-      <p class="hint">
-        Отключает всплывающие серверные предупреждения. Пропуски данных датчиков,
-        погружение и связь с блоками — на странице уведомлений (колокольчик в шапке).
-        Подтверждения действий и ошибки показываются всегда.
-      </p>
-    </section>
-
-    <section class="section">
       <h3>Графики</h3>
       <select class="field-input" :value="tooltipMode" @change="onTooltipMode($event.target.value)">
         <option value="auto">Только при наведении мышью</option>
@@ -168,7 +155,7 @@
 import AlarmBell from '../components/AlarmBell.vue'
 import { reactive, ref, onMounted } from 'vue'
 import { settings, getChartTooltipMode, setChartTooltipMode, getTheme, setTheme, getBgColor, setBgColor, isVaccHidden, setVaccVisible, isFieldHidden, toggleField, getBlockName, getIndividualName, fieldKeys, fieldLabel, fieldUnit, defaultLabel, defaultUnit, setFields, saveDefaults, applyDefaults } from '../store/settings'
-import { clearEventNotifications, pushNotification } from '../store/notifications'
+import { pushNotification } from '../store/notifications'
 import { isAdmin, auth, deviceAccess, rememberDeviceAccess } from '../store/auth'
 import { getSensorTypes, listDevices, getSensorCatalog, getCalibrationDefaults, saveCalibrationDefaults, listDeviceAccess } from '../api/auth'
 import { getFieldName, getFieldUnit } from '../store/settings'
@@ -178,7 +165,6 @@ const labels = reactive({})
 const units = reactive({})
 const blocks = ref([])
 const sensors = ref([])
-const alertsEnabled = ref(true)
 const tooltipMode = ref('auto')
 const isLight = ref(false)
 const bgColor = ref('#1a1a2e')
@@ -234,7 +220,6 @@ async function loadSensorAccess() {
 }
 
 onMounted(async () => {
-  alertsEnabled.value = settings.alertsEnabled !== false
   tooltipMode.value = getChartTooltipMode()
   isLight.value = getTheme() === 'light'
   syncBgColor()
@@ -400,12 +385,6 @@ function saveUnits(type) {
     entries[key] = { unit: units[String(type)][key] || '' }
   }
   setFields(type, entries)
-}
-
-function onAlertsChange(v) {
-  alertsEnabled.value = v
-  settings.alertsEnabled = v
-  if (!v) clearEventNotifications()
 }
 
 function defaultBgColor() {

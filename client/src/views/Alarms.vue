@@ -46,10 +46,21 @@
         @click="selectTab(t.type)"
       >
         {{ t.label }}
-        <span v-if="alarmState.open[t.type]" class="tab-count">{{ alarmState.open[t.type] }}</span>
+        <span v-if="openCounts[t.type]" class="tab-count">{{ openCounts[t.type] }}</span>
       </button>
     </div>
 
+    <p v-if="activeDescription" class="tab-desc">{{ activeDescription }}</p>
+
+    <p v-if="isAdmin()" class="hint scope-hint">
+      <template v-if="scopeUserId">
+        Уведомления пользователя <b>{{ scopeUserName || `#${scopeUserId}` }}</b> — все его устройства.
+      </template>
+      <template v-else>
+        Уведомления устройств без владельца. Уведомления устройств пользователя открываются
+        на странице «Пользователи».
+      </template>
+    </p>
     <p class="hint">Жирным — активные и непросмотренные завершённые. Нажмите на завершённое, чтобы отметить его прочитанным.</p>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -109,22 +120,30 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { listAlarms, markAlarmsSeen, markAlarmRead, markAllAlarmsRead, deleteAlarm, deleteReadAlarms } from '../api/auth'
+import { listAlarms, getAlarmSummary, getUser, markAlarmsSeen, markAlarmRead, markAllAlarmsRead, deleteAlarm, deleteReadAlarms } from '../api/auth'
 import { alarmState, clearUnseen, refreshAlarmSummary } from '../store/alarms'
 import { connectWs, pushNotification } from '../store/notifications'
+import { isAdmin } from '../store/auth'
 import { getIndividualName } from '../store/settings'
 import { fmtEventTime } from '../utils/datetime'
 
 const TABS = [
   { type: 'GAP', label: 'Пропуски', tracked: true },
   { type: 'LEVEL', label: 'Уровень', tracked: true },
-  { type: 'BATTERY', label: 'Батарейка', tracked: false },
+  { type: 'BATTERY', label: 'Батарейка', tracked: true },
   { type: 'OFFLINE', label: 'Офлайн', tracked: true },
   { type: 'THRESHOLD_V0', label: 'Порог V0', tracked: false },
   { type: 'THRESHOLD_V1', label: 'Порог V1', tracked: false },
   { type: 'THRESHOLD_V2', label: 'Порог V2', tracked: false },
   { type: 'THRESHOLD_V3', label: 'Порог V3', tracked: false },
 ]
+
+const TAB_DESCRIPTIONS = {
+  GAP: 'Датчики не передают данные',
+  LEVEL: 'Большая вероятность того, что датчик не погружен в воду',
+  BATTERY: 'Низкое напряжение батарейки датчика',
+  OFFLINE: 'Потеря связи с блоком',
+}
 
 const EVENT_TEXT = {
   GAP: 'не передает данные',
@@ -142,9 +161,22 @@ const error = ref('')
 const now = ref(Date.now())
 let tickTimer = null
 
+const scopeUserId = computed(() => {
+  const id = Number(route.query.user)
+  return Number.isInteger(id) && id > 0 ? id : null
+})
+const scopeUserName = ref('')
+const scopedOpen = ref({})
+const openCounts = computed(() => scopeUserId.value ? scopedOpen.value : alarmState.open)
+
 const activeType = computed(() =>
   TABS.some(t => t.type === route.query.tab) ? route.query.tab : TABS[0].type)
 const activeTab = computed(() => TABS.find(t => t.type === activeType.value))
+const activeDescription = computed(() => {
+  if (TAB_DESCRIPTIONS[activeType.value]) return TAB_DESCRIPTIONS[activeType.value]
+  const m = /^THRESHOLD_(V\d)$/.exec(activeType.value)
+  return m ? `Значение ${m[1]} датчика вышло за контролируемые пределы` : ''
+})
 const hasDeletableRead = computed(() => rows.value.some(a => a.endedAt && a.read && a.canDelete))
 const hasUnreadFinished = computed(() => rows.value.some(a => a.endedAt && !a.read))
 
@@ -233,12 +265,26 @@ function errorText(err) {
   return err?.response?.data?.message || 'Не удалось загрузить уведомления'
 }
 
+async function loadScopedSummary() {
+  if (!isAdmin() || !scopeUserId.value) {
+    scopeUserName.value = ''
+    scopedOpen.value = {}
+    return
+  }
+  const [summary, user] = await Promise.all([
+    getAlarmSummary(scopeUserId.value).catch(() => null),
+    getUser(scopeUserId.value).catch(() => null),
+  ])
+  scopedOpen.value = summary?.open || {}
+  scopeUserName.value = user?.username || ''
+}
+
 async function load() {
   const type = activeType.value
   loading.value = true
   error.value = ''
   try {
-    const data = await listAlarms(type)
+    const data = await listAlarms(type, 200, scopeUserId.value)
     // The user switched tabs while this was loading: keep the newer tab's list.
     if (type === activeType.value) rows.value = data
   } catch (err) {
@@ -254,6 +300,11 @@ async function markSeen() {
   try {
     await markAlarmsSeen()
   } catch { /* the dot comes back on the next summary; nothing else breaks */ }
+}
+
+// A one-user view doesn't mean the admin has seen the ownerless-device alarms.
+function markCurrentScopeSeen() {
+  if (!scopeUserId.value) markSeen()
 }
 
 async function onRowClick(a) {
@@ -283,7 +334,7 @@ async function readAll() {
   menuOpen.value = false
   busy.value = true
   try {
-    await markAllAlarmsRead(activeType.value)
+    await markAllAlarmsRead(activeType.value, scopeUserId.value)
     for (const a of rows.value) {
       if (a.endedAt) a.read = true
     }
@@ -299,7 +350,7 @@ async function removeRead() {
   if (!confirm(`Удалить все прочитанные уведомления на вкладке «${activeTab.value.label}»?`)) return
   busy.value = true
   try {
-    const { deleted } = await deleteReadAlarms(activeType.value)
+    const { deleted } = await deleteReadAlarms(activeType.value, scopeUserId.value)
     pushNotification(`Удалено уведомлений: ${deleted}`)
     await load()
   } catch {
@@ -315,16 +366,24 @@ watch(activeType, () => {
   load()
 })
 
+watch(scopeUserId, () => {
+  rows.value = []
+  loadScopedSummary()
+  load()
+})
+
 // A new or finished alarm while the page is open: show it right away; it is seen as well.
 watch(() => alarmState.version, () => {
   load()
-  markSeen()
+  markCurrentScopeSeen()
+  loadScopedSummary()
 })
 
 onMounted(() => {
   connectWs()
   load()
-  markSeen()
+  loadScopedSummary()
+  markCurrentScopeSeen()
   refreshAlarmSummary()
   tickTimer = setInterval(() => { now.value = Date.now() }, 30000)
   document.addEventListener('click', closeMenuOnOutsideClick)
@@ -354,7 +413,9 @@ onBeforeUnmount(() => {
 .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tab-count { min-width: 1.2rem; padding: 0 0.3rem; border-radius: 0.6rem; background: var(--danger); color: #fff; font-size: 0.7rem; line-height: 1.2rem; text-align: center; }
 
+.tab-desc { color: var(--text-strong); font-size: 0.86rem; font-weight: 700; line-height: 1.4; margin-bottom: 0.65rem; }
 .hint { color: var(--text-dim); font-size: 0.72rem; line-height: 1.4; margin-bottom: 0.75rem; }
+.scope-hint { color: var(--text-muted); }
 
 .menu-wrap { position: relative; flex: none; }
 .menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }

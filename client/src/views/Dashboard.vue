@@ -307,6 +307,7 @@ import { usePager } from '../composables/usePager'
 import { getUser, getUserDevices, listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments, setAdminAccess } from '../api/auth'
 import { auth, logout, devicePayment, rememberPayment, rememberDeviceOwner, adminLockedDevice, adminTrustedDevice } from '../store/auth'
 import { paymentLabel } from '../utils/payment'
+import { batteryLabel, batteryWarningV } from '../utils/battery'
 import { getBlockName, setBlockName, getIndividualName, setIndividualName } from '../store/settings'
 import { connection, pushNotification, onWsMessage, connectWs } from '../store/notifications'
 
@@ -667,6 +668,10 @@ function sensorConfigText(s) {
   if (s.send != null) parts.push(`отпр. ${fmtSend(s.send)}`)
   if (s.percentN != null || s.percentS != null) parts.push(`пределы ${s.percentN ?? 0}/${s.percentS ?? 0} %`)
   if (s.minVoltage != null) parts.push(`мин. напр. ${Math.round(s.minVoltage) / 1000} В`)
+  if (s.batteryType != null || s.warningVoltage != null) {
+    parts.push(`батарейка ${batteryLabel(s.batteryType)}`)
+    parts.push(`порог ${s.warningVoltage != null ? Math.round(s.warningVoltage) / 1000 : batteryWarningV(s.batteryType)} В`)
+  }
   return parts.join(' · ')
 }
 
@@ -833,7 +838,7 @@ h2 { color: var(--text-strong); margin: 0; }
 .trust-badge { font-size: 0.72rem; margin-top: 2px; }
 .trust-badge.trusted { color: var(--warn); font-weight: 600; }
 .trust-badge.view { color: var(--text-faint); }
-.admin-access-banner { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 12px; padding: 0.7rem 1rem; margin-bottom: 1rem; background: var(--bg-card); font-size: 0.85rem; line-height: 1.45; }
+.admin-access-banner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.75rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 12px; padding: 0.7rem 1rem; margin-bottom: 1rem; background: var(--bg-card); font-size: 0.85rem; line-height: 1.45; }
 .admin-access-text b { color: var(--warn); }
 .menu-dropdown .menu-warn { color: var(--warn); }
 .device-card.locked .device-name { color: var(--warn); }

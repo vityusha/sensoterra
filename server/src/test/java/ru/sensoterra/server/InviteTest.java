@@ -445,6 +445,10 @@ class InviteTest {
         assertTrue(left.contains(liveToken), "живая ссылка должна остаться");
         assertFalse(left.contains(revokedToken), "отозванная ссылка должна исчезнуть");
         assertTrue(left.contains(acceptedToken), "принятая ссылка объясняет, кому выдали доступ, и остаётся");
+        assertEquals("inv-cleaner-guest", listInvites().stream()
+                        .filter(i -> acceptedToken.equals(i.get("token")))
+                        .findFirst().orElseThrow().get("acceptedBy"),
+                "в списке видно, кто принял приглашение");
     }
 
     @Test

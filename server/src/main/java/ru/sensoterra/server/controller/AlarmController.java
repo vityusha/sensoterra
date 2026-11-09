@@ -36,7 +36,8 @@ import java.util.Set;
 /**
  * Alarm list of the caller's devices (alarms page). Everyone who sees a device sees its alarms;
  * "read" (normal font) and "seen" (bell dot) are per account; deleting a finished alarm removes it
- * for everyone and needs control of the device.
+ * for everyone and needs control of the device. An admin's default scope is devices without an
+ * owner; the users page opens one account's devices with {@code userId}.
  */
 @Controller("/api/alarms")
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -62,31 +63,29 @@ public class AlarmController {
     @Transactional
     public List<AlarmView> list(@QueryValue String type,
                                 @QueryValue(defaultValue = "200") int limit,
-                                @QueryValue(defaultValue = "0") int offset) {
+                                @QueryValue(defaultValue = "0") int offset,
+                                @Nullable @QueryValue Long userId) {
         String alarmType = requireType(type);
-        Scope scope = scope();
-        if (scope.empty()) {
+        Set<Long> ids = scopeIds(userId);
+        if (ids.isEmpty()) {
             return List.of();
         }
-        var query = em.createQuery("SELECT a FROM Alarm a WHERE a.alarmType = :type"
-                        + (scope.admin ? "" : " AND a.deviceId IN :ids")
+        List<Alarm> alarms = em.createQuery("SELECT a FROM Alarm a WHERE a.alarmType = :type"
+                        + " AND a.deviceId IN :ids"
                         + " ORDER BY a.startedAt DESC, a.id DESC", Alarm.class)
-                .setParameter("type", alarmType);
-        if (!scope.admin) {
-            query.setParameter("ids", scope.ids);
-        }
-        List<Alarm> alarms = query
+                .setParameter("type", alarmType)
+                .setParameter("ids", ids)
                 .setFirstResult(Math.max(offset, 0))
                 .setMaxResults(Math.max(1, Math.min(limit, MAX_LIMIT)))
                 .getResultList();
         if (alarms.isEmpty()) {
             return List.of();
         }
-        Long userId = access.currentUser().getId();
+        Long accountId = access.currentUser().getId();
         Set<Long> read = new HashSet<>(em.createQuery(
                         "SELECT r.id.alarmId FROM AlarmRead r WHERE r.id.userId = :uid AND r.id.alarmId IN :ids",
                         Long.class)
-                .setParameter("uid", userId)
+                .setParameter("uid", accountId)
                 .setParameter("ids", alarms.stream().map(Alarm::getId).toList())
                 .getResultList());
         Map<Long, Boolean> control = new HashMap<>();
@@ -112,24 +111,22 @@ public class AlarmController {
      */
     @Get("/summary")
     @Transactional
-    public Summary summary() {
-        Scope scope = scope();
-        if (scope.empty()) {
+    public Summary summary(@Nullable @QueryValue Long userId) {
+        Set<Long> ids = scopeIds(userId);
+        if (ids.isEmpty()) {
             return new Summary(0, Map.of());
         }
         AlarmSeen seen = em.find(AlarmSeen.class, access.currentUser().getId());
         Instant since = seen != null ? seen.getSeenAt() : Instant.EPOCH;
         var unseen = em.createQuery("SELECT count(a) FROM Alarm a"
                         + " WHERE (a.startedAt > :since OR a.endedAt > :since)"
-                        + (scope.admin ? "" : " AND a.deviceId IN :ids"), Long.class)
-                .setParameter("since", since);
+                        + " AND a.deviceId IN :ids", Long.class)
+                .setParameter("since", since)
+                .setParameter("ids", ids);
         var open = em.createQuery("SELECT a.alarmType, count(a) FROM Alarm a WHERE a.endedAt IS NULL"
-                        + (scope.admin ? "" : " AND a.deviceId IN :ids")
-                        + " GROUP BY a.alarmType", Object[].class);
-        if (!scope.admin) {
-            unseen.setParameter("ids", scope.ids);
-            open.setParameter("ids", scope.ids);
-        }
+                        + " AND a.deviceId IN :ids"
+                        + " GROUP BY a.alarmType", Object[].class)
+                .setParameter("ids", ids);
         Map<String, Long> openByType = new LinkedHashMap<>();
         for (Object[] row : open.getResultList()) {
             openByType.put((String) row[0], ((Number) row[1]).longValue());
@@ -172,24 +169,22 @@ public class AlarmController {
     /** Marks every finished alarm of one type as read by the caller; active ones stay bold. */
     @Post("/read")
     @Transactional
-    public ReadResult markAllRead(@QueryValue String type) {
+    public ReadResult markAllRead(@QueryValue String type, @Nullable @QueryValue Long userId) {
         String alarmType = requireType(type);
-        Scope scope = scope();
-        if (scope.empty()) {
+        Set<Long> deviceIds = scopeIds(userId);
+        if (deviceIds.isEmpty()) {
             return new ReadResult(0);
         }
-        Long userId = access.currentUser().getId();
-        var query = em.createQuery("SELECT a.id FROM Alarm a WHERE a.endedAt IS NOT NULL AND a.alarmType = :type"
+        Long accountId = access.currentUser().getId();
+        List<Long> ids = em.createQuery("SELECT a.id FROM Alarm a WHERE a.endedAt IS NOT NULL AND a.alarmType = :type"
                         + " AND a.id NOT IN (SELECT r.id.alarmId FROM AlarmRead r WHERE r.id.userId = :uid)"
-                        + (scope.admin ? "" : " AND a.deviceId IN :ids"), Long.class)
+                        + " AND a.deviceId IN :ids", Long.class)
                 .setParameter("type", alarmType)
-                .setParameter("uid", userId);
-        if (!scope.admin) {
-            query.setParameter("ids", scope.ids);
-        }
-        List<Long> ids = query.getResultList();
+                .setParameter("uid", accountId)
+                .setParameter("ids", deviceIds)
+                .getResultList();
         for (Long id : ids) {
-            em.persist(new AlarmRead(new AlarmRead.Key(id, userId)));
+            em.persist(new AlarmRead(new AlarmRead.Key(id, accountId)));
         }
         return new ReadResult(ids.size());
     }
@@ -215,22 +210,20 @@ public class AlarmController {
      */
     @Delete
     @Transactional
-    public DeleteResult deleteRead(@Nullable @QueryValue String type) {
+    public DeleteResult deleteRead(@Nullable @QueryValue String type, @Nullable @QueryValue Long userId) {
         String alarmType = type == null || type.isBlank() ? null : requireType(type);
-        Scope scope = scope();
-        if (scope.empty()) {
+        Set<Long> deviceIds = scopeIds(userId);
+        if (deviceIds.isEmpty()) {
             return new DeleteResult(0);
         }
         var query = em.createQuery("SELECT a FROM Alarm a WHERE a.endedAt IS NOT NULL"
                         + " AND a.id IN (SELECT r.id.alarmId FROM AlarmRead r WHERE r.id.userId = :uid)"
                         + (alarmType == null ? "" : " AND a.alarmType = :type")
-                        + (scope.admin ? "" : " AND a.deviceId IN :ids"), Alarm.class)
-                .setParameter("uid", access.currentUser().getId());
+                        + " AND a.deviceId IN :ids", Alarm.class)
+                .setParameter("uid", access.currentUser().getId())
+                .setParameter("ids", deviceIds);
         if (alarmType != null) {
             query.setParameter("type", alarmType);
-        }
-        if (!scope.admin) {
-            query.setParameter("ids", scope.ids);
         }
         Map<Long, Boolean> control = new HashMap<>();
         List<Long> ids = query.getResultList().stream()
@@ -277,15 +270,19 @@ public class AlarmController {
                 .orElseGet(() -> deviceRepository.findById(chipId).map(Device::getName).orElse(null));
     }
 
-    private Scope scope() {
-        boolean admin = access.isAdmin();
-        return new Scope(admin, admin ? Set.of() : access.visibleChipIds());
-    }
-
-    private record Scope(boolean admin, Set<Long> ids) {
-        boolean empty() {
-            return !admin && ids.isEmpty();
+    /**
+     * Admin default: devices without an owner. The users page passes userId to see all devices
+     * of one account. Everyone else only sees the devices they have access to.
+     */
+    private Set<Long> scopeIds(@Nullable Long userId) {
+        if (!access.isAdmin()) {
+            return access.visibleChipIds();
         }
+        if (userId != null) {
+            access.byId(userId);
+            return access.chipsOfUser(userId);
+        }
+        return access.ownerlessChipIds();
     }
 
     @Serdeable

@@ -42,6 +42,13 @@ public class Sensor {
     @Column(name = "min_voltage")
     private Integer minVoltage;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "battery_type", nullable = false, length = 16)
+    private BatteryType batteryType = BatteryType.ALKALINE;
+
+    @Column(name = "warning_voltage", nullable = false)
+    private Integer warningVoltage = BatteryType.ALKALINE.getWarningVoltageMv();
+
     @Column(name = "fields_json")
     private String fieldsJson;
 

@@ -32,7 +32,8 @@
             <template v-if="i.expiresAt">до {{ fmtDate(i.expiresAt) }}</template>
             <template v-else>бессрочно</template>
           </template>
-          <template v-else>{{ i.acceptedAt ? 'принято' : 'отозвано' }}</template>
+          <template v-else-if="i.acceptedAt">принято<span v-if="i.acceptedBy"> ({{ i.acceptedBy }})</span></template>
+          <template v-else>отозвано</template>
         </span>
         <span class="invite-role">{{ i.accessRole === 'VIEWER' ? 'чтение' : 'управление' }}</span>
         <button v-if="i.usable" class="btn small danger" @click="dropInvite(i)">Отозвать</button>

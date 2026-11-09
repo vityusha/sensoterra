@@ -550,13 +550,16 @@ export async function getServerUptimeHistory() {
 
 // --- Alarms (notifications page) ---
 
-export async function listAlarms(type, limit = 200) {
-  const { data } = await api.get('/alarms', { params: { type, limit } })
+export async function listAlarms(type, limit = 200, userId = null) {
+  const params = { type, limit }
+  if (userId != null) params.userId = userId
+  const { data } = await api.get('/alarms', { params })
   return data
 }
 
-export async function getAlarmSummary() {
-  const { data } = await api.get('/alarms/summary')
+export async function getAlarmSummary(userId = null) {
+  const params = userId != null ? { userId } : {}
+  const { data } = await api.get('/alarms/summary', { params })
   return data
 }
 
@@ -569,8 +572,10 @@ export async function markAlarmRead(id) {
 }
 
 /** Marks every finished alarm of the type as read; active ones stay unread. */
-export async function markAllAlarmsRead(type) {
-  const { data } = await api.post('/alarms/read', null, { params: { type } })
+export async function markAllAlarmsRead(type, userId = null) {
+  const params = { type }
+  if (userId != null) params.userId = userId
+  const { data } = await api.post('/alarms/read', null, { params })
   return data
 }
 
@@ -579,8 +584,11 @@ export async function deleteAlarm(id) {
 }
 
 /** Deletes the finished alarms the user has read (of one type, or all when type is null). */
-export async function deleteReadAlarms(type = null) {
-  const { data } = await api.delete('/alarms', { params: type ? { type } : {} })
+export async function deleteReadAlarms(type = null, userId = null) {
+  const params = {}
+  if (type) params.type = type
+  if (userId != null) params.userId = userId
+  const { data } = await api.delete('/alarms', { params })
   return data
 }
 

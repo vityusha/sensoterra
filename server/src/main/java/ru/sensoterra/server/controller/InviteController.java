@@ -157,13 +157,16 @@ public class InviteController {
     }
 
     private InviteView view(DeviceInvite i) {
+        String acceptedBy = i.getAcceptedBy() != null ? invites.usernameOf(i.getAcceptedBy()) : null;
         return new InviteView(i.getId(), i.getToken(), i.getChipId(), invites.usernameOf(i.getCreatedBy()),
-                i.getAccessRole(), i.getCreatedAt(), i.getExpiresAt(), i.getAcceptedAt(), i.isUsable());
+                i.getAccessRole(), i.getCreatedAt(), i.getExpiresAt(), i.getAcceptedAt(), acceptedBy,
+                i.isUsable());
     }
 
     @Serdeable
     public record InviteView(Long id, String token, Long chipId, String createdBy, String accessRole,
-                             Instant createdAt, Instant expiresAt, Instant acceptedAt, boolean usable) {
+                             Instant createdAt, Instant expiresAt, Instant acceptedAt, String acceptedBy,
+                             boolean usable) {
 
     }
 

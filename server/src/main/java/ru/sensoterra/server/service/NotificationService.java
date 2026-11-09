@@ -1,9 +1,7 @@
 package ru.sensoterra.server.service;
 
 import ru.sensoterra.server.entity.Device;
-import ru.sensoterra.server.entity.Sensor;
 import ru.sensoterra.server.repository.DeviceRepository;
-import ru.sensoterra.server.repository.SensorRepository;
 import ru.sensoterra.server.ws.DeviceStatusWebSocketBroadcaster;
 import io.micronaut.scheduling.annotation.Scheduled;
 import io.micronaut.transaction.annotation.Transactional;
@@ -12,9 +10,7 @@ import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,66 +22,18 @@ public class NotificationService {
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
     private static final long RE_NOTIFY_MINUTES = 15;
     private static final int MAX_REMEMBERED = 10_000;
-    private static final float FALLBACK_LOW_BATTERY = 1.9f;
 
-    private final SensorRepository sensorRepository;
     private final DeviceRepository deviceRepository;
-    private final DeviceStateStore stateStore;
     private final DeviceStatusWebSocketBroadcaster broadcaster;
     private final EntityManager entityManager;
     private final Map<String, Instant> lastNotified = new ConcurrentHashMap<>();
 
-    public NotificationService(SensorRepository sensorRepository,
-                               DeviceRepository deviceRepository,
-                               DeviceStateStore stateStore,
+    public NotificationService(DeviceRepository deviceRepository,
                                DeviceStatusWebSocketBroadcaster broadcaster,
                                EntityManager entityManager) {
-        this.sensorRepository = sensorRepository;
         this.deviceRepository = deviceRepository;
-        this.stateStore = stateStore;
         this.broadcaster = broadcaster;
         this.entityManager = entityManager;
-    }
-
-    @Scheduled(fixedDelay = "60s")
-    public void checkBattery() {
-        Map<Long, Sensor> primaryByChip = new LinkedHashMap<>();
-        for (Sensor sensor : sensorRepository.findAll()) {
-            Long chipId = sensor.getSensorChipId() != null
-                    ? sensor.getSensorChipId()
-                    : sensor.getDeviceId();
-            if (chipId == null || sensor.getBattery() == null) {
-                continue;
-            }
-            Sensor current = primaryByChip.get(chipId);
-            if (current == null || freshness(sensor).isAfter(freshness(current))) {
-                primaryByChip.put(chipId, sensor);
-            }
-        }
-        for (Map.Entry<Long, Sensor> entry : primaryByChip.entrySet()) {
-            Long chipId = entry.getKey();
-            Sensor sensor = entry.getValue();
-            Float battery = sensor.getBattery();
-            float threshold;
-            if (sensor.getMinVoltage() != null) {
-                threshold = sensor.getMinVoltage() / 1000f;
-            } else if (sensor.getBatMin() != null) {
-                threshold = sensor.getBatMin();
-            } else {
-                threshold = FALLBACK_LOW_BATTERY;
-            }
-            if (battery < threshold) {
-                String key = "battery:" + chipId;
-                if (canNotify(key)) {
-                    broadcast("lowBattery", sensor.getDeviceId(), chipId,
-                            "Низкая батарея датчика " + chipId + ": " + battery + " В");
-                }
-            }
-        }
-    }
-
-    private Instant freshness(Sensor sensor) {
-        return sensor.getLastTime() != null ? sensor.getLastTime() : sensor.getUpdatedAt();
     }
 
     /**
