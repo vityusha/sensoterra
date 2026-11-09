@@ -66,7 +66,9 @@
         <div class="invite-row" v-for="i in invites" :key="i.id">
           <code class="invite-token">{{ i.token.slice(0, 8) }}…</code>
           <span class="invite-state" :class="i.usable ? 'ok' : 'no'">
-            {{ i.usable ? `до ${fmtDate(i.expiresAt)}` : (i.acceptedAt ? 'принято' : 'отозвано') }}
+            <template v-if="i.usable">до {{ fmtDate(i.expiresAt) }}</template>
+            <template v-else-if="i.acceptedAt">принято<span v-if="i.acceptedBy"> ({{ i.acceptedBy }})</span></template>
+            <template v-else>отозвано</template>
           </span>
           <span class="invite-role">{{ i.accessRole === 'VIEWER' ? 'чтение' : 'управление' }}</span>
           <button v-if="i.usable" class="btn small danger" @click="dropInvite(i)">Отозвать</button>

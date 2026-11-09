@@ -267,7 +267,7 @@ const summary = computed(() => {
   const sleepS = s.sleep
   const sendS = s.send
   const rows = [
-    { l: 'Название', v: s.name || '—' },
+    ...(isBlock ? [{ l: 'Название', v: s.name || '—' }] : []),
     { l: 'Интервал сна', v: sleepS != null ? `${sleepS} с (${roundHalf(sleepS / 60)} мин)` : '—' },
     { l: 'Интервал отправки', v: sendS != null ? fmtSend(sendS) : '—' },
     { l: 'Тип батарейки', v: batteryLabel(s.batteryType) },

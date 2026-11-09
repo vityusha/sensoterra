@@ -30,13 +30,13 @@
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
               </svg>
-              Калибровка
+              Калибровка 0% влажности
             </button>
             <button v-if="calibSectionVisible" role="menuitem" @click="openCalibSettings">
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
               </svg>
-              Калибровка 0% влажности
+              Калибровка пределов
             </button>
             <button role="menuitem" @click="openDisplaySettings">
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -93,6 +93,31 @@
         </div>
       </div>
     </section>
+
+    <template v-if="isIndividual">
+      <InvitePanel :chip-id="chipId" eternal />
+      <!-- Кто ещё имеет доступ к датчику и на каких условиях. -->
+      <section v-if="accessList.length" class="section">
+        <div class="section-head"><h3>Доступ</h3></div>
+        <p v-if="adminLocked" class="muted admin-locked">
+          У датчика есть владелец ({{ deviceInfo.ownerUsername }}): управлять им и доступом может
+          только владелец. Админу остаются просмотр и сервисные операции.
+        </p>
+        <div class="relay-card access-card">
+          <div class="access-entry" v-for="a in accessList" :key="a.userId">
+            <span class="access-who">
+              {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
+            </span>
+            <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
+              <button class="btn small" @click="swapAccessRole(a)">
+                {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
+              </button>
+              <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </template>
 
     <section class="section">
       <h3>Статистика измерений</h3>
@@ -191,8 +216,8 @@
 import AlarmBell from '../components/AlarmBell.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getDeviceKey, regenerateDeviceKey } from '../api/auth'
-import { auth, deviceAccess, rememberDeviceAccess } from '../store/auth'
+import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getDeviceKey, regenerateDeviceKey } from '../api/auth'
+import { auth, deviceAccess, rememberDeviceAccess, rememberDeviceOwner, isOwnerRole } from '../store/auth'
 import { getIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
 import { pushNotification } from '../store/notifications'
 import { calibrationFor, loadCalibration, setCalibration } from '../store/calibration'
@@ -201,6 +226,7 @@ import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import LineChart from '../components/LineChart.vue'
 import RangeTimeline from '../components/RangeTimeline.vue'
+import InvitePanel from '../components/InvitePanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -279,6 +305,8 @@ const transmissionMarkers = computed(() => {
  * (сервер тоже отклоняет запись).
  */
 const accessRole = ref(null)
+const accessList = ref([])
+const deviceInfo = ref(null)
 const resolvedDeviceId = ref(null)
 
 const canEditPrefs = computed(() => {
@@ -289,6 +317,19 @@ const canEditPrefs = computed(() => {
 })
 
 async function loadAccess(deviceId) {
+  // Автономный датчик — сам себе устройство: его доступ ведётся здесь, а не на блоке.
+  if (isIndividual.value && deviceId === chipId) {
+    try {
+      accessList.value = await listDeviceAccess(deviceId)
+      const mine = accessList.value.find(a => a.userId === auth.user?.id)
+      accessRole.value = mine?.accessRole ?? null
+      if (mine?.accessRole) rememberDeviceAccess(deviceId, mine.accessRole)
+    } catch {
+      accessList.value = []
+      accessRole.value = auth.user?.role === 'ADMIN' ? null : accessRole.value
+    }
+    return
+  }
   if (auth.user?.role === 'ADMIN') {
     accessRole.value = null
     return
@@ -314,6 +355,38 @@ async function loadAccess(deviceId) {
 // --- Калибровка влажности этого датчика (только админ; PUT /api/sensors/{id}/calibration) ---
 
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
+
+const myAccessRole = computed(() => accessList.value.find(a => a.userId === auth.user?.id)?.accessRole)
+const othersDevice = computed(() => !!deviceInfo.value?.ownerUsername
+  && deviceInfo.value.ownerUsername !== auth.user?.username)
+const adminLocked = computed(() => isAdmin.value && othersDevice.value && !deviceInfo.value?.ownerAdminAccess)
+const canManageAccess = computed(() => (isAdmin.value && !adminLocked.value) || isOwnerRole(myAccessRole.value))
+
+function accessRoleLabel(role) {
+  if (role === 'OWNER') return 'владелец'
+  return role === 'VIEWER' ? 'только чтение' : 'управление'
+}
+
+async function swapAccessRole(a) {
+  const next = a.accessRole === 'VIEWER' ? 'USER' : 'VIEWER'
+  try {
+    await grantDeviceAccess(chipId, a.userId, next)
+    await loadAccess(chipId)
+  } catch (e) {
+    pushNotification(e?.response?.data?.message || 'Не удалось изменить доступ', 'error')
+  }
+}
+
+async function revokeAccess(a) {
+  if (!confirm(`Отозвать доступ у ${a.username}?`)) return
+  try {
+    await revokeDeviceAccess(chipId, a.userId)
+    await loadAccess(chipId)
+  } catch (e) {
+    pushNotification(e?.response?.data?.message || 'Не удалось отозвать доступ', 'error')
+  }
+}
+
 const menuOpen = ref(false)
 const menuRef = ref(null)
 const displaySettingsOpen = ref(false)
@@ -822,9 +895,16 @@ async function loadData(silent = false) {
     }
     resolvedDeviceId.value = deviceId
     await loadAccess(deviceId)
-    if (tzOffset.value == null) {
+    if (isIndividual.value && deviceId === chipId && !deviceInfo.value) {
       try {
         const device = await getDevice(deviceId)
+        deviceInfo.value = device
+        rememberDeviceOwner(device)
+      } catch { /* список доступа покажется без данных о владельце */ }
+    }
+    if (tzOffset.value == null) {
+      try {
+        const device = deviceInfo.value || await getDevice(deviceId)
         tzOffset.value = device?.tzOffsetMinutes ?? null
       } catch { /* зона остаётся по умолчанию */ }
     }
@@ -900,6 +980,14 @@ onUnmounted(() => {
 .invite-link { color: var(--accent); font-family: monospace; font-size: 0.75rem; word-break: break-all; margin-bottom: 0.4rem; }
 .invite-note { color: var(--text-dim); font-size: 0.75rem; line-height: 1.4; margin-bottom: 0.5rem; }
 .invite-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.2rem; }
+.relay-card { background: var(--bg-card); border-radius: 12px; padding: 0.9rem 1rem; box-shadow: var(--card-shadow); }
+.access-card { padding: 0.25rem 0.8rem; }
+.access-entry { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding: 0.45rem 0; }
+.access-entry + .access-entry { border-top: 1px solid var(--border-soft); }
+.access-who { flex: 1 1 auto; min-width: 0; color: var(--text); font-size: 0.85rem; overflow-wrap: anywhere; }
+.access-self { color: var(--text-faint); font-size: 0.75rem; }
+.access-actions { display: flex; flex: 1 0 100%; flex-wrap: wrap; gap: 0.4rem; }
+.admin-locked { font-size: 0.78rem; line-height: 1.45; color: var(--text-dim); margin: 0 0 0.6rem; }
 .btn.danger { background: var(--bg-accent); border-color: var(--bg-accent); color: var(--on-accent); }
 .btn.danger:hover:not(:disabled) { background: #7a2222; border-color: #7a2222; color: #fff; }
 .gradient-btn {
