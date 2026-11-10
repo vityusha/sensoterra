@@ -2,18 +2,18 @@
   <div class="device">
     <div class="header-row">
       <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-      <h2>
-        <template v-if="editingName && canControl">
-          <input class="name-input" v-model="editNameVal" @click.stop @keyup.enter="saveName" @blur="saveName" @keyup.esc="editingName=false" />
-        </template>
-        <template v-else>
-          <span :class="canControl ? 'editable' : ''" @click="canControl && startEditName()">{{ displayName }}</span>
-        </template>
-      </h2>
+      <h2>{{ displayName }}</h2>
       <span v-if="device?.deviceType === 'BLOCK'" class="status-tag" :class="isOnline ? 'online' : 'offline'">
         {{ isOnline ? 'online' : 'offline' }}
       </span>
       <AlarmBell />
+    </div>
+    <div class="device-id">ID: {{ chipId }}</div>
+
+    <div v-if="canControl" class="device-name-field">
+      <span class="field-label">Название</span>
+      <input type="text" v-model="editNameVal" maxlength="32" placeholder="Введите название" @focus="nameFocused = true" @blur="onNameBlur" @keyup.enter="saveName" @keyup.esc="editNameVal = editableName" />
+      <span class="field-hint">до 32 символов</span>
     </div>
 
     <!-- Оплата блока: срок один на всех, кто имеет доступ, и он общий, а не «мой». -->
@@ -223,13 +223,13 @@
             <button v-if="canControl && device?.deviceType === 'BLOCK' && s.sensorNumber" @click.stop="openSensorSettings(s)" class="btn small ghost" :disabled="!isOnline">Настройки</button>
             <button v-if="canControl && device?.deviceType === 'INDIVIDUAL_SENSOR'" @click.stop="openIndividualSensorSettings(s)" class="btn small ghost">Настройки</button>
           </div>
-          <div class="sensor-readings">
+          <div class="sensor-readings" :class="{ 'sensor-readings-lines': isBlock }">
             <span v-if="s.lastTime" class="reading muted">Получено: {{ fmtEventTimeWithZone(s.lastTime, device?.tzOffsetMinutes) }} <span v-if="s.numMessage != null" class="msg-num">[{{ s.numMessage }}]</span> <span class="ago">({{ fmtAgo(s.lastTime, nowTick) }})</span></span>
-            <span v-if="showField(s, 'v0')" class="reading">{{ getLabel(s, 'v0') }}: <template v-if="moisturePct(s) != null">{{ moisturePct(s) }}% ({{ s.moistureAdc }}<span v-if="getUnit(s, 'v0') && getUnit(s, 'v0') !== '%'"> {{ getUnit(s, 'v0') }}</span>)</template><template v-else>{{ s.moistureAdc }}<span v-if="getUnit(s, 'v0')"> {{ getUnit(s, 'v0') }}</span></template><span v-if="moistureColor(s)" class="pct-color" :style="{ background: moistureColor(s) }"></span></span>
+            <span v-if="showField(s, 'v0')" class="reading">{{ getLabel(s, 'v0') }}: <template v-if="moisturePct(s) != null">{{ moisturePct(s) }}% ({{ s.moistureAdc }}<span v-if="getUnit(s, 'v0') && getUnit(s, 'v0') !== '%'"> {{ getUnit(s, 'v0') }}</span>)</template><template v-else>{{ s.moistureAdc }}<span v-if="getUnit(s, 'v0')"> {{ getUnit(s, 'v0') }}</span></template><span class="pct-color" :style="moistureColor(s) ? { background: moistureColor(s) } : null"></span></span>
             <span v-if="moistureImmersion(s)" class="reading immersion-warning">Проверьте уровень погружения датчика в почву</span>
-            <span v-if="showField(s, 'v1')" class="reading">{{ getLabel(s, 'v1') }}: {{ s.temperature }}<span v-if="getUnit(s, 'v1')"> {{ getUnit(s, 'v1') }}</span><span v-if="fieldColor(s, 'v1', s.temperature)" class="pct-color" :style="{ background: fieldColor(s, 'v1', s.temperature) }"></span></span>
-            <span v-if="showField(s, 'v2')" class="reading">{{ getLabel(s, 'v2') }}: {{ s.humidity }}<span v-if="getUnit(s, 'v2')"> {{ getUnit(s, 'v2') }}</span><span v-if="fieldColor(s, 'v2', s.humidity)" class="pct-color" :style="{ background: fieldColor(s, 'v2', s.humidity) }"></span></span>
-            <span v-if="showField(s, 'v3')" class="reading">{{ getLabel(s, 'v3') }}: {{ s.light }}<span v-if="getUnit(s, 'v3')"> {{ getUnit(s, 'v3') }}</span><span v-if="fieldColor(s, 'v3', s.light)" class="pct-color" :style="{ background: fieldColor(s, 'v3', s.light) }"></span></span>
+            <span v-if="showField(s, 'v1')" class="reading">{{ getLabel(s, 'v1') }}: {{ s.temperature }}<span v-if="getUnit(s, 'v1')"> {{ getUnit(s, 'v1') }}</span><span class="pct-color" :style="fieldColor(s, 'v1', s.temperature) ? { background: fieldColor(s, 'v1', s.temperature) } : null"></span></span>
+            <span v-if="showField(s, 'v2')" class="reading">{{ getLabel(s, 'v2') }}: {{ s.humidity }}<span v-if="getUnit(s, 'v2')"> {{ getUnit(s, 'v2') }}</span><span class="pct-color" :style="fieldColor(s, 'v2', s.humidity) ? { background: fieldColor(s, 'v2', s.humidity) } : null"></span></span>
+            <span v-if="showField(s, 'v3')" class="reading">{{ getLabel(s, 'v3') }}: {{ s.light }}<span v-if="getUnit(s, 'v3')"> {{ getUnit(s, 'v3') }}</span><span class="pct-color" :style="fieldColor(s, 'v3', s.light) ? { background: fieldColor(s, 'v3', s.light) } : null"></span></span>
             <span v-if="s.battery != null" class="reading">Батарея: {{ s.battery }}</span>
             <span v-if="s.rssi != null" class="reading">RSSI: {{ s.rssi }}</span>
             <span v-if="s.power != null" class="reading">Power: {{ s.power }}</span>
@@ -322,7 +322,7 @@
         </div>
         <div class="chart-section" v-if="blockStatsData.length">
           <h4>RSSI_R</h4>
-          <LineChart :labels="timeLabels" :datasets="[{ label: 'RSSI_R', data: blockStatsData.map(d => d.rssiR), color: '#3498db' }]" unit="dBm" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
+          <LineChart :labels="timeLabels" :datasets="[{ label: 'RSSI_R', data: blockStatsData.map(d => d.rssiR), color: '#3498db' }]" unit="dBm" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-bands="RSSI_BANDS" :y-min="RSSI_Y.min" :y-max="RSSI_Y.max" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="chart-section" v-if="blockStatsData.length">
           <h4>Батарея, В</h4>
@@ -344,10 +344,10 @@
 
 <script setup>
 import AlarmBell from '../components/AlarmBell.vue'
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, api, getDeviceStatuses, getBlockTelemetry, getDeviceStatusLog, getRelayTelemetry, getServerUptimeHistory, listInvites, createInvite, revokeInvite, clearFinishedInvites, clearAllInvites, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, getDeviceKey, regenerateDeviceKey, getDevicePayment, setDevicePayment, extendDevicePayment, resetDeviceRegistrations, getMoistureScale, getSensorScales } from '../api/auth'
-import { getBlockName, setBlockName, getFieldName, getFieldUnit, isFieldHidden, isVaccHidden, setVaccVisible } from '../store/settings'
+import { getBlockName, setBlockName, getIndividualName, setIndividualName, getFieldName, getFieldUnit, isFieldHidden, isVaccHidden, setVaccVisible } from '../store/settings'
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
 import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
@@ -355,6 +355,7 @@ import { auth, rememberDeviceAccess, rememberDeviceOwner, rememberPayment, isDev
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
+import { RSSI_BANDS, RSSI_Y } from '../utils/rssi'
 import { paymentText } from '../utils/payment'
 import LineChart from '../components/LineChart.vue'
 import RangeTimeline from '../components/RangeTimeline.vue'
@@ -373,7 +374,7 @@ const fieldScales = ref({})
 const registeredSensors = ref([])
 const busy = ref(null)
 const pendingRelays = ref({})
-const editingName = ref(false)
+const nameFocused = ref(false)
 const editNameVal = ref('')
 const showStats = ref(false)
 const blockTelemetry = ref(null)
@@ -990,11 +991,19 @@ async function dropInvite(invite) {
 
 const displayName = computed(() => {
   if (device.value?.deviceType === 'BLOCK') {
-    const base = getBlockName(chipId) || device.value?.name
-    return base ? `${base} (${chipId})` : `Блок (${chipId})`
+    return getBlockName(chipId) || device.value?.name || 'Блок'
   }
-  return device.value?.name || chipId
+  return getIndividualName(chipId) || device.value?.name || 'Датчик'
 })
+
+const editableName = computed(() => {
+  const pref = device.value?.deviceType === 'BLOCK' ? getBlockName(chipId) : getIndividualName(chipId)
+  return pref || device.value?.name || ''
+})
+
+watch(editableName, (name) => {
+  if (!nameFocused.value) editNameVal.value = name
+}, { immediate: true })
 
 onMounted(async () => {
   await load()
@@ -1204,17 +1213,17 @@ async function toggle(r, state) {
   }
 }
 
-function startEditName() {
+function saveName() {
   if (!canControl.value) return
-  editingName.value = true
-  editNameVal.value = device.value?.deviceType === 'BLOCK' ? (getBlockName(chipId) || '') : (device.value?.name || '')
+  const name = editNameVal.value.trim()
+  editNameVal.value = name
+  if (device.value?.deviceType === 'BLOCK') setBlockName(chipId, name)
+  else setIndividualName(chipId, name)
 }
 
-function saveName() {
-  if (!canControl.value || !editingName.value) return
-  if (device.value?.deviceType === 'BLOCK') setBlockName(chipId, editNameVal.value)
-  else device.value.name = editNameVal.value || null
-  editingName.value = false
+function onNameBlur() {
+  nameFocused.value = false
+  saveName()
 }
 
 function getLabel(sensor, field) {
@@ -1451,7 +1460,11 @@ async function shiftBlockRange(direction) {
 .header-row h2 { color: var(--text-strong); flex: 1; }
 .editable { cursor: pointer; border-bottom: 1px dashed var(--border); }
 .editable:hover { color: var(--accent); }
-.name-input { background: var(--bg); border: 1px solid var(--accent); border-radius: 4px; padding: 0.2rem 0.5rem; color: var(--text); font-size: 1rem; width: 100%; }
+.device-name-field { display: flex; flex-direction: column; gap: 0.4rem; max-width: 360px; margin-bottom: 1rem; }
+.device-name-field .field-label { color: var(--text-muted); font-size: 0.8rem; }
+.device-name-field .field-hint { color: var(--text-faint); font-size: 0.72rem; }
+.device-name-field input { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.95rem; padding: 0.45rem 0.6rem; }
+.device-name-field input:focus { outline: none; border-color: var(--accent); }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg-ok); color: var(--text); }
 .status-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
 .status-tag.online { background: var(--tag-bg-ok); color: var(--success); }
@@ -1528,8 +1541,12 @@ async function shiftBlockRange(direction) {
 .sensor-top .btn { margin-left: auto; }
 .sensor-name { color: var(--text); flex: 1; }
 .sensor-readings { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.sensor-readings-lines { flex-direction: column; align-items: flex-start; }
+.sensor-readings-lines .reading { display: inline-flex; align-items: center; }
+.sensor-readings-lines .reading .pct-color { order: -1; margin: 0 0.4rem 0 0; }
 .reading { font-size: 0.8rem; color: var(--text-muted); background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px; }
 .pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin-top: 0.2em; flex: none; border: 1px solid #fff; border-radius: 2px; }
+
 .reading.muted { color: var(--text-faint); }
 .ago { color: var(--text-faint); font-size: 0.92em; margin-left: 0.3rem; }
 .msg-num { color: var(--text-faint); font-size: 0.92em; }

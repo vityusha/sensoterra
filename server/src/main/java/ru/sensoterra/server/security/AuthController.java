@@ -379,10 +379,12 @@ public class AuthController {
     /** Ответ регистрации: профиль аккаунта плюс токен и факт привязки устройства. */
     @Serdeable
     public record RegisterResponse(Long id, String username, String email, String role,
-                                   String authProvider, String token, boolean deviceBound) {
+                                   String authProvider, String token, boolean deviceBound,
+                                   boolean adminAccess, Instant adminAccessSince) {
         static RegisterResponse of(AppUser user, String token, boolean deviceBound) {
             return new RegisterResponse(user.getId(), user.getUsername(), user.getEmail(),
-                    user.getRole(), user.getAuthProvider(), token, deviceBound);
+                    user.getRole(), user.getAuthProvider(), token, deviceBound,
+                    Boolean.TRUE.equals(user.getAdminAccess()), user.getAdminAccessSince());
         }
     }
 }

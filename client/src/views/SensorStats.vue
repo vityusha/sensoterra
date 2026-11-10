@@ -3,7 +3,7 @@
     <header class="page-header">
       <div class="header-top">
         <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-        <h2>{{ displayName }} ({{ chipId }})</h2>
+        <h2>{{ displayName }}</h2>
         <AlarmBell />
         <div v-if="catalogEntry && canEditPrefs" class="menu-wrap" ref="menuRef">
           <button
@@ -51,6 +51,13 @@
         <span class="type-tag">{{ typeLabel }}</span>
       </div>
     </header>
+    <div class="device-id">ID: {{ chipId }}</div>
+
+    <div v-if="isIndividual && canEditPrefs" class="device-name-field">
+      <span class="field-label">Название</span>
+      <input type="text" v-model="editNameVal" maxlength="32" placeholder="Введите название" @focus="nameFocused = true" @blur="onNameBlur" @keyup.enter="saveName" @keyup.esc="editNameVal = editableName" />
+      <span class="field-hint">до 32 символов</span>
+    </div>
 
     <section class="section" v-if="latest">
       <h3>Последние данные</h3>
@@ -63,9 +70,9 @@
         Проверьте уровень погружения датчика в почву
       </div>
       <div class="latest-grid">
-        <div class="latest-cell" v-for="che in cellCharts" :key="'l' + che.key">
+        <div class="latest-cell" v-for="che in cellCharts" :key="'l' + che.key" :style="cellBackground(che)">
           <span class="l-label">{{ label(che.key) }}<button v-if="isGradientField(che.key)" class="gradient-btn" @click.stop="openGradient(che.key)" :title="gradientTitle(che.key)"></button></span>
-          <span class="l-value">{{ cellValue(che, latest) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span><span v-if="che.key === 'v0' && pctColor" class="pct-color" :style="{ background: pctColor }"></span><span v-if="che.key !== 'v0' && fieldColor(che, latest)" class="pct-color" :style="{ background: fieldColor(che, latest) }"></span></span>
+          <span class="l-value">{{ cellValue(che, latest) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span><span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null"></span></span>
         </div>
       </div>
     </section>
@@ -153,7 +160,7 @@
               <button class="btn small ghost" @click="resetY(che.key)">Авто</button>
             </div>
           </div>
-          <LineChart :labels="timeLabels" :datasets="chartDatasets(che)" :unit="chartUnit(che)" :zone-offset="tzOffset ?? undefined" :x-min="statsXMin" :x-max="statsXMax" :y-min="yBounds(che.key).min" :y-max="yBounds(che.key).max" selectable @select-range="applySelectedRange" />
+          <LineChart :labels="timeLabels" :datasets="chartDatasets(che)" :unit="chartUnit(che)" :zone-offset="tzOffset ?? undefined" :x-min="statsXMin" :x-max="statsXMax" :y-min="yBounds(che.key).min" :y-max="yBounds(che.key).max" :y-bands="che.key === 'rssi' ? RSSI_BANDS : []" selectable @select-range="applySelectedRange" />
         </div>
         <div class="chart-section transmission-section" v-if="transmissionMarkers.length">
           <div class="chart-head">
@@ -214,15 +221,16 @@
 
 <script setup>
 import AlarmBell from '../components/AlarmBell.vue'
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getDeviceKey, regenerateDeviceKey } from '../api/auth'
 import { auth, deviceAccess, rememberDeviceAccess, rememberDeviceOwner, isOwnerRole } from '../store/auth'
-import { getIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
+import { getIndividualName, setIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
 import { pushNotification } from '../store/notifications'
 import { calibrationFor, loadCalibration, setCalibration } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
+import { RSSI_BANDS, RSSI_Y, rssiBackground } from '../utils/rssi'
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import LineChart from '../components/LineChart.vue'
 import RangeTimeline from '../components/RangeTimeline.vue'
@@ -268,6 +276,26 @@ const displayName = computed(() => {
   if (local) return local
   return catalogEntry.value?.name || 'Датчик'
 })
+
+const nameFocused = ref(false)
+const editNameVal = ref('')
+const editableName = computed(() => getIndividualName(chipId) || catalogEntry.value?.name || '')
+
+watch(editableName, (name) => {
+  if (!nameFocused.value) editNameVal.value = name
+}, { immediate: true })
+
+function saveName() {
+  if (!canEditPrefs.value) return
+  const name = editNameVal.value.trim()
+  editNameVal.value = name
+  setIndividualName(chipId, name)
+}
+
+function onNameBlur() {
+  nameFocused.value = false
+  saveName()
+}
 
 const typeLabel = computed(() => {
   if (isIndividual.value) return 'автономный'
@@ -607,6 +635,18 @@ function fieldColor(che, row) {
   return sensorScaleColor(scale, v)
 }
 
+/** Цветовой прямоугольник поля: null — градиент не настроен, рисуем пустую рамку. */
+function cellGradientColor(che) {
+  return che.key === 'v0' ? pctColor.value : fieldColor(che, latest.value)
+}
+
+/** RSSI tile: a translucent signal-quality background behind the value. */
+function cellBackground(che) {
+  if (che.key !== 'rssi') return null
+  const bg = rssiBackground(latest.value?.rssi)
+  return bg ? { background: `linear-gradient(${bg}, ${bg}), var(--bg-card)` } : null
+}
+
 const immersionWarningShown = computed(() => {
   if (!latest.value || latest.value.moistureAdc == null) return false
   const cal = moistureCal.value
@@ -730,6 +770,7 @@ const BATTERY_Y = { min: 1.5, max: 3.5 }
 
 function yBounds(key) {
   if (key === 'battery') return BATTERY_Y
+  if (key === 'rssi') return RSSI_Y
   if (!isYEditable(key)) return { min: null, max: null }
   return getFieldY(chipId, key)
 }
@@ -1015,6 +1056,12 @@ onUnmounted(() => {
 .l-label { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; color: var(--text-sub); font-size: 0.8rem; margin-bottom: 0.25rem; }
 .l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: inline-flex; align-items: center; }
 .pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin: 0.2em 0 0 0.4rem; flex: none; border: 1px solid #fff; border-radius: 2px; }
+.device-name-field { display: flex; flex-direction: column; gap: 0.4rem; max-width: 360px; margin-bottom: 1rem; }
+.device-name-field .field-label { color: var(--text-muted); font-size: 0.8rem; }
+.device-name-field .field-hint { color: var(--text-faint); font-size: 0.72rem; }
+.device-name-field input { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.95rem; padding: 0.45rem 0.6rem; }
+.device-name-field input:focus { outline: none; border-color: var(--accent); }
+
 .l-unit { color: var(--text); font-size: 1rem; font-weight: 500; }
 .chart-section { margin-bottom: 1.5rem; }
 .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.3rem; }

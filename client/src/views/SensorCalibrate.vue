@@ -177,7 +177,7 @@ onUnmounted(() => {
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; }
 .save-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: currentColor; }
+.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: var(--success); }
 .save-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .section { margin-bottom: 2rem; }
 .cal-text { color: var(--text-sub); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1rem; }

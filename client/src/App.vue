@@ -5,14 +5,48 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { auth, loadUser } from './store/auth'
 import ToastHost from './components/ToastHost.vue'
 import { applyTheme } from './store/settings'
 
+let vvFrame = 0
+
+// iOS Safari pans the visual viewport (instead of just scrolling) when the soft
+// keyboard opens, so sticky headers stay pinned to the layout viewport above the
+// visible area. Track the visual viewport offset and let the headers follow it.
+function syncVisualViewport() {
+  if (vvFrame) return
+  vvFrame = requestAnimationFrame(() => {
+    vvFrame = 0
+    const vv = window.visualViewport
+    // Only compensate when the soft keyboard is open (not while pinch-zooming).
+    const keyboardOpen = vv && vv.scale === 1 && vv.height < window.innerHeight - 100
+    const top = keyboardOpen ? Math.max(0, vv.offsetTop) : 0
+    document.documentElement.style.setProperty('--vv-offset-top', `${top}px`)
+  })
+}
+
+function onFocusOut() {
+  setTimeout(syncVisualViewport, 150)
+}
+
 onMounted(async () => {
   applyTheme()
+  window.visualViewport?.addEventListener('resize', syncVisualViewport)
+  window.visualViewport?.addEventListener('scroll', syncVisualViewport)
+  window.addEventListener('resize', syncVisualViewport)
+  document.addEventListener('focusout', onFocusOut)
+  syncVisualViewport()
   await loadUser()
+})
+
+onUnmounted(() => {
+  window.visualViewport?.removeEventListener('resize', syncVisualViewport)
+  window.visualViewport?.removeEventListener('scroll', syncVisualViewport)
+  window.removeEventListener('resize', syncVisualViewport)
+  document.removeEventListener('focusout', onFocusOut)
+  if (vvFrame) cancelAnimationFrame(vvFrame)
 })
 </script>
 
@@ -124,6 +158,12 @@ body {
   --save-text: #14532d;
   --save-border: #8fd6a5;
 }
+
+/* Keep sticky page headers at the top of the visual viewport on iOS. */
+.header-row,
+.page-header { transform: translateY(var(--vv-offset-top, 0px)); }
+
+.device-id { color: var(--text-dim); font-size: 0.8rem; margin: -0.5rem 0 1rem; }
 
 canvas, img, svg { max-width: 100%; }
 

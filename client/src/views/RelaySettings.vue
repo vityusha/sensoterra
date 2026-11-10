@@ -841,7 +841,7 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .status-tag.online { background: var(--tag-bg-ok); color: var(--success); }
 .status-tag.offline { background: var(--bg-accent); color: var(--danger); }
 .save-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: currentColor; }
+.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: var(--success); }
 .save-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .loading, .empty { color: var(--text-dim); text-align: center; padding: 2rem; }
 .empty.small { padding: 1rem; font-size: 0.85rem; }
