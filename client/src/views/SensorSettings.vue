@@ -18,6 +18,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
       </button>
     </div>
+    <div class="device-id">ID: {{ displayId }}</div>
 
     <div v-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="!sensor" class="empty small">Датчик не найден</div>
@@ -42,10 +43,14 @@
       <section class="section">
         <h3>Текущие настройки</h3>
         <div class="settings-list">
-          <div class="setting-row" v-for="item in summary" :key="item.l">
-            <span class="setting-label">{{ item.l }}</span>
-            <span class="setting-value">{{ item.v }}</span>
-          </div>
+          <table class="settings-table">
+            <tbody>
+              <tr v-for="item in summary" :key="item.l">
+                <th scope="row">{{ item.l }}</th>
+                <td>{{ item.v }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -200,7 +205,11 @@ const sensorTitle = computed(() => {
   const base = s?.name || `S${slot}`
   return s?.sensorChipId ? `${base} (${s.sensorChipId})` : base
 })
-const headerTitle = computed(() => isBlock ? sensorTitle.value : `${displayName.value} (${chipId})`)
+const headerTitle = computed(() => {
+  if (!isBlock) return displayName.value
+  return sensor.value?.name || `S${slot}`
+})
+const displayId = computed(() => isBlock ? (sensor.value?.sensorChipId ?? chipId) : chipId)
 const isOnline = computed(() => statusMap.value[chipId]?.status === 'online')
 const settable = computed(() => !isBlock || isOnline.value)
 
@@ -420,7 +429,7 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .status-tag.online { background: var(--tag-bg-ok); color: var(--success); }
 .status-tag.offline { background: var(--bg-accent); color: var(--danger); }
 .save-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: currentColor; }
+.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: var(--success); }
 .save-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .loading, .empty { color: var(--text-dim); text-align: center; padding: 2rem; }
 .empty.small { padding: 1rem; font-size: 0.85rem; }
@@ -437,9 +446,10 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .section { margin-bottom: 2rem; }
 .section h3 { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
 .settings-list { background: var(--bg-card); border-radius: 12px; padding: 0.9rem 1rem; }
-.setting-row { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; font-size: 0.85rem; }
-.setting-label { color: var(--text-dim); }
-.setting-value { color: var(--text); text-align: right; max-width: 60%; }
+.settings-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.settings-table th, .settings-table td { padding: 0.35rem 0; vertical-align: top; }
+.settings-table th { color: var(--text-dim); font-weight: normal; text-align: left; padding-right: 1rem; }
+.settings-table td { color: var(--text); text-align: right; white-space: nowrap; }
 .settings-form { background: var(--bg-card); border-radius: 12px; padding: 1rem; }
 .field { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
 .field.disabled { opacity: 0.5; }
@@ -457,6 +467,5 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 /* Телефон: поля в ряд не влезают — переносим. */
 @media (hover: none) {
   .field-row { flex-wrap: wrap; row-gap: 0.4rem; }
-  .setting-row { flex-wrap: wrap; row-gap: 0.2rem; }
 }
 </style>

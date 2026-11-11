@@ -90,15 +90,19 @@ public class AlarmController {
                 .getResultList());
         Map<Long, Boolean> control = new HashMap<>();
         Map<Long, String> names = new HashMap<>();
+        Map<Long, Sensor> sensorRows = new HashMap<>();
         Map<Long, Integer> zones = new HashMap<>();
         List<AlarmView> result = new ArrayList<>();
         for (Alarm a : alarms) {
             boolean finished = a.getEndedAt() != null;
             boolean canDelete = finished && control.computeIfAbsent(a.getDeviceId(), access::canControl);
             String name = names.computeIfAbsent(a.getChipId(), chip -> nameOf(chip, a.getAlarmType()));
+            Sensor sensor = sensorRows.computeIfAbsent(a.getChipId(), chip -> sensorRepository
+                    .findBySensorChipIdOrderByUpdatedAtDesc(chip).stream().findFirst().orElse(null));
             Integer zone = zones.computeIfAbsent(a.getDeviceId(), chip -> deviceRepository.findById(chip)
                     .map(Device::getTzOffsetMinutes).orElse(null));
-            result.add(new AlarmView(a.getId(), a.getAlarmType(), a.getChipId(), a.getDeviceId(), name, zone,
+            result.add(new AlarmView(a.getId(), a.getAlarmType(), a.getChipId(), a.getDeviceId(), name,
+                    sensor != null ? sensor.getSensorType() : null, a.getThresholdMode(), a.getThresholdSide(), zone,
                     a.getStartedAt(), a.getEndedAt(), a.getValue(),
                     finished && read.contains(a.getId()), canDelete));
         }
@@ -286,7 +290,8 @@ public class AlarmController {
     }
 
     @Serdeable
-    public record AlarmView(Long id, String type, Long chipId, Long deviceId, String name,
+    public record AlarmView(Long id, String type, Long chipId, Long deviceId, String name, Short sensorType,
+                            Short thresholdMode, Short thresholdSide,
                             Integer tzOffsetMinutes, Instant startedAt, Instant endedAt, Double value,
                             boolean read, boolean canDelete) {
     }

@@ -140,13 +140,8 @@
               </div>
               <div class="device-info">
                 <div class="device-name">
-                  <template v-if="editing === d.chipId">
-                    <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveBlockName(d.chipId)" @blur="saveBlockName(d.chipId)" @keyup.esc="editing=null" />
-                  </template>
-                  <template v-else>
-                    <span @click.stop="startEdit(d.chipId, 'block')">{{ getBlockName(d.chipId) || 'Имя блока' }}</span>
-                    <span v-if="d.ownerUsername" class="device-owner"> ({{ d.ownerUsername }})</span>
-                  </template>
+                  <span>{{ getBlockName(d.chipId) || 'Имя блока' }}</span>
+                  <span v-if="d.ownerUsername" class="device-owner"> ({{ d.ownerUsername }})</span>
                 </div>
                 <div class="device-type block"></div>
                 <!-- Оплата у блока своя: у одного истёк, у другого впереди. -->
@@ -230,13 +225,8 @@
               <div class="device-icon sensor">SA</div>
               <div class="device-info">
                 <div class="device-name">
-                  <template v-if="editing === s.chipId">
-                    <input class="name-input" v-model="editName" @click.stop @keyup.enter="saveIndividualName(s.chipId)" @blur="saveIndividualName(s.chipId)" @keyup.esc="editing=null" />
-                  </template>
-                  <template v-else>
-                    <span @click.stop="startEdit(s.chipId, 'individual')">{{ individualSensorName(s) }}</span>
-                    <span v-if="ownerOf(s.chipId)" class="device-owner"> ({{ ownerOf(s.chipId) }})</span>
-                  </template>
+                  <span>{{ individualSensorName(s) }}</span>
+                  <span v-if="ownerOf(s.chipId)" class="device-owner"> ({{ ownerOf(s.chipId) }})</span>
                 </div>
                 <div class="device-tags">
                   <span class="tag">автономный</span>
@@ -308,7 +298,7 @@ import { getUser, getUserDevices, listDevices, getSensorCatalog, getDeviceStatus
 import { auth, logout, devicePayment, rememberPayment, rememberDeviceOwner, adminLockedDevice, adminTrustedDevice } from '../store/auth'
 import { paymentLabel } from '../utils/payment'
 import { batteryLabel, batteryWarningV } from '../utils/battery'
-import { getBlockName, setBlockName, getIndividualName, setIndividualName } from '../store/settings'
+import { getBlockName, getIndividualName } from '../store/settings'
 import { connection, pushNotification, onWsMessage, connectWs } from '../store/notifications'
 
 const router = useRouter()
@@ -317,7 +307,6 @@ const devices = ref([])
 const catalog = ref([])
 const statusMap = ref({})
 const loading = ref(true)
-const editing = ref(null)
 
 // Оплата — свойство блока, поэтому смотрим её по каждому блоку отдельно.
 function payInfo(chipId) {
@@ -372,7 +361,6 @@ async function submitClaim() {
   }
 }
 
-const editName = ref('')
 const conflictDialog = ref(null)
 const keepBlockId = ref(null)
 const resolving = ref(false)
@@ -675,24 +663,6 @@ function sensorConfigText(s) {
   return parts.join(' · ')
 }
 
-function startEdit(chipId, type) {
-  editing.value = chipId
-  if (type === 'block') editName.value = getBlockName(chipId) || ''
-  else editName.value = getIndividualName(chipId) || ''
-}
-
-function saveBlockName(chipId) {
-  if (editing.value !== chipId) return
-  setBlockName(chipId, editName.value)
-  editing.value = null
-}
-
-function saveIndividualName(chipId) {
-  if (editing.value !== chipId) return
-  setIndividualName(chipId, editName.value)
-  editing.value = null
-}
-
 function handleLogout() {
   menuOpen.value = false
   logout()
@@ -865,11 +835,7 @@ h2 { color: var(--text-strong); margin: 0; }
 .status-dot.offline { background: var(--danger); }
 .device-info { flex: 1; min-width: 0; }
 .device-name { color: var(--text); font-weight: 500; }
-.device-name span { cursor: pointer; }
-.device-name span:hover { color: var(--accent); }
-.device-name .device-owner { color: var(--text-dim); font-weight: 400; font-size: 0.8rem; cursor: default; }
-.device-name .device-owner:hover { color: var(--text-dim); }
-.name-input { background: var(--bg); border: 1px solid var(--accent); border-radius: 4px; padding: 0.2rem 0.5rem; color: var(--text); font-size: 0.9rem; width: 100%; }
+.device-name .device-owner { color: var(--text-dim); font-weight: 400; font-size: 0.8rem; }
 .device-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
 .sensor-config { margin-top: 0.35rem; }
 .config-text { font-size: 0.7rem; color: var(--tag-text); font-family: inherit; }

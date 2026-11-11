@@ -38,6 +38,7 @@ class OwnedDeviceAdminTest {
 
     private String adminToken;
     private String ownerToken;
+    private String ownerUsername;
     private Long ownerId;
     private Long guestId;
     private long chipId;
@@ -72,7 +73,8 @@ class OwnedDeviceAdminTest {
         String run = UUID.randomUUID().toString().substring(0, 8);
         adminToken = (String) post("/api/test/admin",
                 Map.of("username", "own-admin-" + run, "password", "admin-pass-123"), null).get("token");
-        ownerToken = register("own-owner-" + run);
+        ownerUsername = "own-owner-" + run;
+        ownerToken = register(ownerUsername);
         ownerId = me(ownerToken);
         guestId = me(register("own-guest-" + run));
         chipId = 880000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100000);
@@ -176,6 +178,18 @@ class OwnedDeviceAdminTest {
                 .get("username");
         assertEquals(java.util.List.of("OWNER_ADMIN_ACCESS_OFF", "OWNER_ADMIN_ACCESS_ON"), audit.stream()
                 .filter(e -> owner.equals(e.get("username"))).map(e -> e.get("event")).toList());
+    }
+
+    @Test
+    @DisplayName("Logging in again keeps the admin access the owner granted")
+    void reloginKeepsAdminAccess() {
+        client.toBlocking().exchange(auth(HttpRequest.PUT("/api/auth/admin-access",
+                Map.of("enabled", true)), ownerToken));
+        Map login = post("/api/auth/login",
+                Map.of("username", ownerUsername, "password", "pw-123456"), null);
+        Map user = (Map) login.get("user");
+        assertEquals(Boolean.TRUE, user.get("adminAccess"));
+        assertNotNull(user.get("adminAccessSince"));
     }
 
     @Test

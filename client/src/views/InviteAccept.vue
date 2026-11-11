@@ -175,7 +175,7 @@ async function register() {
     const res = await registerByInvite(token.value, username.value.trim(), password.value)
     setToken(res.token)
     await enterSession(res.user)
-    done.value = true
+    router.replace('/')
   } catch (e) {
     const status = e.response?.status
     actionError.value = status === 409 ? 'Такой логин уже занят'
@@ -202,7 +202,7 @@ async function onGoogle(idToken) {
     setToken(res.token)
     await enterSession(userFromAuthResponse(res))
     await acceptInvite(token.value)
-    done.value = true
+    router.replace('/')
   } catch (e) {
     actionError.value = e.response?.data?.message || 'Не удалось войти через Google'
   } finally {

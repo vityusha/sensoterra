@@ -48,7 +48,8 @@ export async function enterSession(user) {
  */
 export function userFromAuthResponse(data) {
   return { id: data.id, username: data.username, email: data.email, role: data.role,
-    authProvider: data.authProvider ?? null }
+    authProvider: data.authProvider ?? null,
+    adminAccess: data.adminAccess === true, adminAccessSince: data.adminAccessSince ?? null }
 }
 
 export function isAdmin() {

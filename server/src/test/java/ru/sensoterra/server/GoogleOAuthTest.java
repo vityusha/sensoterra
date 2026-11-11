@@ -116,6 +116,22 @@ class GoogleOAuthTest {
     }
 
     @Test
+    @DisplayName("Повторный вход через Google сохраняет выданный админам доступ")
+    void reloginKeepsAdminAccess() {
+        Map<String, String> id = FakeGoogle.freshIdentity();
+        Map first = googleLogin(google.issueToken(id.get("sub"), id.get("email"), true), null, null);
+        client.toBlocking().exchange(
+                HttpRequest.PUT("/api/auth/admin-access", Map.of("enabled", true))
+                        .header("Authorization", "Bearer " + first.get("token"))
+                        .contentType(MediaType.APPLICATION_JSON),
+                Argument.of(Map.class));
+
+        Map second = googleLogin(google.issueToken(id.get("sub"), id.get("email"), true), null, null);
+        assertEquals(Boolean.TRUE, second.get("adminAccess"));
+        assertNotNull(second.get("adminAccessSince"));
+    }
+
+    @Test
     @DisplayName("Токен, подписанный чужим ключом, не принимается")
     void foreignSignatureRejected() {
         Map<String, String> id = FakeGoogle.freshIdentity();

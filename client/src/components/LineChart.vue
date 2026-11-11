@@ -64,6 +64,32 @@ const offlinePlugin = {
   },
 }
 
+// Плагин: горизонтальные цветовые зоны по значению (например, уровни RSSI).
+const yBandsPlugin = {
+  id: 'yBands',
+  beforeDatasetsDraw(chart) {
+    const bands = chart.config.options?.plugins?.yBands?.bands || []
+    if (!bands.length) return
+    const { ctx, chartArea, scales } = chart
+    const yScale = scales?.y
+    if (!ctx || !chartArea || !yScale) return
+    ctx.save()
+    for (const band of bands) {
+      // from/to are the lower/upper value of the band; null means the chart edge.
+      const low = band.from == null ? yScale.min : band.from
+      const high = band.to == null ? yScale.max : band.to
+      const top = yScale.getPixelForValue(high)
+      const bottom = yScale.getPixelForValue(low)
+      const y = Math.max(chartArea.top, Math.min(top, bottom))
+      const h = Math.min(chartArea.bottom, Math.max(top, bottom)) - y
+      if (h <= 0) continue
+      ctx.fillStyle = band.color
+      ctx.fillRect(chartArea.left, y, chartArea.right - chartArea.left, h)
+    }
+    ctx.restore()
+  },
+}
+
 // Плагин: вертикальные отметки на timeline (например, передачи данных).
 const timelineMarkersPlugin = {
   id: 'timelineMarkers',
@@ -86,7 +112,10 @@ const timelineMarkersPlugin = {
   },
 }
 
-Chart.register(LineController, LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Filler, Tooltip, Legend, downtimePlugin, offlinePlugin, timelineMarkersPlugin)
+// Chart.js keeps the plugin object with a given id from the first registration, so during
+// HMR an edited plugin would keep running the old code. Drop the stale entry first.
+Chart.unregister(yBandsPlugin)
+Chart.register(LineController, LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Filler, Tooltip, Legend, downtimePlugin, offlinePlugin, yBandsPlugin, timelineMarkersPlugin)
 
 const props = defineProps({
   labels: { type: Array, default: () => [] },
@@ -105,6 +134,7 @@ const props = defineProps({
   xMax: { type: Number, default: null },
   selectable: { type: Boolean, default: false },
   markers: { type: Array, default: () => [] },
+  yBands: { type: Array, default: () => [] },
   timeline: { type: Boolean, default: false },
   ariaLabel: { type: String, default: '' },
   // Непрерывный ряд (статус): линия держит последнее значение между записями,
@@ -363,6 +393,7 @@ function buildChart() {
       plugins: {
         downtime: { downtimes: bgBreaks.value },
         offline: { intervals: offlineClipped.value },
+        yBands: { bands: props.yBands },
         timelineMarkers: { items: props.markers, color: markerColor },
         legend: { display: series.value.length > 1, labels: { color: legendColor, font: { size: 10 } } },
         tooltip: {
@@ -424,7 +455,8 @@ onMounted(() => {
   canvas.value?.addEventListener('pointercancel', onPointerCancel)
 })
 watch(() => [props.labels, props.datasets, props.downtimes, props.yMin, props.yMax, props.yStep,
-    props.xMin, props.xMax, props.zoneOffset, props.unit, props.continuous, props.markers, props.timeline],
+    props.xMin, props.xMax, props.zoneOffset, props.unit, props.continuous, props.markers, props.yBands,
+    props.timeline],
   buildChart, { deep: true })
 watch(() => settings.chartTooltips, buildChart)
 onUnmounted(() => {
