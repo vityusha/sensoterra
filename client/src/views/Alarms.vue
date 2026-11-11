@@ -91,8 +91,11 @@
         >
           <td class="col-event">
             <span class="subject">{{ subjectKind(a) }} {{ subjectLabel(a) }}</span>
+            <span v-if="a.type.startsWith('THRESHOLD_')" class="event-description">{{ eventText(a) }}</span>
           </td>
-          <td v-if="valueTitle" class="col-value" :data-label="valueTitle">{{ fmtValue(a) }}</td>
+          <td v-if="valueTitle" class="col-value" :data-label="valueTitle">
+            {{ fmtValue(a) }}<span v-if="valueUnit(a)"> {{ valueUnit(a) }}</span>
+          </td>
           <td data-label="Начало">{{ fmtEventTime(a.startedAt, a.tzOffsetMinutes) }}</td>
           <td data-label="Окончание">{{ a.endedAt ? fmtEventTime(a.endedAt, a.tzOffsetMinutes) : 'продолжается' }}</td>
           <td data-label="Длительность">{{ duration(a) }}</td>
@@ -124,7 +127,7 @@ import { listAlarms, getAlarmSummary, getUser, markAlarmsSeen, markAlarmRead, ma
 import { alarmState, clearUnseen, refreshAlarmSummary } from '../store/alarms'
 import { connectWs, pushNotification } from '../store/notifications'
 import { isAdmin } from '../store/auth'
-import { getIndividualName } from '../store/settings'
+import { getIndividualName, getFieldName, getFieldUnit } from '../store/settings'
 import { fmtEventTime } from '../utils/datetime'
 
 const TABS = [
@@ -132,15 +135,15 @@ const TABS = [
   { type: 'LEVEL', label: 'Уровень', tracked: true },
   { type: 'BATTERY', label: 'Батарейка', tracked: true },
   { type: 'OFFLINE', label: 'Офлайн', tracked: true },
-  { type: 'THRESHOLD_V0', label: 'Порог V0', tracked: false },
-  { type: 'THRESHOLD_V1', label: 'Порог V1', tracked: false },
-  { type: 'THRESHOLD_V2', label: 'Порог V2', tracked: false },
-  { type: 'THRESHOLD_V3', label: 'Порог V3', tracked: false },
+  { type: 'THRESHOLD_V0', label: 'Порог V0', tracked: true },
+  { type: 'THRESHOLD_V1', label: 'Порог V1', tracked: true },
+  { type: 'THRESHOLD_V2', label: 'Порог V2', tracked: true },
+  { type: 'THRESHOLD_V3', label: 'Порог V3', tracked: true },
 ]
 
 const TAB_DESCRIPTIONS = {
   GAP: 'Датчики не передают данные',
-  LEVEL: 'Большая вероятность того, что датчик не погружен в воду',
+  LEVEL: 'Большая вероятность того, что датчик не погружен в почву',
   BATTERY: 'Низкое напряжение батарейки датчика',
   OFFLINE: 'Потеря связи с блоком',
 }
@@ -221,6 +224,20 @@ function subjectLabel(a) {
 }
 
 function eventText(a) {
+  const threshold = /^THRESHOLD_(V\d)$/.exec(a.type)
+  if (threshold) {
+    const field = threshold[1].toLowerCase()
+    const name = getFieldName(a.sensorType, field)
+    const condition = {
+      1: 'ниже порога',
+      2: 'выше порога',
+      3: a.thresholdSide === 1 ? 'вне интервала, ниже порога 1'
+        : a.thresholdSide === 2 ? 'вне интервала, выше порога 2' : 'вне интервала',
+      4: 'внутри интервала',
+    }[a.thresholdMode]
+    const parameter = name && name !== field ? name : threshold[1]
+    return condition ? `${parameter} ${condition}` : `Порог ${threshold[1]}`
+  }
   return typeEventText(a.type)
 }
 
@@ -242,8 +259,17 @@ function fmtValue(a) {
   return a.type === 'LEVEL' ? String(Math.round(a.value)) : String(Math.round(a.value * 100) / 100)
 }
 
+function valueUnit(a) {
+  if (a.type === 'BATTERY') return 'В'
+  if (a.type === 'LEVEL') return getFieldUnit(a.sensorType, 'v0')
+  const threshold = /^THRESHOLD_(V\d)$/.exec(a.type)
+  if (threshold?.[1] === 'V0') return '%'
+  return threshold ? getFieldUnit(a.sensorType, threshold[1].toLowerCase()) : ''
+}
+
 // Every row of a tab is the same event, so it names the first column instead of each row.
 const eventTitle = computed(() => {
+  if (activeType.value.startsWith('THRESHOLD_')) return 'Событие'
   const text = typeEventText(activeType.value)
   return text.charAt(0).toUpperCase() + text.slice(1)
 })
@@ -438,6 +464,7 @@ onBeforeUnmount(() => {
 .alarm-table tr.clickable { cursor: pointer; }
 .alarm-table tr.clickable:hover td { background: var(--bg-soft); }
 .col-value { white-space: nowrap; }
+.event-description { display: block; margin-top: 0.2rem; color: var(--text-muted); font-size: 0.78rem; font-weight: normal; }
 .mobile-caption { display: none; }
 .col-actions { width: 2.5rem; text-align: right; }
 .delete-btn { display: inline-flex; padding: 0.25rem; border: none; border-radius: 6px; background: transparent; color: var(--text-dim); cursor: pointer; }

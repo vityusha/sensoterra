@@ -71,8 +71,11 @@
       </div>
       <div class="latest-grid">
         <div class="latest-cell" v-for="che in cellCharts" :key="'l' + che.key" :style="cellBackground(che)">
-          <span class="l-label">{{ label(che.key) }}<button v-if="isGradientField(che.key)" class="gradient-btn" @click.stop="openGradient(che.key)" :title="gradientTitle(che.key)"></button></span>
-          <span class="l-value">{{ cellValue(che, latest) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span><span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null"></span></span>
+          <span class="l-label" :class="{ 'has-threshold': configuredThresholdFields.has(che.key) }"><svg v-if="configuredThresholdFields.has(che.key)" class="threshold-bell" viewBox="0 0 16 16" role="img" aria-label="Для параметра настроен порог" title="Для параметра настроен порог"><path d="M8 1.75a3 3 0 0 0-3 3v1.1c0 1.25-.38 2.48-1.1 3.5L3 10.75h10l-.9-1.4A6.5 6.5 0 0 1 11 5.85v-1.1a3 3 0 0 0-3-3ZM6.3 12a1.75 1.75 0 0 0 3.4 0" /></svg><span>{{ label(che.key) }}</span></span>
+          <span v-if="isGradientField(che.key)" class="gradient-tools">
+            <button class="gradient-btn" @click.stop="openGradient(che.key)" :title="gradientTitle(che.key)"></button>
+          </span>
+          <span class="l-value"><span class="l-reading" :class="{ 'alarm-active': openThresholdFields.has(che.key) }">{{ cellValue(che, latest) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span></span><span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null"></span></span>
         </div>
       </div>
     </section>
@@ -152,7 +155,7 @@
       <template v-else-if="rows.length">
         <div class="chart-section" v-for="che in chartSections" :key="che.key">
           <div class="chart-head">
-            <h4>{{ label(che.key) }} <span class="unit" v-if="chartUnit(che)">, {{ chartUnit(che) }}</span></h4>
+            <h4>{{ label(che.key) }}<span class="unit" v-if="chartUnit(che)">, {{ chartUnit(che) }}</span></h4>
             <div class="y-edit" v-if="isYEditable(che.key) && canEditPrefs">
               <label>min <input type="number" step="any" v-model="yEdit(che.key).min" @keyup.enter="applyY(che.key)" /></label>
               <label>max <input type="number" step="any" v-model="yEdit(che.key).max" @keyup.enter="applyY(che.key)" /></label>
@@ -223,14 +226,15 @@
 import AlarmBell from '../components/AlarmBell.vue'
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getDeviceKey, regenerateDeviceKey } from '../api/auth'
+import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getSensorThreshold, getDeviceKey, regenerateDeviceKey, listAlarms } from '../api/auth'
 import { auth, deviceAccess, rememberDeviceAccess, rememberDeviceOwner, isOwnerRole } from '../store/auth'
 import { getIndividualName, setIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
-import { pushNotification } from '../store/notifications'
+import { pushNotification, connectWs } from '../store/notifications'
+import { alarmState } from '../store/alarms'
 import { calibrationFor, loadCalibration, setCalibration } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
-import { RSSI_BANDS, RSSI_Y, rssiBackground } from '../utils/rssi'
+import { RSSI_BANDS, rssiBounds, rssiBackground } from '../utils/rssi'
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import LineChart from '../components/LineChart.vue'
 import RangeTimeline from '../components/RangeTimeline.vue'
@@ -248,6 +252,8 @@ const customTo = ref('')
 const baseFromMs = ref(null)
 const baseToMs = ref(null)
 const selection = ref(null)
+const openThresholdFields = ref(new Set())
+const configuredThresholdFields = ref(new Set())
 const baseLive = ref(true)
 const loading = ref(true)
 const catalogEntry = ref(null)
@@ -302,6 +308,26 @@ const typeLabel = computed(() => {
   const slot = blockRole.value?.slot
   return ['Блок', blockLabel.value, slot != null ? `S${slot}` : null].filter(Boolean).join(' ')
 })
+
+const THRESHOLD_FIELDS = ['v0', 'v1', 'v2', 'v3']
+
+async function refreshOpenThresholds() {
+  try {
+    const results = await Promise.all(THRESHOLD_FIELDS.map(field => listAlarms(`THRESHOLD_${field.toUpperCase()}`, 200)))
+    openThresholdFields.value = new Set(THRESHOLD_FIELDS.filter((field, i) =>
+      results[i].some(a => Number(a.chipId) === chipId && !a.endedAt)))
+  } catch {
+    openThresholdFields.value = new Set()
+  }
+}
+
+async function refreshThresholdConfig() {
+  const configs = await Promise.all(THRESHOLD_FIELDS.map(field =>
+    getSensorThreshold(chipId, field, resolvedDeviceId.value).catch(() => null)))
+  configuredThresholdFields.value = new Set(THRESHOLD_FIELDS.filter((field, i) => configs[i]?.limit1 != null))
+}
+
+watch(() => alarmState.version, refreshOpenThresholds)
 
 const sensorType = computed(() => {
   const last = rows.value.slice().reverse().find(r => r.sensorType != null)
@@ -555,9 +581,9 @@ function gradientTitle(key) {
 /** Цветовой градиент поля — отдельная страница настройки. */
 function openGradient(key) {
   if (key === 'v0') {
-    router.push(`/sensor/${chipId}/moisture-gradient`)
+    router.push({ path: `/sensor/${chipId}/moisture-gradient`, query: { deviceId: resolvedDeviceId.value } })
   } else {
-    router.push({ path: `/sensor/${chipId}/field-gradient/${key}`, query: { name: label(key) } })
+    router.push({ path: `/sensor/${chipId}/field-gradient/${key}`, query: { name: label(key), deviceId: resolvedDeviceId.value } })
   }
 }
 
@@ -689,7 +715,7 @@ function label(key) {
   if (name !== key) return name
   if (key === 'battery') return 'Батарея'
   if (key === 'batload') return 'Батарея под нагрузкой'
-  if (key === 'rssi') return 'RSSI'
+  if (key === 'rssi') return isIndividual.value ? 'RSSI роутера' : 'RSSI блока'
   return name
 }
 
@@ -699,7 +725,7 @@ function fieldUnit(key) {
   if (u) return u
   if (key === 'battery') return 'В'
   if (key === 'batload') return 'В'
-  if (key === 'rssi') return 'dBm'
+  if (key === 'rssi') return 'дБм'
   return ''
 }
 
@@ -768,9 +794,11 @@ function yEdit(key) {
 /** График батареи всегда в фиксированном диапазоне 1,5–3,5 В (для всех датчиков). */
 const BATTERY_Y = { min: 1.5, max: 3.5 }
 
+const rssiY = computed(() => rssiBounds(rows.value.map(r => r.rssi)))
+
 function yBounds(key) {
   if (key === 'battery') return BATTERY_Y
-  if (key === 'rssi') return RSSI_Y
+  if (key === 'rssi') return rssiY.value
   if (!isYEditable(key)) return { min: null, max: null }
   return getFieldY(chipId, key)
 }
@@ -973,7 +1001,9 @@ async function loadData(silent = false) {
 let refreshTimer = null
 
 onMounted(() => {
-  loadData()
+  connectWs()
+  refreshOpenThresholds()
+  loadData().then(refreshThresholdConfig)
   getMoistureScale(chipId).then(s => { moistureScale.value = s }).catch(() => {})
   getSensorScales(chipId).then(list => {
     const map = {}
@@ -1036,6 +1066,10 @@ onUnmounted(() => {
   border: 2px solid #fff; border-radius: 50%;
   background: conic-gradient(#ff0000 0 120deg, #00ff00 120deg 240deg, #0000ff 240deg 360deg);
 }
+.threshold-bell { width: 12px; height: 12px; flex: none; fill: none; stroke: #ffe066; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+:global(html[data-theme="light"] .threshold-bell) { stroke: #2563eb !important; }
+.latest-cell { position: relative; display: grid; grid-template-rows: 2.25rem 1.5rem; row-gap: 0.25rem; }
+.gradient-tools { position: absolute; top: 0.55rem; right: 0.9rem; display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.small { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
 .btn.secondary { background: var(--bg-accent); }
@@ -1053,8 +1087,12 @@ onUnmounted(() => {
 .immersion-warning { color: var(--danger); background: #3a1518; font-weight: 600; font-size: 0.85rem; padding: 0.5rem 0.7rem; border-radius: 8px; margin-bottom: 0.7rem; }
 .latest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; }
 .latest-cell { background: var(--bg-card); border-radius: 10px; padding: 0.7rem 0.9rem; }
-.l-label { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; color: var(--text-sub); font-size: 0.8rem; margin-bottom: 0.25rem; }
-.l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: inline-flex; align-items: center; }
+.l-label { display: flex; align-items: flex-start; gap: 0.4rem; color: var(--text-sub); font-size: 0.8rem; line-height: 1.05rem; margin: 0; padding-right: 1.8rem; overflow: hidden; white-space: normal; }
+.l-label.has-threshold { gap: 0.08rem; }
+.l-label > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: inline-flex; align-items: center; align-self: start; min-width: 0; min-height: 1.5rem; }
+.l-reading { display: inline-flex; align-items: center; min-height: 1.5rem; box-sizing: border-box; padding: 0.15rem 0.35rem; border: 1px solid transparent; border-radius: 5px; }
+.l-reading.alarm-active { border-color: var(--danger); }
 .pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin: 0.2em 0 0 0.4rem; flex: none; border: 1px solid #fff; border-radius: 2px; }
 .device-name-field { display: flex; flex-direction: column; gap: 0.4rem; max-width: 360px; margin-bottom: 1rem; }
 .device-name-field .field-label { color: var(--text-muted); font-size: 0.8rem; }

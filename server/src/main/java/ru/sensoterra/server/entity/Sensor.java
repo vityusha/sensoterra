@@ -52,8 +52,44 @@ public class Sensor {
     @Column(name = "fields_json")
     private String fieldsJson;
 
+    @Column(name = "v1_limit_1")
+    private Double v1Limit1;
+
+    @Column(name = "v1_limit_2")
+    private Double v1Limit2;
+
+    @Column(name = "v1_type_alarm", nullable = false)
+    private Short v1TypeAlarm = 0;
+
+    @Column(name = "v2_limit_1")
+    private Double v2Limit1;
+
+    @Column(name = "v2_limit_2")
+    private Double v2Limit2;
+
+    @Column(name = "v2_type_alarm", nullable = false)
+    private Short v2TypeAlarm = 0;
+
+    @Column(name = "v3_limit_1")
+    private Double v3Limit1;
+
+    @Column(name = "v3_limit_2")
+    private Double v3Limit2;
+
+    @Column(name = "v3_type_alarm", nullable = false)
+    private Short v3TypeAlarm = 0;
+
     @Column(name = "moisture_adc")
     private Integer moistureAdc;
+
+    @Column(name = "v0_limit_1")
+    private Double v0Limit1;
+
+    @Column(name = "v0_limit_2")
+    private Double v0Limit2;
+
+    @Column(name = "v0_type_alarm", nullable = false)
+    private Short v0TypeAlarm = 0;
 
     private Float temperature;
 

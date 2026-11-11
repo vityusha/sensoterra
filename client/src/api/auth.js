@@ -464,6 +464,18 @@ export async function saveSensorCalibrationValue2(chipId, value2) {
   return data
 }
 
+export async function getSensorThreshold(chipId, fieldKey, deviceId = null) {
+  const params = deviceId != null ? { deviceId } : {}
+  const { data } = await api.get(`/sensors/${chipId}/threshold/${fieldKey}`, { params })
+  return data
+}
+
+export async function saveSensorThreshold(chipId, fieldKey, config, deviceId = null) {
+  const params = deviceId != null ? { deviceId } : {}
+  const { data } = await api.put(`/sensors/${chipId}/threshold/${fieldKey}`, config, { params })
+  return data
+}
+
 export async function getCalibrationDefaults() {
   const { data } = await api.get('/prefs/defaults/calibration-defaults')
   return data

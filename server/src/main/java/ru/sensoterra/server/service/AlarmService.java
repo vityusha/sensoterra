@@ -36,7 +36,8 @@ import java.util.Set;
  *   <li>OFFLINE — a block went offline; ends when it is online again.</li>
  *   <li>BATTERY — sensor battery at or below its warning threshold (derived from the battery
  *       type); ends after recovering by more than 0.2 V or at 3.0 V.</li>
- *   <li>THRESHOLD_V0..V3 — reserved, not raised yet.</li>
+ *   <li>THRESHOLD_V0 — thresholds on moisture percent converted from ADC using sensor calibration.</li>
+ *   <li>THRESHOLD_V1..V3 — configured low/high/range alarms for the sensor's V1, V2 and V3 readings.</li>
  * </ul>
  *
  * Every opened or closed episode is pushed over the WebSocket as {@code type: "alarm"}.
@@ -95,6 +96,16 @@ public class AlarmService {
      * was opened.
      */
     public boolean raise(Long chipId, Long deviceId, String type, Instant startedAt, Double value) {
+        return raise(chipId, deviceId, type, startedAt, value, null);
+    }
+
+    public boolean raise(Long chipId, Long deviceId, String type, Instant startedAt, Double value,
+                         Short thresholdMode) {
+        return raise(chipId, deviceId, type, startedAt, value, thresholdMode, null);
+    }
+
+    public boolean raise(Long chipId, Long deviceId, String type, Instant startedAt, Double value,
+                         Short thresholdMode, Short thresholdSide) {
         Optional<Alarm> open = repository.findFirstByChipIdAndAlarmTypeAndEndedAtIsNull(chipId, type);
         if (open.isPresent()) {
             Alarm alarm = open.get();
@@ -108,6 +119,14 @@ public class AlarmService {
                 alarm.setDeviceId(deviceId);
                 changed = true;
             }
+            if (thresholdMode != null && !thresholdMode.equals(alarm.getThresholdMode())) {
+                alarm.setThresholdMode(thresholdMode);
+                changed = true;
+            }
+            if (thresholdSide != null && !thresholdSide.equals(alarm.getThresholdSide())) {
+                alarm.setThresholdSide(thresholdSide);
+                changed = true;
+            }
             if (changed) {
                 repository.update(alarm);
             }
@@ -119,6 +138,8 @@ public class AlarmService {
         alarm.setAlarmType(type);
         alarm.setStartedAt(startedAt != null ? startedAt : Instant.now());
         alarm.setValue(value);
+        alarm.setThresholdMode(thresholdMode);
+        alarm.setThresholdSide(thresholdSide);
         try {
             repository.save(alarm);
         } catch (Exception e) {
@@ -152,6 +173,15 @@ public class AlarmService {
      * the device the data came through.
      */
     public void onSensorData(Long deviceId, Long chipId, Integer moistureAdc, Float battery) {
+        onSensorData(deviceId, chipId, moistureAdc, battery, null);
+    }
+
+    public void onSensorData(Long deviceId, Long chipId, Integer moistureAdc, Float battery, Float v1) {
+        onSensorData(deviceId, chipId, moistureAdc, battery, v1, null, null);
+    }
+
+    public void onSensorData(Long deviceId, Long chipId, Integer moistureAdc, Float battery,
+                             Float v1, Float v2, Integer v3) {
         if (deviceId == null || chipId == null) {
             return;
         }
@@ -170,7 +200,85 @@ public class AlarmService {
             } else {
                 clear(chipId, LEVEL, now);
             }
+            updateThreshold(sensor, deviceId, chipId, "v0", moisturePercent(sensor, moistureAdc), now);
         }
+        updateThreshold(sensor, deviceId, chipId, "v1", v1 == null ? null : v1.doubleValue(), now);
+        updateThreshold(sensor, deviceId, chipId, "v2", v2 == null ? null : v2.doubleValue(), now);
+        updateThreshold(sensor, deviceId, chipId, "v3", v3 == null ? null : v3.doubleValue(), now);
+    }
+
+    private void updateThreshold(Sensor sensor, Long deviceId, Long chipId, String field, Double value, Instant now) {
+        Short configuredType = thresholdType(sensor, field);
+        int type = configuredType == null ? 0 : configuredType;
+        Double limit1 = thresholdLimit1(sensor, field);
+        Double limit2 = thresholdLimit2(sensor, field);
+        String alarmType = "THRESHOLD_" + field.toUpperCase();
+        if (type == 0) {
+            clear(chipId, alarmType, now);
+            return;
+        }
+        if (value == null) return;
+        if (limit1 == null) {
+            clear(chipId, alarmType, now);
+            return;
+        }
+        double v = value;
+        boolean triggered = switch (type) {
+            case 1 -> v <= limit1;
+            case 2 -> v >= limit1;
+            case 3 -> limit2 != null && (v <= limit1 || v >= limit2);
+            case 4 -> limit2 != null && v >= limit1 && v <= limit2;
+            default -> false;
+        };
+        if (!triggered) {
+            clear(chipId, alarmType, now);
+            return;
+        }
+        Short side = type == 3 ? (short) (v <= limit1 ? 1 : 2) : null;
+        if (side != null) {
+            Optional<Alarm> open = repository.findFirstByChipIdAndAlarmTypeAndEndedAtIsNull(chipId, alarmType);
+            if (open.isPresent() && !side.equals(open.get().getThresholdSide())) {
+                clear(chipId, alarmType, now);
+            }
+        }
+        raise(chipId, deviceId, alarmType, now, v, (short) type, side);
+    }
+
+    /** Re-evaluates the last stored field value after a threshold configuration change. */
+    public void reevaluateThreshold(Sensor sensor, String field, Long deviceId, Instant now) {
+        if (sensor == null || sensor.getSensorChipId() == null) return;
+        Double value = switch (field) {
+            case "v0" -> sensor.getMoistureAdc() == null ? null : moisturePercent(sensor, sensor.getMoistureAdc());
+            case "v1" -> sensor.getTemperature() == null ? null : sensor.getTemperature().doubleValue();
+            case "v2" -> sensor.getHumidity() == null ? null : sensor.getHumidity().doubleValue();
+            case "v3" -> sensor.getLight() == null ? null : sensor.getLight().doubleValue();
+            default -> null;
+        };
+        updateThreshold(sensor, deviceId, sensor.getSensorChipId(), field, value, now);
+    }
+
+    private static Short thresholdType(Sensor s, String f) { return switch (f) { case "v0" -> s.getV0TypeAlarm(); case "v1" -> s.getV1TypeAlarm(); case "v2" -> s.getV2TypeAlarm(); default -> s.getV3TypeAlarm(); }; }
+    private static Double thresholdLimit1(Sensor s, String f) { return switch (f) { case "v0" -> s.getV0Limit1(); case "v1" -> s.getV1Limit1(); case "v2" -> s.getV2Limit1(); default -> s.getV3Limit1(); }; }
+    private static Double thresholdLimit2(Sensor s, String f) { return switch (f) { case "v0" -> s.getV0Limit2(); case "v1" -> s.getV1Limit2(); case "v2" -> s.getV2Limit2(); default -> s.getV3Limit2(); }; }
+
+    /** Mirrors client/src/utils/moisture.js adcToPercent(), including its 0.1% rounding. */
+    public Double moisturePercent(Sensor sensor, Integer adc) {
+        if (adc == null || sensor == null || (sensor.getSensorType() != null && sensor.getSensorType() != 0)) return null;
+        SensorCalibration cal = calibrationService.bySensorId(sensor.getId());
+        Integer dry;
+        Integer water;
+        if (cal != null) {
+            dry = cal.getValue2();
+            water = cal.getValue3();
+        } else {
+            SensorCalibrationService.Values defaults = calibrationService.defaultsFor(sensor.getSensorType());
+            dry = defaults.value2();
+            water = defaults.value3();
+        }
+        if (dry == null || water == null || dry.equals(water)) return null;
+        if (adc > dry) return 0.0;
+        if (adc < water) return 100.0;
+        return Math.round(((dry - adc) / (double) (dry - water)) * 1000.0) / 10.0;
     }
 
     private void updateBattery(Sensor sensor, Long deviceId, Long chipId, float battery, Instant now) {

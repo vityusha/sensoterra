@@ -39,4 +39,12 @@ public class Alarm {
     /** Type-specific reading (LEVEL: moisture ADC); unused by GAP and OFFLINE. */
     @Column(name = "data_value")
     private Double value;
+
+    /** Threshold mode captured for the V0–V3 alarm, so its wording survives later setting changes. */
+    @Column(name = "threshold_mode")
+    private Short thresholdMode;
+
+    /** For outside-interval alarms: 1 = below limit 1, 2 = above limit 2. */
+    @Column(name = "threshold_side")
+    private Short thresholdSide;
 }
