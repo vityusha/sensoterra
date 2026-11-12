@@ -23,7 +23,7 @@ function normalizeBgColor(v) {
   return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : null
 }
 
-const DEFAULT_BG = { dark: '#1a1a2e', light: '#f7f7f7' }
+const DEFAULT_BG = { dark: '#00374a', light: '#f7f7f7' }
 
 function clearPaletteVars(root) {
   for (const name of THEME_VAR_NAMES) root.style.removeProperty(name)

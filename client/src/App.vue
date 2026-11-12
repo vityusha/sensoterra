@@ -69,11 +69,13 @@ body {
 
 :root {
   color-scheme: dark;
-  --bg: #1a1a2e;
+  --bg: #00374a;
   --bg-soft: #242444;
   --bg-card: #2c2c3e;
   --bg-primary: #3a3a50;
   --bg-accent: #5c1a1a;
+  --relay-off-bg: var(--bg-accent);
+  --relay-off-text: var(--text);
   --bg-active: #1a3b5c;
   --text: #eee;
   --text-strong: #e0e0e0;
@@ -120,6 +122,8 @@ body {
   --bg-card: #ffffff;
   --bg-primary: #e6e6ec;
   --bg-accent: #f6dada;
+  --relay-off-bg: #ff8c82;
+  --relay-off-text: #ffffff;
   --bg-active: #d3e6f6;
   --text: #1a1a1a;
   --text-strong: #222222;

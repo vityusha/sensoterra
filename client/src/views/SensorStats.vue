@@ -70,11 +70,9 @@
         Проверьте уровень погружения датчика в почву
       </div>
       <div class="latest-grid">
-        <div class="latest-cell" v-for="che in cellCharts" :key="'l' + che.key" :style="cellBackground(che)">
-          <span class="l-label" :class="{ 'has-threshold': configuredThresholdFields.has(che.key) }"><svg v-if="configuredThresholdFields.has(che.key)" class="threshold-bell" viewBox="0 0 16 16" role="img" aria-label="Для параметра настроен порог" title="Для параметра настроен порог"><path d="M8 1.75a3 3 0 0 0-3 3v1.1c0 1.25-.38 2.48-1.1 3.5L3 10.75h10l-.9-1.4A6.5 6.5 0 0 1 11 5.85v-1.1a3 3 0 0 0-3-3ZM6.3 12a1.75 1.75 0 0 0 3.4 0" /></svg><span>{{ labelParts(che.key).first }}<br v-if="labelParts(che.key).rest" />{{ labelParts(che.key).rest }}</span></span>
-          <span v-if="isGradientField(che.key)" class="gradient-tools">
-            <button class="gradient-btn" @click.stop="openGradient(che.key)" :title="gradientTitle(che.key)"></button>
-          </span>
+        <div class="latest-cell" v-for="che in cellCharts" :key="'l' + che.key" :style="cellBackground(che)" :class="{ 'gradient-editable': isGradientField(che.key) }" :role="isGradientField(che.key) ? 'button' : undefined" :tabindex="isGradientField(che.key) ? 0 : undefined" :aria-label="isGradientField(che.key) ? `Настройка цвета и порогов: ${label(che.key)}` : undefined" @click="isGradientField(che.key) && openGradient(che.key)" @keydown.enter.stop="isGradientField(che.key) && openGradient(che.key)" @keydown.space.prevent.stop="isGradientField(che.key) && openGradient(che.key)">
+          <span class="l-label" :class="{ 'has-gradient': isGradientField(che.key) }"><span>{{ labelParts(che.key).first }}<br v-if="labelParts(che.key).rest" />{{ labelParts(che.key).rest }}</span></span>
+          <span v-if="configuredThresholdFields.has(che.key)" class="threshold-indicator" title="Настроены пороги" aria-label="Настроены пороги"><svg class="threshold-bell" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.75a3 3 0 0 0-3 3v1.1c0 1.25-.38 2.48-1.1 3.5L3 10.75h10l-.9-1.4A6.5 6.5 0 0 1 11 5.85v-1.1a3 3 0 0 0-3-3ZM6.3 12a1.75 1.75 0 0 0 3.4 0" /></svg></span>
           <span class="l-value"><span class="l-reading" :class="{ 'alarm-active': openThresholdFields.has(che.key) }">{{ cellValue(che, latest) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span></span><span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null"></span></span>
         </div>
       </div>
@@ -1123,15 +1121,14 @@ onUnmounted(() => {
 .admin-locked { font-size: 0.78rem; line-height: 1.45; color: var(--text-dim); margin: 0 0 0.6rem; }
 .btn.danger { background: var(--bg-accent); border-color: var(--bg-accent); color: var(--on-accent); }
 .btn.danger:hover:not(:disabled) { background: #7a2222; border-color: #7a2222; color: #fff; }
-.gradient-btn {
-  width: 16px; height: 16px; flex: none; padding: 0; cursor: pointer;
-  border: 2px solid #fff; border-radius: 50%;
-  background: conic-gradient(#ff0000 0 120deg, #00ff00 120deg 240deg, #0000ff 240deg 360deg);
-}
-.threshold-bell { width: 12px; height: 12px; flex: none; fill: none; stroke: #ffe066; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.threshold-indicator { position: absolute; top: 0.45rem; right: 0.75rem; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.threshold-bell { width: 16px; height: 16px; flex: none; fill: none; stroke: #ffe066; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 :global(html[data-theme="light"] .threshold-bell) { stroke: #2563eb !important; }
 .latest-cell { position: relative; display: grid; grid-template-rows: 2.25rem 1.5rem; row-gap: 0.25rem; }
-.gradient-tools { position: absolute; top: 0.55rem; right: 0.9rem; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.latest-cell.gradient-editable { border: 1px solid var(--border-soft); padding: calc(0.7rem - 1px) calc(0.9rem - 1px); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s; }
+.latest-cell.gradient-editable:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.latest-cell.gradient-editable:active { border-color: var(--accent); background: var(--bg-soft); box-shadow: 0 0 0 1px var(--accent); }
+.latest-cell.gradient-editable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.small { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
 .btn.secondary { background: var(--bg-accent); }
@@ -1151,11 +1148,12 @@ onUnmounted(() => {
 .latest-cell { background: var(--bg-card); border-radius: 10px; padding: 0.7rem 0.9rem; }
 .l-label { display: flex; align-items: flex-start; gap: 0.4rem; color: var(--text-sub); font-size: 0.8rem; line-height: 1.05rem; margin: 0; padding-right: 1.8rem; overflow: hidden; white-space: normal; }
 .l-label.has-threshold { gap: 0.08rem; }
+.l-label.has-gradient { padding-right: 2.5rem; }
 .l-label > span { display: -webkit-box; flex: 1; min-width: 0; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: inline-flex; align-items: center; align-self: start; min-width: 0; min-height: 1.5rem; }
+.l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: flex; align-items: center; align-self: start; width: 100%; min-width: 0; min-height: 1.5rem; }
 .l-reading { display: inline-flex; align-items: center; min-height: 1.5rem; box-sizing: border-box; padding: 0.15rem 0.35rem; border: 1px solid transparent; border-radius: 5px; }
 .l-reading.alarm-active { border-color: var(--danger); }
-.pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin: 0.2em 0 0 0.4rem; flex: none; border: 1px solid #fff; border-radius: 2px; }
+.pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin: 0.2em 0 0 auto; flex: none; border: 1px solid #fff; border-radius: 2px; }
 .device-name-field { display: flex; flex-direction: column; gap: 0.4rem; max-width: 360px; margin-bottom: 1rem; }
 .device-name-field .field-label { color: var(--text-muted); font-size: 0.8rem; }
 .device-name-field .field-hint { color: var(--text-faint); font-size: 0.72rem; }
