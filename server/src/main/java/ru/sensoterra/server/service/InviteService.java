@@ -142,6 +142,14 @@ public class InviteService {
         inviteRepository.update(invite);
     }
 
+    /** Permanently removes one invite record; accepted device access remains unchanged. */
+    @Transactional
+    public void delete(Long chipId, Long inviteId) {
+        DeviceInvite invite = inviteRepository.findByIdAndChipId(inviteId, chipId)
+                .orElseThrow(() -> new HttpStatusException(HttpStatus.NOT_FOUND, "Invite not found"));
+        inviteRepository.delete(invite);
+    }
+
     /**
      * Отозвать все живые ссылки устройства. Нужно при отмене всех регистраций блока:
      * старые ссылки не должны выдавать доступ тому, кто их сохранил.

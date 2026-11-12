@@ -221,7 +221,7 @@
           <div v-if="filteredIndividualSensors.length === 0" class="empty small">По ID ничего не найдено</div>
           <div class="device-list" v-else>
             <div class="device-card" v-for="s in pagedIndividualSensors" :key="s.chipId"
-              :class="{ trusted: adminTrustedDevice(s.chipId) }" @click="router.push(`/sensor/${s.chipId}`)">
+              :class="{ trusted: adminTrustedDevice(s.chipId) }" @click="openIndividualSensor(s)">
               <div class="device-icon sensor">SA</div>
               <div class="device-info">
                 <div class="device-name">
@@ -552,6 +552,7 @@ onMounted(async () => {
   connectWs()
   try {
     await refreshAll()
+    restoreSensorListPage()
   } finally {
     loading.value = false
   }
@@ -597,7 +598,32 @@ function openBlockSensor(s) {
     keepBlockId.value = null
     return
   }
+  rememberSensorListPage('blockSensors')
   router.push(`/sensor/${s.chipId}?deviceId=${s.blockRoles?.[0]?.blockId ?? s.chipId}`)
+}
+
+function openIndividualSensor(s) {
+  rememberSensorListPage('individual')
+  router.push(`/sensor/${s.chipId}`)
+}
+
+const SENSOR_LIST_PAGE_KEY = 'sensoterra.dashboard.return-sensor-page'
+
+function rememberSensorListPage(list) {
+  try {
+    const page = list === 'blockSensors' ? blockSensorPage.value : individualPage.value
+    sessionStorage.setItem(SENSOR_LIST_PAGE_KEY, JSON.stringify({ list, page }))
+  } catch { /* session storage can be disabled by the browser */ }
+}
+
+function restoreSensorListPage() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SENSOR_LIST_PAGE_KEY) || 'null')
+    sessionStorage.removeItem(SENSOR_LIST_PAGE_KEY)
+    if (!saved || !Number.isInteger(saved.page) || saved.page < 1) return
+    if (saved.list === 'blockSensors') blockSensorPage.value = Math.min(saved.page, blockSensorPages.value)
+    if (saved.list === 'individual') individualPage.value = Math.min(saved.page, individualPages.value)
+  } catch { /* ignore invalid or unavailable session state */ }
 }
 
 async function resolveConflict() {

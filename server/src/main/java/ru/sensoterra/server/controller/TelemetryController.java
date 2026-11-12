@@ -95,6 +95,28 @@ public class TelemetryController {
         return q.getResultList();
     }
 
+    /** All retained non-empty sensor errors, paged and restricted to administrators. */
+    @Get("/sensor/errors")
+    @Secured("ADMIN")
+    @Transactional
+    public List<SensorTelemetry> sensorErrors(
+            @QueryValue Long deviceId,
+            @QueryValue Long sensorChipId,
+            @Nullable @QueryValue Integer offset,
+            @Nullable @QueryValue Integer limit) {
+        access.requireView(deviceId);
+        int first = Math.max(0, offset == null ? 0 : offset);
+        int size = Math.min(500, Math.max(1, limit == null ? 500 : limit));
+        return em.createQuery("SELECT t FROM SensorTelemetry t WHERE t.deviceId = :deviceId " +
+                        "AND t.sensorChipId = :chipId AND t.error IS NOT NULL AND TRIM(t.error) <> '' " +
+                        "ORDER BY t.time DESC", SensorTelemetry.class)
+                .setParameter("deviceId", deviceId)
+                .setParameter("chipId", sensorChipId)
+                .setFirstResult(first)
+                .setMaxResults(size)
+                .getResultList();
+    }
+
     /**
      * Access check for sensor telemetry; returns the deviceId the query must be limited to
      * (null = no limit, admins only).

@@ -38,6 +38,9 @@ export function dismissNotification(id) {
 
 let ws = null
 let reconnectTimer = null
+let heartbeatTimer = null
+let heartbeatSocket = null
+let lastPongAt = 0
 // Token the server refused (close code 1008): don't retry with it, wait for a new login.
 let rejectedToken = null
 const CLOSE_POLICY_VIOLATION = 1008
@@ -75,11 +78,15 @@ export function connectWs() {
   }
   ws = socket
   socket.onopen = () => {
+    if (ws !== socket) return
     connection.online = true
+    lastPongAt = Date.now()
+    startHeartbeat(socket)
   }
   socket.onclose = (event) => {
     // Replaced or closed on purpose by disconnectWs().
     if (ws !== socket) return
+    stopHeartbeat(socket)
     ws = null
     connection.online = false
     // The server rejected the token (expired, invalid, account disabled): retrying every
@@ -98,15 +105,49 @@ export function connectWs() {
     scheduleReconnect()
   }
   socket.onerror = () => {
+    if (ws !== socket) return
     connection.online = false
     socket.close()
   }
   socket.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
+      if (msg.type === 'pong') {
+        if (ws === socket) {
+          lastPongAt = Date.now()
+          connection.online = true
+        }
+        return
+      }
       handleMessage(msg)
     } catch { /* ignore */ }
   }
+}
+
+function startHeartbeat(socket) {
+  stopHeartbeat()
+  heartbeatSocket = socket
+  heartbeatTimer = setInterval(() => {
+    if (ws !== socket || socket.readyState !== WebSocket.OPEN) return
+    if (Date.now() - lastPongAt > 65_000) {
+      connection.online = false
+      socket.close()
+      return
+    }
+    try {
+      socket.send(JSON.stringify({ type: 'ping' }))
+    } catch {
+      connection.online = false
+      socket.close()
+    }
+  }, 20_000)
+}
+
+function stopHeartbeat(socket = null) {
+  if (socket && heartbeatSocket !== socket) return
+  if (heartbeatTimer) clearInterval(heartbeatTimer)
+  heartbeatTimer = null
+  heartbeatSocket = null
 }
 
 function handleMessage(msg) {
@@ -138,6 +179,11 @@ function scheduleReconnect() {
 export function reconnectWsNow() {
   clearTimeout(reconnectTimer)
   reconnectTimer = null
+  const stale = ws
+  ws = null
+  connection.online = false
+  stopHeartbeat()
+  if (stale && stale.readyState < WebSocket.CLOSING) stale.close(1000, 'Reconnect')
   connectWs()
 }
 
@@ -148,5 +194,6 @@ export function disconnectWs() {
   const socket = ws
   ws = null
   connection.online = false
+  stopHeartbeat()
   if (socket) socket.close()
 }

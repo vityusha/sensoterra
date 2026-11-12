@@ -345,6 +345,10 @@ export async function revokeInvite(chipId, inviteId) {
   await api.delete(`/devices/${chipId}/invites/${inviteId}`)
 }
 
+export async function deleteInvite(chipId, inviteId) {
+  await api.delete(`/devices/${chipId}/invites/${inviteId}/delete`)
+}
+
 /** Убирает из списка завершённые приглашения (отозванные и истёкшие). Возвращает { removed }. */
 export async function clearFinishedInvites(chipId) {
   const { data } = await api.delete(`/devices/${chipId}/invites/finished`)
@@ -539,6 +543,12 @@ export async function getSensorTelemetry(deviceId, sensorChipId, since, to, limi
   if (to) params.set('to', to)
   if (limit != null) params.set('limit', limit)
   const { data } = await api.get(`/telemetry/sensor?${params}`)
+  return data
+}
+
+export async function getSensorErrors(deviceId, sensorChipId, offset = 0, limit = 500) {
+  const params = new URLSearchParams({ deviceId, sensorChipId, offset, limit })
+  const { data } = await api.get(`/telemetry/sensor/errors?${params}`)
   return data
 }
 

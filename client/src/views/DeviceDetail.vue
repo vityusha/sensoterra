@@ -64,6 +64,9 @@
       </div>
       <div v-if="invites.length" class="invite-list">
         <div class="invite-row" v-for="i in invites" :key="i.id">
+          <button v-if="i.acceptedAt" class="invite-delete" :disabled="clearBusy || inviteDeleteBusy === i.id" title="Удалить запись о принятом приглашении" :aria-label="`Удалить принятое приглашение ${i.token.slice(0, 8)}`" @click="deleteAcceptedInvite(i)">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" /></svg>
+          </button>
           <code class="invite-token">{{ i.token.slice(0, 8) }}…</code>
           <span class="invite-state" :class="i.usable ? 'ok' : 'no'">
             <template v-if="i.usable">до {{ fmtDate(i.expiresAt) }}</template>
@@ -203,7 +206,7 @@
             />
             <div class="range-hint">Выделите период на графике мышью или пальцем</div>
             <div class="chart-section" v-if="relayStatsData[r.relayNumber]?.states?.length" @click.stop>
-              <LineChart :labels="relayStatsData[r.relayNumber].labels" :datasets="[{ label: relayName(r), data: relayStatsData[r.relayNumber].states, color: '#f39c12', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'выкл', 1: 'вкл' }" :x-min="relayStatsData[r.relayNumber].startMs" :x-max="relayStatsData[r.relayNumber].endMs" selectable @select-range="applyRelayRange(r, $event)" />
+              <LineChart :labels="relayStatsData[r.relayNumber].labels" :datasets="[{ label: relayName(r), data: relayStatsData[r.relayNumber].states, color: '#f39c12', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'выкл', 1: 'вкл' }" :x-min="relayStatsData[r.relayNumber].startMs" :x-max="relayStatsData[r.relayNumber].endMs" selectable @select-range="applyRelayRange(r, $event)" />
             </div>
             <div class="empty small" v-else>Нет переключений за выбранный период</div>
           </div>
@@ -322,15 +325,15 @@
         </div>
         <div class="chart-section" v-if="blockStatsData.length">
           <h4>RSSI роутера, дБм</h4>
-          <LineChart :labels="timeLabels" :datasets="[{ label: 'RSSI роутера', data: blockStatsData.map(d => d.rssiR), color: '#3498db' }]" unit="дБм" :zone-offset="device?.tzOffsetMinutes" :y-bands="RSSI_BANDS" :y-min="blockRssiY.min" :y-max="blockRssiY.max" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
+          <LineChart :labels="timeLabels" :datasets="[{ label: 'RSSI роутера', data: blockStatsData.map(d => d.rssiR), color: '#3498db' }]" unit="дБм" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :y-bands="RSSI_BANDS" :y-min="blockRssiY.min" :y-max="blockRssiY.max" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="chart-section" v-if="blockStatsData.length">
           <h4>Батарея, В</h4>
-          <LineChart :labels="vbatStatsData.map(d => d.time)" :datasets="[{ label: 'Батарея', data: vbatStatsData.map(d => d.vbat), color: '#2ecc71' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="3.5" :y-step="0.5" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
+          <LineChart :labels="vbatStatsData.map(d => d.time)" :datasets="[{ label: 'Батарея', data: vbatStatsData.map(d => d.vbat), color: '#2ecc71' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :y-min="0" :y-max="3.5" :y-step="0.5" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="chart-section" v-if="showVacc && blockStatsData.length">
           <h4>Аккумулятор, В</h4>
-          <LineChart :labels="timeLabels" :datasets="[{ label: 'Аккумулятор', data: blockStatsData.map(d => d.vacc), color: '#f39c12' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :y-min="0" :y-max="25" :y-step="5" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
+          <LineChart :labels="timeLabels" :datasets="[{ label: 'Аккумулятор', data: blockStatsData.map(d => d.vacc), color: '#f39c12' }]" unit="В" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :y-min="0" :y-max="25" :y-step="5" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="chart-section" v-if="statusStatsData.length">
           <h4>Статус</h4>
@@ -346,7 +349,7 @@
 import AlarmBell from '../components/AlarmBell.vue'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, api, getDeviceStatuses, getBlockTelemetry, getDeviceStatusLog, getRelayTelemetry, getServerUptimeHistory, listInvites, createInvite, revokeInvite, clearFinishedInvites, clearAllInvites, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, getDeviceKey, regenerateDeviceKey, getDevicePayment, setDevicePayment, extendDevicePayment, resetDeviceRegistrations, getMoistureScale, getSensorScales, listAlarms } from '../api/auth'
+import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, api, getDeviceStatuses, getBlockTelemetry, getDeviceStatusLog, getRelayTelemetry, getServerUptimeHistory, listInvites, createInvite, revokeInvite, deleteInvite, clearFinishedInvites, clearAllInvites, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, getDeviceKey, regenerateDeviceKey, getDevicePayment, setDevicePayment, extendDevicePayment, resetDeviceRegistrations, getMoistureScale, getSensorScales, listAlarms } from '../api/auth'
 import { getBlockName, setBlockName, getIndividualName, setIndividualName, getFieldName, getFieldUnit, isFieldHidden, isVaccHidden, setVaccVisible } from '../store/settings'
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
@@ -942,6 +945,7 @@ async function copyInvite(token) {
  */
 const removableInvites = computed(() => invites.value.filter(i => !i.acceptedAt))
 const clearBusy = ref(false)
+const inviteDeleteBusy = ref(null)
 
 async function clearFinished() {
   if (!confirm('Убрать из списка отозванные и истёкшие ссылки? Принятые останутся.')) return
@@ -990,6 +994,21 @@ async function dropInvite(invite) {
   await revokeInvite(chipId, invite.id)
   if (lastInvite.value?.id === invite.id) lastInvite.value = null
   await loadInvites()
+}
+
+async function deleteAcceptedInvite(invite) {
+  if (!invite.acceptedAt || inviteDeleteBusy.value != null) return
+  if (!confirm(`Удалить запись о принятом приглашении${invite.acceptedBy ? ` пользователя ${invite.acceptedBy}` : ''}? Доступ к устройству останется.`)) return
+  inviteDeleteBusy.value = invite.id
+  try {
+    await deleteInvite(chipId, invite.id)
+    if (lastInvite.value?.id === invite.id) lastInvite.value = null
+    await loadInvites()
+  } catch (e) {
+    pushNotification(e.response?.data?.message || 'Не удалось удалить приглашение', 'error')
+  } finally {
+    inviteDeleteBusy.value = null
+  }
 }
 
 const displayName = computed(() => {
@@ -1519,6 +1538,10 @@ async function shiftBlockRange(direction) {
 .invite-cleanup { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
 .invite-list { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .invite-row { display: flex; align-items: center; gap: 0.5rem; background: var(--bg); border-radius: 6px; padding: 0.35rem 0.5rem; }
+.invite-delete { display: inline-flex; flex: none; padding: 0.25rem; border: none; border-radius: 6px; background: transparent; color: var(--text-dim); cursor: pointer; }
+.invite-delete:hover:not(:disabled) { color: var(--danger); background: var(--bg-soft); }
+.invite-delete:focus-visible { outline: 2px solid var(--accent); }
+.invite-delete:disabled { opacity: 0.5; cursor: default; }
 .role-select { padding: 0.25rem 0.4rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.75rem; }
 .invite-role { color: var(--muted-fg); font-size: 0.7rem; }
 .invite-token { color: var(--text-dim); font-size: 0.75rem; }
