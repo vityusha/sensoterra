@@ -71,7 +71,7 @@
       </div>
       <div class="latest-grid">
         <div class="latest-cell" v-for="che in cellCharts" :key="'l' + che.key" :style="cellBackground(che)">
-          <span class="l-label" :class="{ 'has-threshold': configuredThresholdFields.has(che.key) }"><svg v-if="configuredThresholdFields.has(che.key)" class="threshold-bell" viewBox="0 0 16 16" role="img" aria-label="Для параметра настроен порог" title="Для параметра настроен порог"><path d="M8 1.75a3 3 0 0 0-3 3v1.1c0 1.25-.38 2.48-1.1 3.5L3 10.75h10l-.9-1.4A6.5 6.5 0 0 1 11 5.85v-1.1a3 3 0 0 0-3-3ZM6.3 12a1.75 1.75 0 0 0 3.4 0" /></svg><span>{{ label(che.key) }}</span></span>
+          <span class="l-label" :class="{ 'has-threshold': configuredThresholdFields.has(che.key) }"><svg v-if="configuredThresholdFields.has(che.key)" class="threshold-bell" viewBox="0 0 16 16" role="img" aria-label="Для параметра настроен порог" title="Для параметра настроен порог"><path d="M8 1.75a3 3 0 0 0-3 3v1.1c0 1.25-.38 2.48-1.1 3.5L3 10.75h10l-.9-1.4A6.5 6.5 0 0 1 11 5.85v-1.1a3 3 0 0 0-3-3ZM6.3 12a1.75 1.75 0 0 0 3.4 0" /></svg><span>{{ labelParts(che.key).first }}<br v-if="labelParts(che.key).rest" />{{ labelParts(che.key).rest }}</span></span>
           <span v-if="isGradientField(che.key)" class="gradient-tools">
             <button class="gradient-btn" @click.stop="openGradient(che.key)" :title="gradientTitle(che.key)"></button>
           </span>
@@ -165,12 +165,34 @@
           </div>
           <LineChart :labels="timeLabels" :datasets="chartDatasets(che)" :unit="chartUnit(che)" :zone-offset="tzOffset ?? undefined" :x-min="statsXMin" :x-max="statsXMax" :y-min="yBounds(che.key).min" :y-max="yBounds(che.key).max" :y-bands="che.key === 'rssi' ? RSSI_BANDS : []" selectable @select-range="applySelectedRange" />
         </div>
-        <div class="chart-section transmission-section" v-if="transmissionMarkers.length">
+        <div class="chart-section transmission-section" v-if="transmissionMarkers.length || isAdmin">
           <div class="chart-head">
             <h4>Передача данных</h4>
-            <span class="transmission-count">{{ transmissionMarkers.length }} сообщ.</span>
+            <div class="transmission-actions">
+              <div v-if="isAdmin" class="transmission-toggle" role="group" aria-label="Вид передачи данных">
+                <button class="btn small" :class="{ active: transmissionView === 'graph' }" @click="transmissionView = 'graph'">График</button>
+                <button class="btn small" :class="{ active: transmissionView === 'errors' }" @click="showErrors">Ошибки</button>
+              </div>
+              <span class="transmission-count" v-if="transmissionView === 'graph' || !isAdmin">{{ transmissionMarkers.length }} сообщ.</span>
+              <span class="transmission-count" v-else>{{ errorsExhausted ? `${errorRows.length} ошибок` : `Показано ${errorRows.length}` }}</span>
+            </div>
           </div>
-          <LineChart :markers="transmissionMarkers" :x-min="statsXMin" :x-max="statsXMax" :zone-offset="tzOffset ?? undefined" timeline selectable :aria-label="`Передача данных: ${transmissionMarkers.length} сообщений`" @select-range="applySelectedRange" />
+          <LineChart v-if="transmissionView === 'graph' || !isAdmin" :markers="transmissionMarkers" :x-min="statsXMin" :x-max="statsXMax" :zone-offset="tzOffset ?? undefined" timeline selectable :aria-label="`Передача данных: ${transmissionMarkers.length} сообщений`" @select-range="applySelectedRange" />
+          <div v-else class="error-list-wrap">
+            <div v-if="errorsLoading" class="empty small">Загружаю ошибки…</div>
+            <table v-if="errorRows.length" class="error-list">
+              <thead><tr><th>Дата</th><th>№ сообщения</th><th>Ошибка</th></tr></thead>
+              <tbody>
+                <tr v-for="(row, index) in errorRows" :key="`${row.time}-${index}`">
+                  <td>{{ fmtEventTimeWithZone(row.time, tzOffset) }}</td>
+                  <td>{{ row.numMessage ?? '—' }}</td>
+                  <td>{{ row.error }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else-if="!errorsLoading" class="empty small">Ошибок в сохранённой истории нет</div>
+            <button v-if="!errorsExhausted && !errorsLoading" class="btn small load-more-errors" @click="loadMoreErrors">Загрузить ещё</button>
+          </div>
         </div>
         <div class="empty small" v-if="!chartSections.length && !transmissionMarkers.length">За выбранный период данных нет</div>
       </template>
@@ -226,7 +248,7 @@
 import AlarmBell from '../components/AlarmBell.vue'
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSensorCatalog, getSensorTelemetry, getSensorFirstMessage, getDevice, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getSensorThreshold, getDeviceKey, regenerateDeviceKey, listAlarms } from '../api/auth'
+import { getSensorCatalog, getSensorTelemetry, getSensorErrors, getSensorFirstMessage, getDevice, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getSensorThreshold, getDeviceKey, regenerateDeviceKey, listAlarms } from '../api/auth'
 import { auth, deviceAccess, rememberDeviceAccess, rememberDeviceOwner, isOwnerRole } from '../store/auth'
 import { getIndividualName, setIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
 import { pushNotification, connectWs } from '../store/notifications'
@@ -338,6 +360,37 @@ const timeLabels = computed(() => rows.value.map(r => r.time))
 
 const statsXMin = ref(null)
 const statsXMax = ref(null)
+const transmissionView = ref('graph')
+const allErrorRows = ref([])
+const errorsLoading = ref(false)
+const errorsExhausted = ref(false)
+const errorOffset = ref(0)
+
+const errorRows = computed(() => allErrorRows.value
+  .slice()
+  .sort((a, b) => Date.parse(b.time) - Date.parse(a.time)))
+
+async function showErrors() {
+  transmissionView.value = 'errors'
+  if (allErrorRows.value.length || errorsExhausted.value || errorsLoading.value) return
+  await loadMoreErrors()
+}
+
+async function loadMoreErrors() {
+  if (errorsExhausted.value || errorsLoading.value) return
+  errorsLoading.value = true
+  try {
+    const pageSize = 100
+    const page = await getSensorErrors(resolvedDeviceId.value, chipId, errorOffset.value, pageSize)
+    allErrorRows.value = [...allErrorRows.value, ...page]
+    errorOffset.value += page.length
+    if (page.length < pageSize) errorsExhausted.value = true
+  } catch (e) {
+    pushNotification(e?.response?.data?.message || 'Не удалось загрузить список ошибок', 'error')
+  } finally {
+    errorsLoading.value = false
+  }
+}
 
 const transmissionMarkers = computed(() => {
   const min = statsXMin.value
@@ -349,6 +402,7 @@ const transmissionMarkers = computed(() => {
     return [{
       x: ms,
       title: `${fmtEventTimeWithZone(r.time, tzOffset.value)}${r.numMessage != null ? ` [${r.numMessage}]` : ''}`,
+      error: isAdmin.value && typeof r.error === 'string' && r.error.trim() ? r.error.trim() : '',
     }]
   })
 })
@@ -717,6 +771,14 @@ function label(key) {
   if (key === 'batload') return 'Батарея под нагрузкой'
   if (key === 'rssi') return isIndividual.value ? 'RSSI роутера' : 'RSSI блока'
   return name
+}
+
+function labelParts(key) {
+  const text = label(key)
+  const splitAt = text.indexOf(' ')
+  return splitAt < 0
+    ? { first: text, rest: '' }
+    : { first: text.slice(0, splitAt), rest: text.slice(splitAt + 1) }
 }
 
 /** Единица величины — из настроек; дефолты для батареи/RSSI. */
@@ -1089,7 +1151,7 @@ onUnmounted(() => {
 .latest-cell { background: var(--bg-card); border-radius: 10px; padding: 0.7rem 0.9rem; }
 .l-label { display: flex; align-items: flex-start; gap: 0.4rem; color: var(--text-sub); font-size: 0.8rem; line-height: 1.05rem; margin: 0; padding-right: 1.8rem; overflow: hidden; white-space: normal; }
 .l-label.has-threshold { gap: 0.08rem; }
-.l-label > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.l-label > span { display: -webkit-box; flex: 1; min-width: 0; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: inline-flex; align-items: center; align-self: start; min-width: 0; min-height: 1.5rem; }
 .l-reading { display: inline-flex; align-items: center; min-height: 1.5rem; box-sizing: border-box; padding: 0.15rem 0.35rem; border: 1px solid transparent; border-radius: 5px; }
 .l-reading.alarm-active { border-color: var(--danger); }
@@ -1106,6 +1168,17 @@ onUnmounted(() => {
 .chart-section h4 { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 0; }
 .transmission-section { margin-bottom: 1.5rem; }
 .transmission-count { color: var(--text-faint); font-size: 0.72rem; }
+.transmission-actions, .transmission-toggle { display: flex; align-items: center; gap: 0.45rem; }
+.error-list-wrap { max-width: 100%; overflow-x: auto; }
+.error-list { width: 100%; border-collapse: collapse; color: var(--text); font-size: 0.8rem; }
+.error-list th, .error-list td { padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--border-soft); text-align: left; vertical-align: top; }
+.error-list th { color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+.error-list td:first-child, .error-list td:nth-child(2) { white-space: nowrap; }
+@media (max-width: 560px) {
+  .transmission-section .chart-head { align-items: flex-start; flex-direction: column; }
+  .error-list { font-size: 0.74rem; }
+  .error-list th, .error-list td { padding: 0.45rem 0.35rem; }
+}
 .y-edit { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .y-edit label { display: flex; align-items: center; gap: 0.3rem; color: var(--text-dim); font-size: 0.7rem; }
 .y-edit input { width: 5.5rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.75rem; padding: 0.2rem 0.4rem; }

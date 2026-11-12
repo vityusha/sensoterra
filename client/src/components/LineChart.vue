@@ -255,7 +255,16 @@ function mergeIntervals(list) {
 }
 
 const series = computed(() => {
-  // Точки, попавшие внутрь простоя сервиса, отбрасываются (сервер не принимал данные).
+  const offlineMs = (props.offline || []).map(i => ({
+    from: new Date(i.from).getTime(),
+    to: new Date(i.to).getTime(),
+  })).filter(i => !isNaN(i.from) && !isNaN(i.to) && i.to > i.from)
+  const lineBreaks = props.continuous
+    ? mergeIntervals(downMs.value)
+    : mergeIntervals([...downMs.value, ...offlineMs])
+  const pointBreaks = props.continuous ? downMs.value : lineBreaks
+
+  // Omit samples during service downtime or device offline intervals.
   const datasets = props.datasets.map(d => {
     const pts = (d.data || []).map((y, i) => {
       const t = props.labels?.[i]
@@ -263,7 +272,7 @@ const series = computed(() => {
       return { x, y }
     }).filter(pt => {
       if (pt.x == null || isNaN(pt.x)) return false
-      for (const dn of downMs.value) {
+      for (const dn of pointBreaks) {
         if (pt.x > dn.from && pt.x < dn.to) return false
       }
       return true
@@ -271,27 +280,27 @@ const series = computed(() => {
     return { ...d, pts }
   })
 
-  // Единый набор интервалов разрыва — только простой сервиса (одинаков для всех графиков).
-  const breakInts = mergeIntervals(downMs.value)
-  bgBreaks.value = breakInts.map(b => ({ from: new Date(b.from).toISOString(), to: new Date(b.to).toISOString() }))
-  bgBreaksMs.value = breakInts
+  // Серый фон отмечает только downtime сервера; offline сохраняет красный фон.
+  const downtimeInts = mergeIntervals(downMs.value)
+  bgBreaks.value = downtimeInts.map(b => ({ from: new Date(b.from).toISOString(), to: new Date(b.to).toISOString() }))
+  bgBreaksMs.value = downtimeInts
 
-  // Вставляем null на середину каждого интервала разрыва (ломаем линию).
-  // В режиме continuous (статус) разрыв идёт строго по границам серой зоны:
-  // линия держит последнее значение до её начала и возобновляется от её конца.
+  // Split ordinary series exactly at offline/downtime boundaries. Continuous status
+  // remains visible through offline events and only breaks during server downtime.
   return datasets.map(ds => {
     const p = ds.pts
     const minX = p.length ? p[0].x : Infinity
     const maxX = p.length ? p[p.length - 1].x : -Infinity
     const markers = []
-    for (const b of breakInts) {
+    for (const b of lineBreaks) {
       const m = (b.from + b.to) / 2
       if (props.continuous) {
         if (b.from > minX && b.from < maxX) markers.push({ x: b.from, kind: 'start' })
         if (b.to > minX && b.to < maxX) markers.push({ x: b.to, kind: 'end' })
         if (m > minX && m < maxX) markers.push({ x: m, kind: 'gap' })
-      } else if (m > minX && m < maxX) {
-        markers.push({ x: m, kind: 'gap' })
+      } else {
+        if (b.from > minX && b.from < maxX) markers.push({ x: b.from, kind: 'start' })
+        if (b.to > minX && b.to < maxX) markers.push({ x: b.to, kind: 'end' })
       }
     }
     markers.sort((a, b) => a.x - b.x)
@@ -303,8 +312,13 @@ const series = computed(() => {
       while (mi < markers.length && markers[mi].x < p[i].x) {
         const mk = markers[mi++]
         if (mk.kind === 'gap') push({ x: mk.x, y: null })
-        else if (mk.kind === 'start') push({ x: mk.x, y: lastY })
-        else push({ x: mk.x, y: p[i].y }) // end: возобновляем значением следующей точки
+        else if (mk.kind === 'start') {
+          push({ x: mk.x, y: lastY })
+          if (!props.continuous) push({ x: mk.x, y: null })
+        } else {
+          if (!props.continuous) push({ x: mk.x, y: null })
+          push({ x: mk.x, y: p[i].y }) // End: resume with the next sample.
+        }
       }
       push(p[i])
     }
@@ -364,7 +378,8 @@ function buildChart() {
   cancelBrush()
   if (chart) chart.destroy()
   if (!canvas.value) return
-  const tipOn = chartTooltipsEnabled()
+  const hasTimelineMarkers = props.timeline && props.markers.length > 0
+  const tipOn = chartTooltipsEnabled() || hasTimelineMarkers
   const legendColor = cssVar('--text-muted', '#aaa')
   const tickColor = cssVar('--text-dim', '#888')
   const tickColor2 = cssVar('--text-faint', '#666')
@@ -373,7 +388,8 @@ function buildChart() {
   chart = new Chart(canvas.value, {
     type: 'line',
     data: {
-      datasets: series.value.map(d => ({
+      datasets: [
+        ...series.value.map(d => ({
         label: d.label,
         data: d.data,
         borderColor: d.color || '#3498db',
@@ -383,7 +399,18 @@ function buildChart() {
         tension: d.stepped ? 0 : 0.3,
         stepped: d.stepped || false,
         fill: d.fill || false,
-      })),
+        })),
+        ...(hasTimelineMarkers ? [{
+          label: '',
+          data: props.markers.map(marker => ({ x: marker.x, y: 0.5 })),
+          showLine: false,
+          pointRadius: 0,
+          pointHitRadius: 10,
+          pointHoverRadius: 0,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+        }] : []),
+      ],
     },
     options: {
       responsive: true,
@@ -399,7 +426,15 @@ function buildChart() {
         tooltip: {
           enabled: tipOn,
           callbacks: {
-            title: (items) => tickLabel(items?.[0]?.parsed?.x),
+            title: (items) => {
+              const x = items?.[0]?.parsed?.x
+              const marker = props.timeline ? props.markers.find(item => item.x === x) : null
+              return marker?.title || tickLabel(x)
+            },
+            label: (item) => {
+              const marker = props.timeline ? props.markers.find(entry => entry.x === item?.parsed?.x) : null
+              return marker?.error || ''
+            },
           },
         },
       },
@@ -454,7 +489,7 @@ onMounted(() => {
   canvas.value?.addEventListener('pointerup', onPointerUp)
   canvas.value?.addEventListener('pointercancel', onPointerCancel)
 })
-watch(() => [props.labels, props.datasets, props.downtimes, props.yMin, props.yMax, props.yStep,
+watch(() => [props.labels, props.datasets, props.downtimes, props.offline, props.yMin, props.yMax, props.yStep,
     props.xMin, props.xMax, props.zoneOffset, props.unit, props.continuous, props.markers, props.yBands,
     props.timeline],
   buildChart, { deep: true })

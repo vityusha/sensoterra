@@ -110,6 +110,12 @@ public class DeviceStatusWebSocket {
 
     @OnMessage
     public void onMessage(String message, WebSocketSession session) {
+        if ("{\"type\":\"ping\"}".equals(message)) {
+            if (session.isOpen()) {
+                session.sendAsync("{\"type\":\"pong\"}");
+            }
+            return;
+        }
         log.debug("WebSocket message from {}: {}", session.getId(), message);
     }
 

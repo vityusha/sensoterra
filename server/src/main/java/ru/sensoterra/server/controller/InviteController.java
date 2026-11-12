@@ -83,6 +83,14 @@ public class InviteController {
         return HttpResponse.noContent();
     }
 
+    @Delete("/api/devices/{chipId}/invites/{id}/delete")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    public HttpResponse<?> delete(Long chipId, Long id) {
+        access.requireShare(chipId);
+        invites.delete(chipId, id);
+        return HttpResponse.noContent();
+    }
+
     /**
      * Убирает из списка завершённые приглашения устройства (отозванные и истёкшие).
      * Принятые остаются: они объясняют, кому выдавался доступ.
