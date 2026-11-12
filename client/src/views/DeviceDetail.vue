@@ -47,14 +47,20 @@
     <section v-if="canShare && device?.deviceType !== 'INDIVIDUAL_SENSOR' && !blockClosed" class="section">
       <div class="section-head">
         <h3>Приглашение</h3>
-        <select v-model="inviteAccessRole" class="role-select">
-          <option value="USER">с управлением</option>
-          <option value="VIEWER">только чтение</option>
-        </select>
-        <button class="btn small" @click="makeInvite" :disabled="inviteBusy">
-          {{ inviteBusy ? '...' : 'Создать ссылку' }}
+        <button class="btn small ghost" type="button" :aria-expanded="inviteSectionOpen" @click="inviteSectionOpen = !inviteSectionOpen">
+          {{ inviteSectionOpen ? 'Скрыть' : 'Показать' }}
         </button>
       </div>
+      <div v-if="inviteSectionOpen" class="collapsible-content">
+        <div class="section-head invite-create-head">
+          <select v-model="inviteAccessRole" class="role-select">
+            <option value="USER">с управлением</option>
+            <option value="VIEWER">только чтение</option>
+          </select>
+          <button class="btn small" @click="makeInvite" :disabled="inviteBusy">
+            {{ inviteBusy ? '...' : 'Создать ссылку' }}
+          </button>
+        </div>
       <div v-if="inviteError" class="invite-error">{{ inviteError }}</div>
       <div v-if="lastInvite" class="invite-box">
         <div class="invite-link">{{ inviteUrl(lastInvite.token) }}</div>
@@ -96,6 +102,7 @@
           </button>
         </div>
       </div>
+      </div>
     </section>
 
     <!-- Ключ для комплектного листа: его копирует админ и отдаёт покупателю вместе с устройством. -->
@@ -117,22 +124,29 @@
 
     <!-- Кто ещё имеет доступ к этому устройству и на каких условиях. -->
     <section v-if="accessList.length" class="section">
-      <div class="section-head"><h3>Доступ</h3></div>
-      <p v-if="adminLocked" class="muted admin-locked">
-        У устройства есть владелец ({{ device.ownerUsername }}): управлять им, его настройками и
-        доступом может только владелец. Админу остаются просмотр и сервисные операции.
-      </p>
-      <div class="relay-card access-card">
-        <div class="access-entry" v-for="a in accessList" :key="a.userId">
-          <span class="access-who">
-            {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
-          </span>
-          <!-- The owner's row has no actions: ownership moves only through the admin page. -->
-          <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
-            <button class="btn small" @click="swapAccessRole(a)">
-              {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
-            </button>
-            <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
+      <div class="section-head">
+        <h3>Доступ</h3>
+        <button class="btn small ghost" type="button" :aria-expanded="accessSectionOpen" @click="accessSectionOpen = !accessSectionOpen">
+          {{ accessSectionOpen ? 'Скрыть' : 'Показать' }}
+        </button>
+      </div>
+      <div v-if="accessSectionOpen" class="collapsible-content">
+        <p v-if="adminLocked" class="muted admin-locked">
+          У устройства есть владелец ({{ device.ownerUsername }}): управлять им, его настройками и
+          доступом может только владелец. Админу остаются просмотр и сервисные операции.
+        </p>
+        <div class="relay-card access-card">
+          <div class="access-entry" v-for="a in accessList" :key="a.userId">
+            <span class="access-who">
+              {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
+            </span>
+            <!-- The owner's row has no actions: ownership moves only through the admin page. -->
+            <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
+              <button class="btn small" @click="swapAccessRole(a)">
+                {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
+              </button>
+              <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
+            </div>
           </div>
         </div>
       </div>
@@ -155,146 +169,9 @@
       </section>
     </template>
 
-    <section class="section">
-      <h3>Каналы управления</h3>
-      <div class="relay-list">
-        <div class="relay-card" v-for="r in relays" :key="r.id" @click="openRelaySettings(r)" title="Открыть настройки канала">
-          <div class="relay-top">
-            <span class="dot" :class="relayDotClass(r)">{{ isRelayQuestion(r) ? '?' : '' }}</span>
-            <span class="relay-num">R{{ r.relayNumber }}</span>
-            <div class="relay-id">
-              <div class="relay-name-row">
-                <span class="relay-name">{{ r.name || '—' }}</span>
-                <span class="relay-last-time" v-if="!r.activity">неактивен</span>
-                <span class="relay-last-time" v-else-if="relayLastText(r)">{{ relayLastText(r) }}</span>
-              </div>
-              <span class="relay-type">
-                {{ relayTypeName(r) }}
-                <span v-if="relayTypeComment(r)" class="relay-type-comment">{{ relayTypeComment(r) }}</span>
-              </span>
-            </div>
-          </div>
-          <div class="relay-actions">
-            <button v-if="canControl" @click.stop="toggle(r, 1)" class="btn small" :disabled="busy===r.id || !r.activity || !isOnline">Вкл</button>
-            <button v-if="canControl" @click.stop="toggle(r, 0)" class="btn small danger" :disabled="busy===r.id || !r.activity || !isOnline">Выкл</button>
-            <button v-if="canControl" @click.stop="openRelaySettings(r)" class="btn small ghost" :disabled="!isOnline">Настройки</button>
-          </div>
-          <div class="relay-stats" v-if="r.activity">
-            <button @click.stop="toggleRelayStats(r)" class="btn small ghost">
-              {{ relayStatsOpen[r.relayNumber] ? 'Скрыть' : 'Статистика' }} {{ relayStatsOpen[r.relayNumber] ? '▾' : '▸' }}
-            </button>
-          </div>
-          <div v-if="r.activity && relayStatsOpen[r.relayNumber]" class="relay-stats-panel">
-            <div class="range-select">
-              <button v-for="rg in ranges" :key="rg.label" class="btn small" :class="{ active: relayRangeVal[r.relayNumber] === rg.value }" @click.stop="selectRelayRange(r, rg.value)">{{ rg.label }}</button>
-              <button class="btn small" :class="{ active: relayRangeVal[r.relayNumber] === 'custom' }" @click.stop="relayShowCustom[r.relayNumber] = !relayShowCustom[r.relayNumber]">{{ relayShowCustom[r.relayNumber] ? 'Скрыть' : 'Свой период' }}</button>
-            </div>
-            <div v-if="relayShowCustom[r.relayNumber]" class="custom-range">
-              <label>С <input @click.stop v-model="relayCustomFrom[r.relayNumber]" type="datetime-local" /></label>
-              <label>По <input @click.stop v-model="relayCustomTo[r.relayNumber]" type="datetime-local" /></label>
-              <span class="zone-label">{{ zoneLabel(device?.tzOffsetMinutes) }}</span>
-              <button class="btn small" @click.stop="applyRelayCustom(r)">Применить</button>
-            </div>
-            <RangeTimeline
-              v-if="relayBaseFromMs[r.relayNumber] != null && relayBaseToMs[r.relayNumber] != null && relayBaseToMs[r.relayNumber] > relayBaseFromMs[r.relayNumber]"
-              :from="relayBaseFromMs[r.relayNumber]"
-              :to="relayBaseToMs[r.relayNumber]"
-              :selection="relaySelection[r.relayNumber] || null"
-              :zone-offset="device?.tzOffsetMinutes"
-              @shift="shiftRelayRange(r, $event)"
-              @update:selection="applyRelayTimelineRange(r, $event)"
-            />
-            <div class="range-hint">Выделите период на графике мышью или пальцем</div>
-            <div class="chart-section" v-if="relayStatsData[r.relayNumber]?.states?.length" @click.stop>
-              <LineChart :labels="relayStatsData[r.relayNumber].labels" :datasets="[{ label: relayName(r), data: relayStatsData[r.relayNumber].states, color: '#f39c12', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'выкл', 1: 'вкл' }" :x-min="relayStatsData[r.relayNumber].startMs" :x-max="relayStatsData[r.relayNumber].endMs" selectable @select-range="applyRelayRange(r, $event)" />
-            </div>
-            <div class="empty small" v-else>Нет переключений за выбранный период</div>
-          </div>
-        </div>
-        <div v-if="!relays.length" class="empty small">Нет каналов</div>
-      </div>
-    </section>
-
-    <section class="section">
-      <h3>{{ device?.deviceType === 'BLOCK' ? 'Датчики блока' : 'Датчик' }}</h3>
-      <div class="sensor-list">
-        <div class="sensor-card" v-for="s in sensors" :key="s.id" @click="openSensor(s)">
-          <div class="sensor-top">
-            <span class="sensor-name">{{ s.name || `S${s.sensorNumber ?? ''}` }}{{ s.sensorChipId ? ` (${s.sensorChipId})` : '' }}</span>
-            <span v-if="s.sensorNumber" class="type-tag">S{{ s.sensorNumber }}</span>
-            <span v-if="s.sensorType" class="type-tag">type {{ s.sensorType }}</span>
-            <button v-if="canControl && device?.deviceType === 'BLOCK' && s.sensorNumber" @click.stop="openSensorSettings(s)" class="btn small ghost" :disabled="!isOnline">Настройки</button>
-            <button v-if="canControl && device?.deviceType === 'INDIVIDUAL_SENSOR'" @click.stop="openIndividualSensorSettings(s)" class="btn small ghost">Настройки</button>
-          </div>
-          <div class="sensor-readings" :class="{ 'sensor-readings-lines': isBlock }">
-            <span v-if="s.lastTime" class="reading muted">Получено: {{ fmtEventTimeWithZone(s.lastTime, device?.tzOffsetMinutes) }} <span v-if="s.numMessage != null" class="msg-num">[{{ s.numMessage }}]</span> <span class="ago">({{ fmtAgo(s.lastTime, nowTick) }})</span></span>
-            <span v-if="showField(s, 'v0')" class="reading">{{ getLabel(s, 'v0') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v0') }"><template v-if="moisturePct(s) != null">{{ moisturePct(s) }}&nbsp;% ({{ s.moistureAdc }}<span v-if="getUnit(s, 'v0') && getUnit(s, 'v0') !== '%'">&nbsp;{{ getUnit(s, 'v0') }}</span>)</template><template v-else>{{ s.moistureAdc }}<span v-if="getUnit(s, 'v0')">&nbsp;{{ getUnit(s, 'v0') }}</span></template></span><span class="pct-color" :style="moistureColor(s) ? { background: moistureColor(s) } : null"></span></span>
-            <span v-if="moistureImmersion(s)" class="reading immersion-warning">Проверьте уровень погружения датчика в почву</span>
-            <span v-if="showField(s, 'v1')" class="reading">{{ getLabel(s, 'v1') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v1') }">{{ s.temperature }}<span v-if="getUnit(s, 'v1')">&nbsp;{{ getUnit(s, 'v1') }}</span></span><span class="pct-color" :style="fieldColor(s, 'v1', s.temperature) ? { background: fieldColor(s, 'v1', s.temperature) } : null"></span></span>
-            <span v-if="showField(s, 'v2')" class="reading">{{ getLabel(s, 'v2') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v2') }">{{ s.humidity }}<span v-if="getUnit(s, 'v2')">&nbsp;{{ getUnit(s, 'v2') }}</span></span><span class="pct-color" :style="fieldColor(s, 'v2', s.humidity) ? { background: fieldColor(s, 'v2', s.humidity) } : null"></span></span>
-            <span v-if="showField(s, 'v3')" class="reading">{{ getLabel(s, 'v3') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v3') }">{{ s.light }}<span v-if="getUnit(s, 'v3')">&nbsp;{{ getUnit(s, 'v3') }}</span></span><span class="pct-color" :style="fieldColor(s, 'v3', s.light) ? { background: fieldColor(s, 'v3', s.light) } : null"></span></span>
-            <span v-if="s.battery != null" class="reading">Батарея:&nbsp;{{ s.battery }}&nbsp;В</span>
-            <span v-if="s.rssi != null" class="reading">RSSI блока:&nbsp;{{ s.rssi }}&nbsp;дБм</span>
-            <span v-if="s.power != null" class="reading">Power:&nbsp;{{ s.power }}</span>
-            <span v-if="!hasAnyData(s)" class="reading muted">нет данных</span>
-          </div>
-          <div class="sensor-config" v-if="sensorConfigText(s)">
-            <span class="reading muted">{{ sensorConfigText(s) }}</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Оплата: админ назначает план конкретному блоку или отменяет все регистрации. -->
-    <section v-if="isAdmin && isBlock" class="section">
-      <div class="section-head">
-        <h3>Оплата блока</h3>
-      </div>
-      <div class="pay-admin-row">
-        <label>
-          Срок, дней
-          <input v-model="planDays" type="number" min="1" placeholder="напр. 365" />
-        </label>
-        <label class="opt">
-          <input type="checkbox" v-model="planUnlimited" /> бессрочно
-        </label>
-        <button class="btn small" @click="savePlan" :disabled="planBusy">
-          {{ planBusy ? '...' : 'Назначить план' }}
-        </button>
-      </div>
-      <div class="pay-admin-row">
-        <label>
-          Продлить, дней
-          <input v-model="extendDays" type="number" min="1" placeholder="напр. 30" />
-        </label>
-        <button class="btn small" @click="doExtend" :disabled="planBusy || !extendDays">
-          {{ planBusy ? '...' : 'Продлить' }}
-        </button>
-        <button class="btn small danger" @click="doReset" :disabled="planBusy">Отменить все регистрации</button>
-      </div>
-      <div class="invite-note">
-        Отмена регистраций снимает доступы и отзывает живые ссылки, а отсчёт обнуляет:
-        срок снова пойдёт с первого подтверждения «ID + ключ» по этому же плану.
-      </div>
-      <div v-if="planError" class="invite-error">{{ planError }}</div>
-    </section>
-
-    <section class="section" v-if="registeredSensors.length && !blockClosed">
-      <h3>Зарегистрированные датчики (для настройки блоков)</h3>
-      <div class="sensor-list">
-        <div class="sensor-card" v-for="r in registeredSensors" :key="r.id" :class="{ linked: isLinked(r) }" @click="openSensor(r)">
-          <div class="sensor-top">
-            <span class="sensor-name">{{ registeredName(r) }} ({{ r.sensorChipId }})</span>
-            <span class="type-tag">зарегистрирован</span>
-            <span v-if="isLinked(r)" class="type-tag">используется</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <section class="section" v-if="device?.deviceType === 'BLOCK' && !blockClosed">
       <h3>
-        <span class="editable" @click="toggleStats">Статистика {{ showStats ? '▾' : '▸' }}</span>
+        <span class="editable" @click="toggleStats">Статистика блока {{ showStats ? '▾' : '▸' }}</span>
       </h3>
       <template v-if="showStats">
         <div class="range-select">
@@ -342,6 +219,176 @@
         <div class="empty small" v-if="!blockStatsData.length && !statusStatsData.length">Нет данных за выбранный период</div>
       </template>
     </section>
+
+    <section class="section">
+      <h3>Каналы управления</h3>
+      <div v-if="relays.length" class="relay-tabs" role="tablist" aria-label="Каналы управления">
+        <button
+          v-for="number in relayTabNumbers"
+          :key="number"
+          type="button"
+          role="tab"
+          class="relay-tab"
+          :class="[relayTabStatus(number), { active: activeRelayNumber === number }]"
+          :aria-selected="activeRelayNumber === number"
+          @click="activeRelayNumber = number"
+        >R{{ number }}</button>
+      </div>
+      <div class="relay-list">
+        <div v-if="activeRelay" class="relay-card channel-card">
+          <div class="relay-top">
+            <span class="dot" :class="relayDotClass(activeRelay)">{{ isRelayQuestion(activeRelay) ? '?' : '' }}</span>
+            <span class="relay-num">R{{ activeRelay.relayNumber }}</span>
+            <div class="relay-id">
+              <div class="relay-name-row">
+                <span class="relay-name">{{ activeRelay.name || '—' }}</span>
+                <span class="relay-last-time" v-if="!activeRelay.activity">неактивен</span>
+                <span class="relay-last-time" v-else-if="relayLastText(activeRelay)">{{ relayLastText(activeRelay) }}</span>
+              </div>
+              <span class="relay-type">
+                {{ relayTypeName(activeRelay) }}
+                <span v-if="relayTypeComment(activeRelay)" class="relay-type-comment">{{ relayTypeComment(activeRelay) }}</span>
+              </span>
+            </div>
+          </div>
+          <div class="relay-actions">
+            <button
+              v-if="canControl"
+              type="button"
+              role="switch"
+              class="relay-switch"
+              :class="{ on: !!activeRelay.state }"
+              :aria-checked="!!activeRelay.state"
+              :aria-label="`${activeRelay.name || `Канал R${activeRelay.relayNumber}`}: ${activeRelay.state ? 'включен' : 'выключен'}`"
+              :disabled="busy===activeRelay.id || !activeRelay.activity || !isOnline"
+              @click.stop="toggle(activeRelay, activeRelay.state ? 0 : 1)"
+            >
+              <span class="relay-switch-label">{{ activeRelay.state ? 'ВКЛ' : 'ВЫКЛ' }}</span>
+              <span class="relay-switch-thumb"></span>
+            </button>
+            <button v-if="canControl" @click.stop="openRelaySettings(activeRelay)" class="btn small ghost relay-settings" :disabled="!isOnline">Настройки</button>
+          </div>
+          <div class="relay-stats">
+            <button @click.stop="toggleRelayStats(activeRelay)" class="btn small ghost">
+              {{ relayStatsOpen[activeRelay.relayNumber] ? 'Скрыть' : 'Статистика' }} {{ relayStatsOpen[activeRelay.relayNumber] ? '▾' : '▸' }}
+            </button>
+          </div>
+          <div v-if="relayStatsOpen[activeRelay.relayNumber]" class="relay-stats-panel">
+            <div class="range-select">
+              <button v-for="rg in ranges" :key="rg.label" class="btn small" :class="{ active: relayRangeVal[activeRelay.relayNumber] === rg.value }" @click.stop="selectRelayRange(activeRelay, rg.value)">{{ rg.label }}</button>
+              <button class="btn small" :class="{ active: relayRangeVal[activeRelay.relayNumber] === 'custom' }" @click.stop="relayShowCustom[activeRelay.relayNumber] = !relayShowCustom[activeRelay.relayNumber]">{{ relayShowCustom[activeRelay.relayNumber] ? 'Скрыть' : 'Свой период' }}</button>
+            </div>
+            <div v-if="relayShowCustom[activeRelay.relayNumber]" class="custom-range">
+              <label>С <input @click.stop v-model="relayCustomFrom[activeRelay.relayNumber]" type="datetime-local" /></label>
+              <label>По <input @click.stop v-model="relayCustomTo[activeRelay.relayNumber]" type="datetime-local" /></label>
+              <span class="zone-label">{{ zoneLabel(device?.tzOffsetMinutes) }}</span>
+              <button class="btn small" @click.stop="applyRelayCustom(activeRelay)">Применить</button>
+            </div>
+            <RangeTimeline
+              v-if="relayBaseFromMs[activeRelay.relayNumber] != null && relayBaseToMs[activeRelay.relayNumber] != null && relayBaseToMs[activeRelay.relayNumber] > relayBaseFromMs[activeRelay.relayNumber]"
+              :from="relayBaseFromMs[activeRelay.relayNumber]"
+              :to="relayBaseToMs[activeRelay.relayNumber]"
+              :selection="relaySelection[activeRelay.relayNumber] || null"
+              :zone-offset="device?.tzOffsetMinutes"
+              @shift="shiftRelayRange(activeRelay, $event)"
+              @update:selection="applyRelayTimelineRange(activeRelay, $event)"
+            />
+            <div class="range-hint">Выделите период на графике мышью или пальцем</div>
+            <div class="chart-section" v-if="relayStatsData[activeRelay.relayNumber]?.states?.length" @click.stop>
+              <LineChart :labels="relayStatsData[activeRelay.relayNumber].labels" :datasets="[{ label: relayName(activeRelay), data: relayStatsData[activeRelay.relayNumber].states, color: '#f39c12', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'выкл', 1: 'вкл' }" :x-min="relayStatsData[activeRelay.relayNumber].startMs" :x-max="relayStatsData[activeRelay.relayNumber].endMs" selectable @select-range="applyRelayRange(activeRelay, $event)" />
+            </div>
+            <div class="empty small" v-else>Нет переключений за выбранный период</div>
+          </div>
+        </div>
+        <div v-else-if="relays.length" class="empty small">Канал R{{ activeRelayNumber }} не настроен</div>
+        <div v-if="!relays.length" class="empty small">Нет каналов</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h3>{{ device?.deviceType === 'BLOCK' ? 'Датчики блока' : 'Датчик' }}</h3>
+      <div v-if="isBlock && sensorTabNumbers.length" class="sensor-tabs relay-tabs" role="tablist" aria-label="Датчики блока">
+        <button
+          v-for="number in sensorTabNumbers"
+          :key="number"
+          type="button"
+          role="tab"
+          class="sensor-tab relay-tab"
+          :class="{ active: activeSensorNumber === number, alarm: sensorTabHasAlarm(number) }"
+          :aria-selected="activeSensorNumber === number"
+          @click="activeSensorNumber = number"
+        >S{{ number }}</button>
+      </div>
+      <div class="sensor-list">
+        <div class="sensor-card" v-for="s in displayedSensors" :key="s.id" :class="{ 'block-sensor-card': isBlock }">
+          <div class="sensor-top">
+            <div class="sensor-title">
+              <span class="sensor-name">{{ s.name || '—' }}<span v-if="s.sensorChipId" class="sensor-chip-id"> (ID: {{ s.sensorChipId }})</span></span>
+              <span v-if="s.sensorType" class="type-tag">type {{ s.sensorType }}</span>
+              <span v-if="isBlock && sensorChannels(s).length" class="sensor-channels">Каналы: {{ sensorChannels(s).join(', ') }}</span>
+            </div>
+          </div>
+          <div class="sensor-card-actions">
+            <button @click="openSensor(s)" class="btn small ghost relay-settings">Подробнее</button>
+            <button v-if="canControl && device?.deviceType === 'BLOCK' && s.sensorNumber" @click="openSensorSettings(s)" class="btn small ghost relay-settings" :disabled="!isOnline">Настройки</button>
+            <button v-else-if="canControl && device?.deviceType === 'INDIVIDUAL_SENSOR'" @click="openIndividualSensorSettings(s)" class="btn small ghost relay-settings">Настройки</button>
+          </div>
+          <div class="sensor-readings" :class="{ 'sensor-readings-lines': isBlock }">
+            <span v-if="s.lastTime" class="reading muted">Получено: {{ fmtEventTimeWithZone(s.lastTime, device?.tzOffsetMinutes) }} <span v-if="s.numMessage != null" class="msg-num">[{{ s.numMessage }}]</span> <span class="ago">({{ fmtAgo(s.lastTime, nowTick) }})</span></span>
+            <span v-if="showField(s, 'v0')" class="reading">{{ getLabel(s, 'v0') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v0') }"><template v-if="moisturePct(s) != null">{{ moisturePct(s) }}&nbsp;% ({{ s.moistureAdc }}<span v-if="getUnit(s, 'v0') && getUnit(s, 'v0') !== '%'">&nbsp;{{ getUnit(s, 'v0') }}</span>)</template><template v-else>{{ s.moistureAdc }}<span v-if="getUnit(s, 'v0')">&nbsp;{{ getUnit(s, 'v0') }}</span></template></span><span class="pct-color" :style="moistureColor(s) ? { background: moistureColor(s) } : null"></span></span>
+            <span v-if="moistureImmersion(s)" class="reading immersion-warning">Проверьте уровень погружения датчика в почву</span>
+            <span v-if="showField(s, 'v1')" class="reading">{{ getLabel(s, 'v1') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v1') }">{{ s.temperature }}<span v-if="getUnit(s, 'v1')">&nbsp;{{ getUnit(s, 'v1') }}</span></span><span class="pct-color" :style="fieldColor(s, 'v1', s.temperature) ? { background: fieldColor(s, 'v1', s.temperature) } : null"></span></span>
+            <span v-if="showField(s, 'v2')" class="reading">{{ getLabel(s, 'v2') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v2') }">{{ s.humidity }}<span v-if="getUnit(s, 'v2')">&nbsp;{{ getUnit(s, 'v2') }}</span></span><span class="pct-color" :style="fieldColor(s, 'v2', s.humidity) ? { background: fieldColor(s, 'v2', s.humidity) } : null"></span></span>
+            <span v-if="showField(s, 'v3')" class="reading">{{ getLabel(s, 'v3') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v3') }">{{ s.light }}<span v-if="getUnit(s, 'v3')">&nbsp;{{ getUnit(s, 'v3') }}</span></span><span class="pct-color" :style="fieldColor(s, 'v3', s.light) ? { background: fieldColor(s, 'v3', s.light) } : null"></span></span>
+            <span v-if="s.battery != null" class="reading">Батарея:&nbsp;{{ s.battery }}&nbsp;В</span>
+            <span v-if="s.rssi != null" class="reading">RSSI блока:&nbsp;{{ s.rssi }}&nbsp;дБм</span>
+            <span v-if="s.power != null" class="reading">Power:&nbsp;{{ s.power }}</span>
+            <span v-if="!hasAnyData(s)" class="reading muted">нет данных</span>
+          </div>
+          <div class="sensor-config" v-if="sensorConfigText(s)">
+            <span class="reading muted">{{ sensorConfigText(s) }}</span>
+          </div>
+        </div>
+        <div v-if="isBlock && !sensorTabNumbers.length" class="empty small">Нет зарегистрированных датчиков</div>
+        <div v-else-if="isBlock && !activeSensor" class="empty small">Нет данных датчика S{{ activeSensorNumber }}</div>
+        <div v-else-if="!isBlock && !sensors.length" class="empty small">Нет данных датчика</div>
+      </div>
+    </section>
+
+    <!-- Оплата: админ назначает план конкретному блоку или отменяет все регистрации. -->
+    <section v-if="isAdmin && isBlock" class="section">
+      <div class="section-head">
+        <h3>Оплата блока</h3>
+      </div>
+      <div class="pay-admin-row">
+        <label>
+          Срок, дней
+          <input v-model="planDays" type="number" min="1" placeholder="напр. 365" />
+        </label>
+        <label class="opt">
+          <input type="checkbox" v-model="planUnlimited" /> бессрочно
+        </label>
+        <button class="btn small" @click="savePlan" :disabled="planBusy">
+          {{ planBusy ? '...' : 'Назначить план' }}
+        </button>
+      </div>
+      <div class="pay-admin-row">
+        <label>
+          Продлить, дней
+          <input v-model="extendDays" type="number" min="1" placeholder="напр. 30" />
+        </label>
+        <button class="btn small" @click="doExtend" :disabled="planBusy || !extendDays">
+          {{ planBusy ? '...' : 'Продлить' }}
+        </button>
+        <button class="btn small danger" @click="doReset" :disabled="planBusy">Отменить все регистрации</button>
+      </div>
+      <div class="invite-note">
+        Отмена регистраций снимает доступы и отзывает живые ссылки, а отсчёт обнуляет:
+        срок снова пойдёт с первого подтверждения «ID + ключ» по этому же плану.
+      </div>
+      <div v-if="planError" class="invite-error">{{ planError }}</div>
+    </section>
+
   </div>
 </template>
 
@@ -369,6 +416,13 @@ const router = useRouter()
 const chipId = route.params.chipId
 const device = ref(null)
 const relays = ref([])
+const relayTabNumbers = Array.from({ length: 8 }, (_, index) => index + 1)
+const activeRelayNumber = ref(1)
+const activeRelay = computed(() => relays.value.find(r => Number(r.relayNumber) === activeRelayNumber.value) || null)
+const sensorTabNumbers = computed(() => [...new Set(registeredSensors.value
+  .map(sensor => Number(sensor.slot))
+  .filter(slot => Number.isInteger(slot) && slot >= 1 && slot <= 8))].sort((a, b) => a - b))
+const activeSensorNumber = ref(1)
 const lastEvents = ref({})
 const sensors = ref([])
 const activeThresholdAlarms = ref(new Map())
@@ -493,6 +547,13 @@ function relayDotClass(r) {
   return r.state ? 'on' : 'off'
 }
 
+function relayTabStatus(number) {
+  const relay = relays.value.find(r => Number(r.relayNumber) === number)
+  if (!relay || !relay.activity) return 'inactive'
+  if (isRelayPending(relay)) return 'pending'
+  return relay.state ? 'on' : 'off'
+}
+
 function relayLastText(r) {
   const ev = lastEvent(r)
   if (!ev?.time) return ''
@@ -543,6 +604,7 @@ function openRelaySettings(r) {
     pushNotification('Блок оффлайн — настройка канала недоступна', 'warn')
     return
   }
+  saveDevicePosition({ relayNumber: r.relayNumber })
   router.push(`/device/${chipId}/relay/${r.relayNumber}`)
 }
 
@@ -707,6 +769,8 @@ const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 // Оплата блока: срок общий для всех, кто имеет доступ, поэтому гейт смотрит на блок.
 const payment = ref(null)
 const isBlock = computed(() => device.value?.deviceType === 'BLOCK')
+const activeSensor = computed(() => sensors.value.find(s => Number(s.sensorNumber) === activeSensorNumber.value) || null)
+const displayedSensors = computed(() => isBlock.value ? (activeSensor.value ? [activeSensor.value] : []) : sensors.value)
 const blockClosed = computed(() => isBlock.value && !!payment.value && !payment.value.paid)
 const payClass = computed(() => {
   if (!payment.value || payment.value.chargeable === false) return 'free'
@@ -804,6 +868,8 @@ function accessRoleLabel(role) {
 const invites = ref([])
 const inviteAccessRole = ref('USER')
 const accessList = ref([])
+const inviteSectionOpen = ref(false)
+const accessSectionOpen = ref(false)
 const deviceKey = ref(null)
 const keyBusy = ref(false)
 
@@ -1033,6 +1099,7 @@ onMounted(async () => {
   await load()
   await loadAccess()
   await loadInvites()
+  restoreDevicePosition()
 })
 
 let wsUnsub = null
@@ -1180,6 +1247,9 @@ async function load() {
   await loadLastEvents()
   if (device.value?.deviceType === 'BLOCK') {
     registeredSensors.value = await getDeviceRegisteredSensors(Number(chipId))
+    if (!registeredSensors.value.some(sensor => Number(sensor.slot) === activeSensorNumber.value) && registeredSensors.value.length) {
+      activeSensorNumber.value = Number(registeredSensors.value[0].slot)
+    }
     const bt = await getBlockTelemetry(Number(chipId))
     blockTelemetry.value = bt[0] || null
   }
@@ -1189,19 +1259,47 @@ async function load() {
   statusesMap.value = map
 }
 
-function isLinked(r) {
-  return relays.value.some(x => x.sensorId && String(x.sensorId) === String(r.sensorChipId))
-}
-
-function registeredName(r) {
-  const s = sensors.value.find(x => String(x.sensorChipId) === String(r.sensorChipId))
-  return s?.name || `S${r.slot}`
+function sensorChannels(sensor) {
+  const sensorId = String(sensor.sensorChipId ?? sensor.chipId ?? '')
+  return relays.value
+    .filter(relay => relay.sensorId && String(relay.sensorId) === sensorId)
+    .map(relay => Number(relay.relayNumber))
+    .sort((a, b) => a - b)
+    .map(number => `R${number}`)
 }
 
 function openSensor(s) {
   const chip = s.sensorChipId ?? s.chipId
   if (!chip) return
+  saveDevicePosition(s)
   router.push(`/sensor/${chip}?deviceId=${chipId}`)
+}
+
+function saveDevicePosition({ sensorNumber, relayNumber } = {}) {
+  try {
+    sessionStorage.setItem(`device-detail-return-${chipId}`, JSON.stringify({
+      scrollY: window.scrollY,
+      sensorNumber: Number(sensorNumber) || activeSensorNumber.value,
+      relayNumber: Number(relayNumber) || activeRelayNumber.value,
+      savedAt: Date.now(),
+    }))
+  } catch { /* session storage may be unavailable */ }
+}
+
+function restoreDevicePosition() {
+  const key = `device-detail-return-${chipId}`
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(key) || 'null')
+    sessionStorage.removeItem(key)
+    if (!saved || Date.now() - saved.savedAt > 10 * 60 * 1000) return
+    if (Number.isInteger(saved.sensorNumber) && saved.sensorNumber >= 1 && saved.sensorNumber <= 8) {
+      activeSensorNumber.value = saved.sensorNumber
+    }
+    if (Number.isInteger(saved.relayNumber) && saved.relayNumber >= 1 && saved.relayNumber <= 8) {
+      activeRelayNumber.value = saved.relayNumber
+    }
+    requestAnimationFrame(() => window.scrollTo(0, Math.max(0, Number(saved.scrollY) || 0)))
+  } catch { /* ignore invalid saved position */ }
 }
 
 function openSensorSettings(s) {
@@ -1214,6 +1312,7 @@ function openSensorSettings(s) {
     pushNotification('У датчика нет слота — настройка через блок невозможна', 'warn')
     return
   }
+  saveDevicePosition(s)
   router.push(`/device/${chipId}/sensor/${s.sensorNumber}`)
 }
 
@@ -1281,6 +1380,11 @@ async function refreshThresholdAlarms() {
 function hasThresholdAlarm(sensor, field) {
   const chip = String(sensor.sensorChipId ?? sensor.chipId)
   return activeThresholdAlarms.value.get(chip)?.has(field) ?? false
+}
+
+function sensorTabHasAlarm(number) {
+  const sensor = sensors.value.find(s => Number(s.sensorNumber) === number)
+  return sensor ? ['v0', 'v1', 'v2', 'v3'].some(field => hasThresholdAlarm(sensor, field)) : false
 }
 
 const showVacc = computed(() => !isVaccHidden(chipId))
@@ -1557,9 +1661,17 @@ async function shiftBlockRange(direction) {
 .section { margin-bottom: 2rem; }
 .section h3 { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
 .relay-list, .sensor-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.relay-tabs { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0.2rem; align-items: end; margin-bottom: 0; border-bottom: 1px solid var(--border); }
+.relay-tab { min-width: 0; padding: 0.45rem 0.1rem; border: 1px solid var(--border); border-bottom: 0; border-radius: 8px 8px 0 0; background: var(--bg); font-size: 0.8rem; font-weight: 700; text-align: center; cursor: pointer; }
+.relay-tab.on { color: var(--success); }
+.relay-tab.off { color: var(--danger); }
+.relay-tab.pending { color: var(--warn); }
+.relay-tab.inactive { color: var(--text-muted); }
+.relay-tab.active { position: relative; z-index: 2; padding-top: 0.7rem; border-color: var(--accent); background: var(--bg-card); }
+.relay-tab.active::after { position: absolute; right: 0; bottom: -2px; left: 0; z-index: 2; height: 3px; background: var(--bg-card); content: ''; }
+.sensor-tab.alarm { color: var(--danger); }
 .relay-card { background: var(--bg-card); border-radius: 12px; padding: 0.9rem 1rem; box-shadow: var(--card-shadow); }
-.relay-card { cursor: pointer; transition: background 0.2s; }
-.relay-card:hover { background: var(--bg-primary); }
+.relay-card.channel-card { border: 1px solid var(--accent); border-radius: 0 0 12px 12px; }
 .relay-top { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
 .relay-num { font-family: monospace; color: var(--text-muted); font-size: 0.9rem; flex-shrink: 0; }
 .relay-id { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 0.2rem; }
@@ -1568,8 +1680,15 @@ async function shiftBlockRange(direction) {
 .state { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
 .state.on { background: var(--tag-bg-ok); color: var(--success); }
 .state.off { background: var(--bg-accent); color: var(--danger); }
-.relay-actions { display: flex; gap: 0.5rem; }
-.relay-actions .btn.small { flex: 1; }
+.relay-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 0.5rem; }
+.relay-switch { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 100%; min-width: 0; min-height: 2.35rem; box-sizing: border-box; padding: 0.35rem 2rem; border: 1px solid var(--border); border-radius: 999px; background: var(--relay-off-bg); color: var(--relay-off-text); cursor: pointer; }
+.relay-switch.on { border-color: var(--success); background: var(--tag-bg-ok); }
+.relay-switch:disabled { opacity: 0.55; cursor: default; }
+.relay-switch:focus-visible, .relay-settings:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.relay-switch-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; pointer-events: none; }
+.relay-switch-thumb { position: absolute; left: 0.25rem; width: 1.55rem; height: 1.55rem; border-radius: 50%; background: var(--danger); box-shadow: 0 1px 4px rgba(0,0,0,0.35); transition: left 0.18s ease, background 0.18s ease; }
+.relay-switch.on .relay-switch-thumb { left: calc(100% - 1.8rem); background: var(--success); }
+.relay-actions .relay-settings { width: 100%; min-width: 0; box-sizing: border-box; min-height: 2.35rem; border-radius: 999px; }
 .relay-stats { margin-top: 0.6rem; }
 /* Раньше ghost был с прозрачным фоном и рамкой того же тона, что карточка — сливался. */
 .btn.ghost { background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--btn-text); }
@@ -1588,13 +1707,16 @@ async function shiftBlockRange(direction) {
 .relay-type.unk { background: var(--banner-bg); border-color: var(--banner-border); color: var(--warn); }
 .relay-last-time { margin-left: auto; font-size: 0.72rem; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
 .sensor-card { background: var(--bg-card); border-radius: 12px; padding: 0.9rem 1rem; box-shadow: var(--card-shadow); }
-.sensor-card { cursor: pointer; transition: background 0.2s; }
-.sensor-card:hover { background: var(--bg-primary); }
 .sensor-top { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
-.sensor-top .btn { margin-left: auto; }
-.sensor-name { color: var(--text); flex: 1; }
+.sensor-card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin: 0.4rem 0 0.6rem; }
+.sensor-card-actions .relay-settings { width: 100%; min-width: 0; box-sizing: border-box; min-height: 2.35rem; border-radius: 999px; }
+.sensor-title { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 0.15rem; }
+.sensor-name { color: var(--text); }
+.sensor-chip-id { color: var(--text-muted); font-size: 0.85em; }
+.sensor-channels { color: var(--text-muted); font-size: 0.76rem; }
 .sensor-readings { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .sensor-readings-lines { flex-direction: column; align-items: flex-start; }
+.sensor-card.block-sensor-card .reading { background: transparent; }
 .sensor-readings-lines .reading { display: inline-flex; align-items: center; }
 .sensor-readings-lines .reading .pct-color { order: -1; margin: 0 0.4rem 0 0; }
 .reading { font-size: 0.8rem; color: var(--text-muted); background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px; }
@@ -1608,6 +1730,7 @@ async function shiftBlockRange(direction) {
 .reading-value.threshold-alarm { color: var(--danger); font-weight: 700; }
 .sensor-config { margin-top: 0.5rem; }
 .sensor-card.linked { border: 1px solid var(--success); }
+.sensor-card.block-sensor-card { border: 1px solid var(--accent); border-radius: 0 0 12px 12px; }
 .telemetry-row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .telemetry-row.muted { color: var(--text-faint); }
 .trust-line { font-size: 0.82rem; line-height: 1.45; margin: 0 0 0.8rem; padding: 0.5rem 0.75rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 8px; }
@@ -1631,6 +1754,9 @@ async function shiftBlockRange(direction) {
 /* Палец вместо курсора: кнопки каналов крупнее и с чёткой рамкой. */
 @media (hover: none) {
   .relay-actions { gap: 0.6rem; }
-  .relay-actions .btn.small { min-height: 2.6rem; font-size: 0.85rem; }
+  .relay-switch, .relay-actions .relay-settings { min-height: 2.6rem; }
+  .relay-actions .relay-settings { min-height: 2.6rem; font-size: 0.85rem; }
+  .sensor-card-actions { gap: 0.6rem; }
+  .sensor-card-actions .relay-settings { min-height: 2.6rem; }
 }
 </style>

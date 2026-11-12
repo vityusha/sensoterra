@@ -4,6 +4,8 @@ import { sessionExpired } from '../api/auth'
 let nextId = 0
 
 const MAX_NOTIFICATIONS = 5
+const NOTIFICATION_TTL_MS = 5_000
+const dismissTimers = new Map()
 
 export const notifications = reactive([])
 
@@ -16,12 +18,13 @@ export function onWsMessage(handler) {
 
 export function pushNotification(text, type = 'info') {
   const dup = notifications.findIndex(n => n.text === text)
-  if (dup >= 0) notifications.splice(dup, 1)
+  if (dup >= 0) dismissNotification(notifications[dup].id)
   const item = { id: nextId++, text, type, time: Date.now() }
   notifications.push(item)
   if (notifications.length > MAX_NOTIFICATIONS) {
-    notifications.shift()
+    dismissNotification(notifications[0].id)
   }
+  dismissTimers.set(item.id, setTimeout(() => dismissNotification(item.id), NOTIFICATION_TTL_MS))
   return item.id
 }
 
@@ -32,6 +35,9 @@ export function pushEventNotification(text, type = 'info') {
 }
 
 export function dismissNotification(id) {
+  const timer = dismissTimers.get(id)
+  if (timer) clearTimeout(timer)
+  dismissTimers.delete(id)
   const idx = notifications.findIndex(n => n.id === id)
   if (idx >= 0) notifications.splice(idx, 1)
 }

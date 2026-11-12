@@ -167,7 +167,7 @@ const blocks = ref([])
 const sensors = ref([])
 const tooltipMode = ref('auto')
 const isLight = ref(false)
-const bgColor = ref('#1a1a2e')
+const bgColor = ref('#00374a')
 const isCustomBg = ref(false)
 
 function deviceLabel(d) {
@@ -388,7 +388,7 @@ function saveUnits(type) {
 }
 
 function defaultBgColor() {
-  return getTheme() === 'light' ? '#f7f7f7' : '#1a1a2e'
+  return getTheme() === 'light' ? '#f7f7f7' : '#00374a'
 }
 
 function syncBgColor() {
