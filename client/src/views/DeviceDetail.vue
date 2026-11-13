@@ -242,12 +242,11 @@
             <div class="relay-id">
               <div class="relay-name-row">
                 <span class="relay-name">{{ activeRelay.name || '—' }}</span>
-                <span class="relay-last-time" v-if="!activeRelay.activity">неактивен</span>
-                <span class="relay-last-time" v-else-if="relayLastText(activeRelay)">{{ relayLastText(activeRelay) }}</span>
+                <span class="relay-last-time" v-if="activeRelay.activity && relayLastText(activeRelay)">{{ relayLastText(activeRelay) }}</span>
               </div>
               <span class="relay-type">
-                {{ relayTypeName(activeRelay) }}
-                <span v-if="relayTypeComment(activeRelay)" class="relay-type-comment">{{ relayTypeComment(activeRelay) }}</span>
+                <strong>{{ relayTypeTitle(activeRelay) }}</strong>
+                <span v-if="relayTypeDetails(activeRelay)" class="relay-type-comment">{{ relayTypeDetails(activeRelay) }}</span>
               </span>
             </div>
           </div>
@@ -507,20 +506,84 @@ const ranges = [
 ]
 const relayTypeNames = [
   { value: 0, code: 'TIME', label: 'по времени' },
-  { value: 1, code: 'S_ONE', label: 'от датчика', comment: 'по превышению одного порога' },
-  { value: 2, code: 'S_LOW', label: 'от датчика', comment: 'включение по нижнему, выключение по верхнему' },
-  { value: 3, code: 'S_HIGH', label: 'от датчика', comment: 'включение по верхнему, выключение по нижнему' },
+  { value: 1, code: 'S_ONE', label: 'от датчика — по превышению одного порога' },
+  { value: 2, code: 'S_LOW', label: 'от датчика — вкл. по нижнему, выкл. по верхнему' },
+  { value: 3, code: 'S_HIGH', label: 'от датчика — вкл. по верхнему, выкл. по нижнему' },
 ]
 const lastEventsByRelay = ref({})
 
-function relayTypeName(r) {
+function relayTypeTitle(r) {
+  if (r?.activity !== true) return 'неактивен'
   const t = relayTypeNames.find(x => x.code === (r?.typeEnum || '').toUpperCase())
   return t ? t.label : (r?.typeEnum || 'НЕИЗВ')
 }
 
-function relayTypeComment(r) {
-  const t = relayTypeNames.find(x => x.code === (r?.typeEnum || '').toUpperCase())
-  return t?.comment || null
+function relaySensor(r) {
+  return sensors.value.find(s => String(s.sensorChipId ?? s.chipId) === String(r?.sensorId))
+}
+
+function relayTime(value) {
+  if (value == null || value === '') return ''
+  const text = String(value).trim()
+  if (text.startsWith('24:')) return ''
+  if (/^\d+$/.test(text)) {
+    const minutes = Number(text)
+    if (minutes >= 1440) return ''
+    return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+  }
+  return text.includes(':') ? text.slice(0, 5) : text
+}
+
+function relayLimitText(r, value) {
+  if (value == null || value === '') return ''
+  const sensor = relaySensor(r)
+  if (!sensor) return String(value)
+  if ((sensor.sensorType ?? 0) === 0 && (r.dataType ?? 0) === 0) {
+    const cal = calibrationFor(Number(sensor.sensorChipId ?? sensor.chipId))
+    const percent = cal ? adcToPercent(Number(value), cal) : null
+    return percent == null ? `${value}${getFieldUnit(sensor.sensorType, 'v0') ? ` ${getFieldUnit(sensor.sensorType, 'v0')}` : ''}` : `${Math.round(percent)}%`
+  }
+  const field = `v${r.dataType ?? 0}`
+  const unit = getFieldUnit(sensor.sensorType, field)
+  return `${value}${unit ? ` ${unit}` : ''}`
+}
+
+function relayTypeDetails(r) {
+  if (!r || r.activity !== true) return ''
+  const type = String(r.typeEnum || '').toUpperCase()
+  if (type === 'TIME') {
+    const parts = []
+    const main = relayTime(r.mainTime)
+    const mainDuration = Number(r.durationMain)
+    if (main) parts.push(`${main}${mainDuration > 0 ? ` (${mainDuration} мин)` : ''}`)
+    const extra = relayTime(r.extraTime)
+    const extraDuration = Number(r.durationExtra)
+    if (extra) parts.push(`${extra}${extraDuration > 0 ? ` (${extraDuration} мин)` : ''}`)
+    const interval = Number(r.intervalH)
+    if (interval > 0) parts.push(`через ${interval} ч`)
+    return parts.join(' ')
+  }
+  if (type === 'S_ONE') {
+    const parts = []
+    const limit = relayLimitText(r, r.oneLimit)
+    if (limit) parts.push(`порог ${limit}${Number(r.durationMain) > 0 ? ` (${Number(r.durationMain)} мин)` : ''}`)
+    const start = relayTime(r.startTime)
+    const finish = relayTime(r.finishTime)
+    if (start && finish) parts.push(`запрет ${start}-${finish}`)
+    return parts.join(', ')
+  }
+  if (type === 'S_LOW' || type === 'S_HIGH') {
+    const parts = []
+    const sensor = relaySensor(r)
+    const field = `v${r.dataType ?? 0}`
+    const parameter = sensor ? getFieldName(sensor.sensorType, field) : ''
+    const low = relayLimitText(r, r.lowLimit)
+    const high = relayLimitText(r, r.highLimit)
+    if (parameter && (low || high)) parts.push(`${parameter}: ${low}${low && high ? ' – ' : ''}${high}`)
+    if (r.timerEnabled === true && Number(r.durationMain) > 0) parts.push(`таймер ${Number(r.durationMain)} мин`)
+    return parts.join(', ')
+  }
+  return ''
 }
 
 function lastEvent(r) {
@@ -1702,8 +1765,9 @@ async function shiftBlockRange(direction) {
   .dot.pending { background: none; box-shadow: none; border-radius: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700; line-height: 1; }
   .dot.pending-on { color: var(--success); }
   .dot.pending-off { color: var(--danger); }
-.relay-type { font-size: 0.72rem; color: var(--banner-text); background: var(--banner-bg); border: 1px solid var(--banner-border); padding: 0.15rem 0.45rem; border-radius: 999px; align-self: flex-start; white-space: nowrap; }
-.relay-type-comment { display: block; font-weight: 400; color: var(--banner-text); margin-top: 0.15rem; white-space: normal; }
+.relay-type { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; color: var(--text-muted); font-size: 0.72rem; white-space: normal; }
+.relay-type strong { color: var(--text); font-weight: 700; }
+.relay-type-comment { display: block; font-weight: 400; color: var(--text-muted); white-space: normal; }
 .relay-type.unk { background: var(--banner-bg); border-color: var(--banner-border); color: var(--warn); }
 .relay-last-time { margin-left: auto; font-size: 0.72rem; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
 .sensor-card { background: var(--bg-card); border-radius: 12px; padding: 0.9rem 1rem; box-shadow: var(--card-shadow); }
