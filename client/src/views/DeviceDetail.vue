@@ -7,6 +7,17 @@
         {{ isOnline ? 'online' : 'offline' }}
       </span>
       <AlarmBell />
+      <div class="menu-wrap" ref="menuRef">
+        <button class="menu-toggle" :aria-expanded="menuOpen" aria-haspopup="menu" aria-label="Меню" @click="menuOpen = !menuOpen">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
+        </button>
+        <div v-if="menuOpen" class="menu-dropdown" role="menu">
+          <button role="menuitem" @click="goMenu('/settings')">Настройки</button>
+          <button role="menuitem" @click="goMenu('/profile')">Профиль</button>
+          <div class="menu-sep"></div>
+          <button role="menuitem" class="menu-danger" @click="handleLogout">Выйти</button>
+        </div>
+      </div>
     </div>
     <div class="device-id">ID: {{ chipId }}</div>
 
@@ -153,7 +164,7 @@
     </section>
 
     <template v-if="device?.deviceType === 'BLOCK'">
-      <label class="t-item vacc-toggle">
+      <label v-if="isAdmin" class="t-item vacc-toggle">
         <input type="checkbox" :checked="!isVaccHidden(chipId)" @change="onVaccChange($event.target.checked)" />
         показывать Vacc (напряжение аккумулятора)
       </label>
@@ -400,7 +411,7 @@ import { getBlockName, setBlockName, getIndividualName, setIndividualName, getFi
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
 import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
-import { auth, rememberDeviceAccess, rememberDeviceOwner, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
+import { auth, logout, rememberDeviceAccess, rememberDeviceOwner, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
@@ -412,6 +423,8 @@ import RangeTimeline from '../components/RangeTimeline.vue'
 
 const route = useRoute()
 const router = useRouter()
+const menuOpen = ref(false)
+const menuRef = ref(null)
 const chipId = route.params.chipId
 const device = ref(null)
 const relays = ref([])
@@ -566,7 +579,7 @@ function relayTypeDetails(r) {
   if (type === 'S_ONE') {
     const parts = []
     const limit = relayLimitText(r, r.oneLimit)
-    if (limit) parts.push(`порог ${limit}${Number(r.durationMain) > 0 ? ` (${Number(r.durationMain)} мин)` : ''}`)
+    if (limit) parts.push(`Влажность почвы: ${limit}${Number(r.durationMain) > 0 ? ` (${Number(r.durationMain)} мин)` : ''}`)
     const start = relayTime(r.startTime)
     const finish = relayTime(r.finishTime)
     if (start && finish) parts.push(`запрет ${start}-${finish}`)
@@ -828,6 +841,25 @@ let lastUptimeFetch = 0
 
 const isOnline = computed(() => statusesMap.value[chipId]?.status === 'online')
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
+
+function goMenu(path) {
+  menuOpen.value = false
+  router.push({ path, query: { returnTo: router.currentRoute.value.fullPath } })
+}
+
+function handleLogout() {
+  menuOpen.value = false
+  logout()
+  router.push('/login')
+}
+
+function closeMenuOnOutsideClick(event) {
+  if (menuOpen.value && !menuRef.value?.contains(event.target)) menuOpen.value = false
+}
+
+function closeMenuOnEscape(event) {
+  if (event.key === 'Escape') menuOpen.value = false
+}
 
 // Оплата блока: срок общий для всех, кто имеет доступ, поэтому гейт смотрит на блок.
 const payment = ref(null)
@@ -1159,6 +1191,8 @@ watch(editableName, (name) => {
 watch(() => alarmState.version, refreshThresholdAlarms)
 
 onMounted(async () => {
+  document.addEventListener('click', closeMenuOnOutsideClick)
+  document.addEventListener('keydown', closeMenuOnEscape)
   await load()
   await loadAccess()
   await loadInvites()
@@ -1256,6 +1290,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('click', closeMenuOnOutsideClick)
+  document.removeEventListener('keydown', closeMenuOnEscape)
   if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null }
   if (liveTimer) { clearInterval(liveTimer); liveTimer = null }
   if (agoTimer) { clearInterval(agoTimer); agoTimer = null }
@@ -1674,6 +1710,14 @@ async function shiftBlockRange(direction) {
 .pay-admin-row input[type='number'] { width: 90px; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; }
+.menu-wrap { position: relative; flex: none; }
+.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
+.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); }
+.menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 200px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.45); }
+.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: 0; border-radius: 6px; display: flex; align-items: center; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; cursor: pointer; }
+.menu-dropdown button:hover { background: var(--bg-primary); }
+.menu-sep { height: 1px; margin: 0.3rem 0; background: var(--border-soft); }
+.menu-dropdown .menu-danger { color: var(--danger); }
 .editable { cursor: pointer; border-bottom: 1px dashed var(--border); }
 .editable:hover { color: var(--accent); }
 .device-name-field { display: flex; flex-direction: column; gap: 0.4rem; max-width: 360px; margin-bottom: 1rem; }

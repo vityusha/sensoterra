@@ -2,10 +2,10 @@
   <div class="sensor">
     <header class="page-header">
       <div class="header-top">
-        <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+        <button @click="router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
         <h2>{{ displayName }}</h2>
         <AlarmBell />
-        <div v-if="catalogEntry && canEditPrefs" class="menu-wrap" ref="menuRef">
+        <div class="menu-wrap" ref="menuRef">
           <button
             class="menu-toggle"
             :aria-expanded="menuOpen"
@@ -20,30 +20,35 @@
             </svg>
           </button>
           <div v-if="menuOpen" class="menu-dropdown" role="menu">
-            <button v-if="isIndividual" role="menuitem" @click="openSettingsFromMenu">
+            <button role="menuitem" @click="goMenu('/settings')">Настройки</button>
+            <button role="menuitem" @click="goMenu('/profile')">Профиль</button>
+            <div class="menu-sep"></div>
+            <button v-if="catalogEntry && canEditPrefs && isIndividual" role="menuitem" @click="openSettingsFromMenu">
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
               </svg>
               Настройка
             </button>
-            <button role="menuitem" @click="openCalibrateFromMenu">
+            <button v-if="catalogEntry && canEditPrefs" role="menuitem" @click="openCalibrateFromMenu">
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
               </svg>
               Калибровка 0% влажности
             </button>
-            <button v-if="calibSectionVisible" role="menuitem" @click="openCalibSettings">
+            <button v-if="catalogEntry && canEditPrefs && calibSectionVisible" role="menuitem" @click="openCalibSettings">
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
               </svg>
               Калибровка пределов
             </button>
-            <button role="menuitem" @click="openDisplaySettings">
+            <button v-if="catalogEntry && canEditPrefs" role="menuitem" @click="openDisplaySettings">
               <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
               </svg>
               Показ измерений
             </button>
+            <div class="menu-sep"></div>
+            <button role="menuitem" class="menu-danger" @click="handleLogout">Выйти</button>
           </div>
         </div>
       </div>
@@ -72,7 +77,7 @@
       <div class="latest-grid">
         <div class="latest-cell" v-for="che in cellCharts" :key="'l' + che.key" :style="cellBackground(che)" :class="{ 'gradient-editable': isGradientField(che.key) }" :role="isGradientField(che.key) ? 'button' : undefined" :tabindex="isGradientField(che.key) ? 0 : undefined" :aria-label="isGradientField(che.key) ? `Настройка цвета и порогов: ${label(che.key)}` : undefined" @click="isGradientField(che.key) && openGradient(che.key)" @keydown.enter.stop="isGradientField(che.key) && openGradient(che.key)" @keydown.space.prevent.stop="isGradientField(che.key) && openGradient(che.key)">
           <span class="l-label" :class="{ 'has-gradient': isGradientField(che.key) }"><span>{{ labelParts(che.key).first }}<br v-if="labelParts(che.key).rest" />{{ labelParts(che.key).rest }}</span></span>
-          <span v-if="configuredThresholdFields.has(che.key)" class="threshold-indicator" title="Настроены пороги" aria-label="Настроены пороги"><svg class="threshold-bell" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.75a3 3 0 0 0-3 3v1.1c0 1.25-.38 2.48-1.1 3.5L3 10.75h10l-.9-1.4A6.5 6.5 0 0 1 11 5.85v-1.1a3 3 0 0 0-3-3ZM6.3 12a1.75 1.75 0 0 0 3.4 0" /></svg></span>
+          <span v-if="thresholdNotificationFields.has(che.key)" class="threshold-indicator" title="Включены уведомления по порогу" aria-label="Включены уведомления по порогу"><svg class="threshold-bell" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.75a3 3 0 0 0-3 3v1.1c0 1.25-.38 2.48-1.1 3.5L3 10.75h10l-.9-1.4A6.5 6.5 0 0 1 11 5.85v-1.1a3 3 0 0 0-3-3ZM6.3 12a1.75 1.75 0 0 0 3.4 0" /></svg></span>
           <span class="l-value"><span class="l-reading" :class="{ 'alarm-active': openThresholdFields.has(che.key) }">{{ cellValue(che, latest) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span></span><span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null"></span></span>
         </div>
       </div>
@@ -247,7 +252,7 @@ import AlarmBell from '../components/AlarmBell.vue'
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSensorCatalog, getSensorTelemetry, getSensorErrors, getSensorFirstMessage, getDevice, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getSensorThreshold, getDeviceKey, regenerateDeviceKey, listAlarms } from '../api/auth'
-import { auth, deviceAccess, rememberDeviceAccess, rememberDeviceOwner, isOwnerRole } from '../store/auth'
+import { auth, logout, deviceAccess, rememberDeviceAccess, rememberDeviceOwner, isOwnerRole } from '../store/auth'
 import { getIndividualName, setIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
 import { pushNotification, connectWs } from '../store/notifications'
 import { alarmState } from '../store/alarms'
@@ -273,7 +278,7 @@ const baseFromMs = ref(null)
 const baseToMs = ref(null)
 const selection = ref(null)
 const openThresholdFields = ref(new Set())
-const configuredThresholdFields = ref(new Set())
+const thresholdNotificationFields = ref(new Set())
 const baseLive = ref(true)
 const loading = ref(true)
 const catalogEntry = ref(null)
@@ -344,7 +349,7 @@ async function refreshOpenThresholds() {
 async function refreshThresholdConfig() {
   const configs = await Promise.all(THRESHOLD_FIELDS.map(field =>
     getSensorThreshold(chipId, field, resolvedDeviceId.value).catch(() => null)))
-  configuredThresholdFields.value = new Set(THRESHOLD_FIELDS.filter((field, i) => configs[i]?.limit1 != null))
+  thresholdNotificationFields.value = new Set(THRESHOLD_FIELDS.filter((field, i) => Number(configs[i]?.typeAlarm) > 0))
 }
 
 watch(() => alarmState.version, refreshOpenThresholds)
@@ -508,6 +513,17 @@ function closeMenuOnEscape(e) {
     displaySettingsOpen.value = false
     calibDialogOpen.value = false
   }
+}
+
+function goMenu(path) {
+  menuOpen.value = false
+  router.push({ path, query: { returnTo: router.currentRoute.value.fullPath } })
+}
+
+function handleLogout() {
+  menuOpen.value = false
+  logout()
+  router.push('/login')
 }
 
 function openSettingsFromMenu() {
@@ -1098,6 +1114,8 @@ onUnmounted(() => {
 .menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 200px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
 .menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; display: flex; align-items: center; gap: 0.55rem; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
 .menu-dropdown button:hover { background: var(--bg-primary); }
+.menu-sep { height: 1px; margin: 0.3rem 0; background: var(--border-soft); }
+.menu-dropdown .menu-danger { color: var(--danger); }
 .menu-icon { width: 1rem; height: 1rem; flex: none; opacity: 0.9; }
 .ago { color: var(--text-dim); font-size: 0.85em; margin-left: 0.35rem; }
 .msg-num { color: var(--text-dim); font-size: 0.85em; margin-left: 0.25rem; }
