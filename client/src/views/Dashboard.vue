@@ -117,6 +117,9 @@
 
     <div v-if="loading || viewedLoading" class="loading">Загрузка...</div>
     <template v-else>
+      <div v-if="showingCachedDashboard" class="cached-dashboard-note" role="status">
+        Сервис недоступен — показан последний сохранённый список устройств
+      </div>
       <section class="section">
         <div class="section-head">
           <h3>Блоки управления</h3>
@@ -307,6 +310,40 @@ const devices = ref([])
 const catalog = ref([])
 const statusMap = ref({})
 const loading = ref(true)
+const showingCachedDashboard = ref(false)
+
+function dashboardCacheKey() {
+  const userKey = auth.user?.id ?? auth.user?.username
+  return userKey == null ? null : `sensoterra-dashboard-${userKey}`
+}
+
+function restoreDashboardCache() {
+  const key = dashboardCacheKey()
+  if (!key) return false
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(key) || 'null')
+    if (!saved || !Array.isArray(saved.devices) || !Array.isArray(saved.catalog)) return false
+    devices.value = saved.devices
+    catalog.value = saved.catalog
+    statusMap.value = saved.statusMap && typeof saved.statusMap === 'object' ? saved.statusMap : {}
+    showingCachedDashboard.value = true
+    return true
+  } catch {
+    return false
+  }
+}
+
+function saveDashboardCache() {
+  const key = dashboardCacheKey()
+  if (!key) return
+  try {
+    sessionStorage.setItem(key, JSON.stringify({
+      devices: devices.value,
+      catalog: catalog.value,
+      statusMap: statusMap.value,
+    }))
+  } catch { /* unavailable or storage quota exceeded */ }
+}
 
 // Оплата — свойство блока, поэтому смотрим её по каждому блоку отдельно.
 function payInfo(chipId) {
@@ -370,7 +407,11 @@ const menuRef = ref(null)
 
 function go(path) {
   menuOpen.value = false
-  router.push(path)
+  if (path === '/settings' || path === '/profile') {
+    router.push({ path, query: { returnTo: router.currentRoute.value.fullPath } })
+  } else {
+    router.push(path)
+  }
 }
 
 function openApDialog() {
@@ -550,9 +591,17 @@ async function refreshAll() {
 
 onMounted(async () => {
   connectWs()
+  const hasCache = restoreDashboardCache()
+  if (hasCache) {
+    loading.value = false
+    restoreSensorListPage()
+  }
   try {
     await refreshAll()
+    showingCachedDashboard.value = false
     restoreSensorListPage()
+  } catch {
+    showingCachedDashboard.value = hasCache
   } finally {
     loading.value = false
   }
@@ -713,6 +762,7 @@ async function refreshStatuses() {
   const map = {}
   for (const s of statuses) map[s.chipId] = s
   statusMap.value = map
+  saveDashboardCache()
 }
 
 async function refreshLive() {
@@ -803,6 +853,7 @@ async function removeBlock(d) {
 .header-bell + .menu-wrap { margin-left: -0.6rem; }
 h2 { color: var(--text-strong); margin: 0; }
 .header-meta { display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; margin-top: 0.35rem; overflow: hidden; white-space: nowrap; }
+.cached-dashboard-note { margin: 0 0 1rem; padding: 0.65rem 0.85rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 8px; color: var(--text-muted); font-size: 0.82rem; }
 .user-info { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); font-size: 0.8rem; }
 .connection-status { flex: none; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
 .connection-status.online { background: var(--tag-bg-ok); color: var(--success); }

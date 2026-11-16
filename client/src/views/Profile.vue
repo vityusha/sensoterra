@@ -1,7 +1,7 @@
 <template>
   <div class="profile">
     <div class="header-row">
-      <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+      <button @click="goBack" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>Профиль</h2>
       <AlarmBell />
     </div>
@@ -131,12 +131,22 @@
 <script setup>
 import AlarmBell from '../components/AlarmBell.vue'
 import { reactive, ref, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { auth } from '../store/auth'
 import { changePassword } from '../api/auth'
 import { pushNotification } from '../store/notifications'
 import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, credentialsErrorText, passwordProblem } from '../utils/credentials'
 
 const MIN_LENGTH = MIN_PASSWORD_LENGTH
+const route = useRoute()
+const router = useRouter()
+
+function goBack() {
+  const target = route.query.returnTo
+  if (typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')) router.push(target)
+  else if (window.history.state?.back) router.back()
+  else router.push('/')
+}
 
 const form = reactive({ current: '', next: '', repeat: '' })
 const show = reactive({ current: false, next: false, repeat: false })
