@@ -170,13 +170,13 @@ export async function mfaVerify(mfaToken, { code = null, recoveryCode = null }) 
   return data
 }
 
-export async function authStatus() {
-  const { data } = await api.get('/auth/status')
+export async function authStatus(config) {
+  const { data } = await api.get('/auth/status', config)
   return data
 }
 
-export async function me() {
-  const { data } = await api.get('/auth/me')
+export async function me(config) {
+  const { data } = await api.get('/auth/me', config)
   return data
 }
 
@@ -247,13 +247,13 @@ export async function getDevicePayment(chipId) {
   return data
 }
 
-export async function getPrefs() {
-  const { data } = await api.get('/prefs')
+export async function getPrefs(config) {
+  const { data } = await api.get('/prefs', config)
   return data
 }
 
-export async function updatePrefs(patch) {
-  const { data } = await api.put('/prefs', patch)
+export async function updatePrefs(patch, config) {
+  const { data } = await api.put('/prefs', patch, config)
   return data
 }
 

@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { me, getToken, setToken } from '../api/auth'
+import { authStatus, me, getToken, setToken } from '../api/auth'
 import { loadPrefs, settings } from './settings'
 import { connectWs, disconnectWs } from './notifications'
 
@@ -9,22 +9,27 @@ export const auth = reactive({
 })
 
 export async function loadUser() {
-  if (!getToken()) {
-    auth.user = null
-    auth.loading = false
-    return
-  }
+  const config = { timeout: 5000 }
   try {
-    auth.user = await me()
-    // Настройки блоков и датчиков живут в БД — тянем сразу вместе с пользователем,
-    // иначе до первого запроса графики успеют отрисоваться со старыми значениями.
-    await loadPrefs()
-    connectWs()
-  } catch {
+    if (getToken()) {
+      const user = await me(config)
+      if (user?.id == null) return false
+      if (getToken()) {
+        auth.user = user
+        await loadPrefs(config)
+        if (auth.user) connectWs()
+      }
+    } else {
+      const status = await authStatus(config)
+      if (typeof status?.googleEnabled !== 'boolean') return false
+    }
+  } catch (error) {
+    const status = error.response?.status
+    if (!status || status >= 500) return false
     auth.user = null
-  } finally {
-    auth.loading = false
   }
+  auth.loading = false
+  return true
 }
 
 export function setUser(user) {

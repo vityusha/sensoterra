@@ -1,16 +1,37 @@
 <template>
   <ToastHost />
   <router-view v-if="!auth.loading" />
+  <main v-else-if="startupUnavailable" class="startup-unavailable">
+    <section class="startup-notice" role="status">
+      <h1>Сервис пока недоступен</h1>
+      <p>Приложение продолжит загрузку, когда связь восстановится.</p>
+    </section>
+  </main>
   <div v-else class="app-loading">Загрузка...</div>
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { auth, loadUser } from './store/auth'
 import ToastHost from './components/ToastHost.vue'
 import { applyTheme } from './store/settings'
 
 let vvFrame = 0
+const startupUnavailable = ref(false)
+let startupTimer
+let startupChecking = false
+let disposed = false
+
+async function initialize() {
+  if (disposed || startupChecking || !auth.loading) return
+  clearTimeout(startupTimer)
+  startupChecking = true
+  const ready = await loadUser()
+  startupChecking = false
+  if (disposed || ready) return
+  startupUnavailable.value = true
+  startupTimer = setTimeout(initialize, 3000)
+}
 
 // iOS Safari pans the visual viewport (instead of just scrolling) when the soft
 // keyboard opens, so sticky headers stay pinned to the layout viewport above the
@@ -31,17 +52,21 @@ function onFocusOut() {
   setTimeout(syncVisualViewport, 150)
 }
 
-onMounted(async () => {
+onMounted(() => {
   applyTheme()
   window.visualViewport?.addEventListener('resize', syncVisualViewport)
   window.visualViewport?.addEventListener('scroll', syncVisualViewport)
   window.addEventListener('resize', syncVisualViewport)
   document.addEventListener('focusout', onFocusOut)
   syncVisualViewport()
-  await loadUser()
+  window.addEventListener('online', initialize)
+  void initialize()
 })
 
 onUnmounted(() => {
+  disposed = true
+  clearTimeout(startupTimer)
+  window.removeEventListener('online', initialize)
   window.visualViewport?.removeEventListener('resize', syncVisualViewport)
   window.visualViewport?.removeEventListener('scroll', syncVisualViewport)
   window.removeEventListener('resize', syncVisualViewport)
@@ -238,6 +263,22 @@ label:has(> input[type='checkbox']) {
 }
 
 .app-loading { color: var(--text-sub); text-align: center; padding: 3rem; }
+.startup-unavailable {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+.startup-notice {
+  max-width: 26rem;
+  background: var(--bg-card);
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  padding: 1.25rem;
+  text-align: center;
+}
+.startup-notice h1 { font-size: 1.15rem; margin-bottom: 0.5rem; }
+.startup-notice p { color: var(--text-sub); }
 .btn.btn.save { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); }
 .btn.btn.save:hover:not(:disabled) { background: var(--save-bg-hover); border-color: var(--save-border); }
 .btn.btn.save:disabled { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); opacity: 0.55; cursor: not-allowed; }

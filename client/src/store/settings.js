@@ -105,18 +105,18 @@ function applyPrefs(data) {
  * Загрузка настроек при входе. При первом запуске после переезда на БД отправляем
  * накопленное в браузере: иначе у пользователя пропали бы блоки, названные вручную.
  */
-export async function loadPrefs() {
+export async function loadPrefs(config) {
   try {
-    const data = await getPrefs()
+    const data = await getPrefs(config)
     applyPrefs(data)
   } catch {
     settings.loaded = true
   }
   if (!localStorage.getItem(MIGRATED_KEY) && hasLegacyData()) {
     try {
-      await updatePrefs(legacyPatch())
+      await updatePrefs(legacyPatch(), config)
       localStorage.setItem(MIGRATED_KEY, '1')
-      const data = await getPrefs()
+      const data = await getPrefs(config)
       applyPrefs(data)
     } catch { /* перенос не удался — работаем на локальных значениях, флаг не ставим */ }
   }
