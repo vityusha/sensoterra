@@ -1,10 +1,9 @@
 <template>
   <ToastHost />
   <router-view v-if="!auth.loading" />
-  <main v-else-if="startupUnavailable" class="startup-unavailable">
+  <main v-else-if="startupWarning" class="startup-unavailable">
     <section class="startup-notice" role="status">
-      <h1>Сервис пока недоступен</h1>
-      <p>Приложение продолжит загрузку, когда связь восстановится.</p>
+      <h1>{{ startupWarning }}</h1>
     </section>
   </main>
   <div v-else class="app-loading">Загрузка...</div>
@@ -17,19 +16,41 @@ import ToastHost from './components/ToastHost.vue'
 import { applyTheme } from './store/settings'
 
 let vvFrame = 0
-const startupUnavailable = ref(false)
+const startupWarning = ref('')
 let startupTimer
 let startupChecking = false
 let disposed = false
+
+async function hasInternetConnection() {
+  if (!navigator.onLine) return false
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 2500)
+  try {
+    await fetch('https://www.google.com/generate_204', {
+      mode: 'no-cors',
+      cache: 'no-store',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      signal: controller.signal
+    })
+    return true
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 async function initialize() {
   if (disposed || startupChecking || !auth.loading) return
   clearTimeout(startupTimer)
   startupChecking = true
   const ready = await loadUser()
+  const online = !ready && !disposed ? await hasInternetConnection() : false
   startupChecking = false
   if (disposed || ready) return
-  startupUnavailable.value = true
+  startupWarning.value = online ? 'Сервис пока недоступен' : 'Проверьте подключение к интернету'
   startupTimer = setTimeout(initialize, 3000)
 }
 
@@ -277,8 +298,7 @@ label:has(> input[type='checkbox']) {
   padding: 1.25rem;
   text-align: center;
 }
-.startup-notice h1 { font-size: 1.15rem; margin-bottom: 0.5rem; }
-.startup-notice p { color: var(--text-sub); }
+.startup-notice h1 { font-size: 1.15rem; }
 .btn.btn.save { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); }
 .btn.btn.save:hover:not(:disabled) { background: var(--save-bg-hover); border-color: var(--save-border); }
 .btn.btn.save:disabled { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); opacity: 0.55; cursor: not-allowed; }
