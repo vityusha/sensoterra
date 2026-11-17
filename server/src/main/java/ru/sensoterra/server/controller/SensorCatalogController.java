@@ -162,7 +162,12 @@ public class SensorCatalogController {
             if (blockId.equals(keepBlockId)) {
                 continue;
             }
-            checkBlockAccess(blockId);
+            // Resolving duplicate sensor registrations is an admin service operation.
+            // Admins may send UNREG even when the affected block has a different owner;
+            // regular users still need control access to every affected block.
+            if (!access.isAdmin()) {
+                checkBlockAccess(blockId);
+            }
             boolean sent = mqttClientService.publishUnregister(blockId, chipId);
             if (sent) {
                 unregistered.add(blockId);
