@@ -314,7 +314,7 @@ function applyFromRelay(r) {
 
 const displayName = computed(() => getBlockName(chipId) || String(chipId))
 const relayTitle = computed(() => `Канал R${relayNumber}`)
-const isOnline = computed(() => statusMap.value[chipId]?.status === 'online')
+const isOnline = computed(() => String(statusMap.value[chipId]?.status || '').trim().toLowerCase() === 'online')
 const isTypeTime = computed(() => form.type === 0)
 const isTypeOne = computed(() => form.type === 1)
 const isTypeThreshold = computed(() => form.type === 2 || form.type === 3)
