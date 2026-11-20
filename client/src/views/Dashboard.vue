@@ -326,7 +326,6 @@ function restoreDashboardCache() {
     devices.value = saved.devices
     catalog.value = saved.catalog
     statusMap.value = saved.statusMap && typeof saved.statusMap === 'object' ? saved.statusMap : {}
-    showingCachedDashboard.value = true
     return true
   } catch {
     return false
@@ -587,6 +586,8 @@ async function refreshAll() {
   const map = {}
   for (const s of statuses) map[s.chipId] = s
   statusMap.value = map
+  showingCachedDashboard.value = false
+  saveDashboardCache()
 }
 
 onMounted(async () => {
@@ -598,7 +599,6 @@ onMounted(async () => {
   }
   try {
     await refreshAll()
-    showingCachedDashboard.value = false
     restoreSensorListPage()
   } catch {
     showingCachedDashboard.value = hasCache
@@ -769,7 +769,8 @@ async function refreshLive() {
   if (document.visibilityState === 'hidden' || liveBusy) return
   liveBusy = true
   try {
-    await Promise.all([refreshCatalog(), refreshStatuses()])
+    if (showingCachedDashboard.value) await refreshAll()
+    else await Promise.all([refreshCatalog(), refreshStatuses()])
   } catch {
   } finally {
     liveBusy = false

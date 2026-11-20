@@ -78,7 +78,25 @@ const routes = [
     path: '/sensor/:chipId',
     name: 'sensor',
     component: () => import('../views/SensorStats.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: 'measurement/:fieldKey(v[0-3]|battery|batload|rssi)',
+        name: 'sensor-measurement'
+      },
+      {
+        path: 'measurement/:fieldKey(v0)/notifications',
+        name: 'sensor-moisture-notifications',
+        component: () => import('../views/MoistureGradient.vue'),
+        meta: { measurementNotifications: true }
+      },
+      {
+        path: 'measurement/:fieldKey(v[123])/notifications',
+        name: 'sensor-field-notifications',
+        component: () => import('../views/FieldGradient.vue'),
+        meta: { measurementNotifications: true }
+      }
+    ]
   },
   {
     path: '/sensor/:chipId/moisture-gradient',
@@ -108,7 +126,14 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if ((to.params.fieldKey && to.matched[0]?.name === 'sensor')
+      || (from.params.fieldKey && from.matched[0]?.name === 'sensor')) {
+      return { top: 0 }
+    }
+  }
 })
 
 router.beforeEach((to, from, next) => {

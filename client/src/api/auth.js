@@ -535,13 +535,14 @@ export async function getRelayTelemetry(deviceId, relayNumber, since, to) {
   return data
 }
 
-export async function getSensorTelemetry(deviceId, sensorChipId, since, to, limit) {
+export async function getSensorTelemetry(deviceId, sensorChipId, since, to, limit, lastField) {
   const params = new URLSearchParams({})
   if (deviceId != null) params.set('deviceId', deviceId)
   if (sensorChipId != null) params.set('sensorChipId', sensorChipId)
   if (since) params.set('since', since)
   if (to) params.set('to', to)
   if (limit != null) params.set('limit', limit)
+  if (lastField) params.set('lastField', lastField)
   const { data } = await api.get(`/telemetry/sensor?${params}`)
   return data
 }

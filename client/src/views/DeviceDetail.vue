@@ -3,7 +3,7 @@
     <div class="header-row">
       <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>{{ displayName }}</h2>
-      <span v-if="device?.deviceType === 'BLOCK'" class="status-tag" :class="isOnline ? 'online' : 'offline'">
+      <span v-if="pageReady && isBlock" class="status-tag" :class="isOnline ? 'online' : 'offline'">
         {{ isOnline ? 'online' : 'offline' }}
       </span>
       <AlarmBell />
@@ -21,11 +21,9 @@
     </div>
     <div class="device-id">ID: {{ chipId }}</div>
 
-    <div v-if="canControl" class="device-name-field">
-      <span class="field-label">Название</span>
-      <input type="text" v-model="editNameVal" maxlength="32" placeholder="Введите название" @focus="nameFocused = true" @blur="onNameBlur" @keyup.enter="saveName" @keyup.esc="editNameVal = editableName" />
-      <span class="field-hint">до 32 символов</span>
-    </div>
+    <PageLoadState v-if="!pageReady" :error="pageError" @retry="loadPage" />
+    <template v-else>
+    <DeviceNameField v-if="canControl" :name="editableName" @save="saveName" />
 
     <!-- Оплата блока: срок один на всех, кто имеет доступ, и он общий, а не «мой». -->
     <div v-if="isBlock" class="pay-line" :class="payClass">{{ paymentText(payment) }}</div>
@@ -399,11 +397,14 @@
       <div v-if="planError" class="invite-error">{{ planError }}</div>
     </section>
 
+    </template>
   </div>
 </template>
 
 <script setup>
 import AlarmBell from '../components/AlarmBell.vue'
+import PageLoadState from '../components/PageLoadState.vue'
+import DeviceNameField from '../components/DeviceNameField.vue'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, api, getDeviceStatuses, getBlockTelemetry, getDeviceStatusLog, getRelayTelemetry, getServerUptimeHistory, listInvites, createInvite, revokeInvite, deleteInvite, clearFinishedInvites, clearAllInvites, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, getDeviceKey, regenerateDeviceKey, getDevicePayment, setDevicePayment, extendDevicePayment, resetDeviceRegistrations, getMoistureScale, getSensorScales, listAlarms } from '../api/auth'
@@ -422,6 +423,8 @@ import LineChart from '../components/LineChart.vue'
 import RangeTimeline from '../components/RangeTimeline.vue'
 
 const route = useRoute()
+const pageReady = ref(false)
+const pageError = ref('')
 const router = useRouter()
 const menuOpen = ref(false)
 const menuRef = ref(null)
@@ -445,8 +448,6 @@ const fieldScales = ref({})
 const registeredSensors = ref([])
 const busy = ref(null)
 const pendingRelays = ref({})
-const nameFocused = ref(false)
-const editNameVal = ref('')
 const showStats = ref(false)
 const blockTelemetry = ref(null)
 const blockStatsData = ref([])
@@ -1184,20 +1185,26 @@ const editableName = computed(() => {
   return pref || device.value?.name || ''
 })
 
-watch(editableName, (name) => {
-  if (!nameFocused.value) editNameVal.value = name
-}, { immediate: true })
-
 watch(() => alarmState.version, refreshThresholdAlarms)
 
 onMounted(async () => {
   document.addEventListener('click', closeMenuOnOutsideClick)
   document.addEventListener('keydown', closeMenuOnEscape)
-  await load()
-  await loadAccess()
-  await loadInvites()
-  restoreDevicePosition()
+  await loadPage()
 })
+
+async function loadPage() {
+  pageError.value = ''
+  try {
+    await load()
+    await loadAccess()
+    await loadInvites()
+    pageReady.value = true
+    restoreDevicePosition()
+  } catch {
+    pageError.value = 'Не удалось загрузить устройство'
+  }
+}
 
 let wsUnsub = null
 let refreshTimer = null
@@ -1216,7 +1223,7 @@ function isThisDevice(value) {
  * в фон, а спящий датчик reconnect не инициирует. Опрос страховит live-обновления.
  */
 async function refreshLive() {
-  if (liveBusy || blockClosed.value) return
+  if (!pageReady.value || liveBusy || blockClosed.value) return
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
   liveBusy = true
   try {
@@ -1312,8 +1319,16 @@ async function load() {
   }
   device.value = await getDevice(Number(chipId))
   rememberDeviceOwner(device.value)
-  relays.value = await getDeviceRelays(Number(chipId))
-  sensors.value = await getDeviceSensors(Number(chipId))
+  const [relayList, sensorList, statuses, registered, telemetry] = await Promise.all([
+    getDeviceRelays(Number(chipId)),
+    getDeviceSensors(Number(chipId)),
+    getDeviceStatuses(),
+    isBlock.value ? getDeviceRegisteredSensors(Number(chipId)) : [],
+    isBlock.value ? getBlockTelemetry(Number(chipId)) : [],
+    loadLastEvents(),
+  ])
+  relays.value = relayList
+  sensors.value = sensorList
   await refreshThresholdAlarms()
   // Калибровки влажности: нужны для показа % и предупреждения о погружении.
   await Promise.all(sensors.value
@@ -1343,16 +1358,13 @@ async function load() {
         fieldScales.value = { ...fieldScales.value, [chip]: map }
       } catch { /* без шкал — просто без цвета */ }
     }))
-  await loadLastEvents()
   if (device.value?.deviceType === 'BLOCK') {
-    registeredSensors.value = await getDeviceRegisteredSensors(Number(chipId))
+    registeredSensors.value = registered
     if (!registeredSensors.value.some(sensor => Number(sensor.slot) === activeSensorNumber.value) && registeredSensors.value.length) {
       activeSensorNumber.value = Number(registeredSensors.value[0].slot)
     }
-    const bt = await getBlockTelemetry(Number(chipId))
-    blockTelemetry.value = bt[0] || null
+    blockTelemetry.value = telemetry[0] || null
   }
-  const statuses = await getDeviceStatuses()
   const map = {}
   for (const s of statuses) map[s.chipId] = s
   statusesMap.value = map
@@ -1436,17 +1448,10 @@ async function toggle(r, state) {
   }
 }
 
-function saveName() {
+function saveName(name) {
   if (!canControl.value) return
-  const name = editNameVal.value.trim()
-  editNameVal.value = name
   if (device.value?.deviceType === 'BLOCK') setBlockName(chipId, name)
   else setIndividualName(chipId, name)
-}
-
-function onNameBlur() {
-  nameFocused.value = false
-  saveName()
 }
 
 function getLabel(sensor, field) {
@@ -1720,11 +1725,6 @@ async function shiftBlockRange(direction) {
 .menu-dropdown .menu-danger { color: var(--danger); }
 .editable { cursor: pointer; border-bottom: 1px dashed var(--border); }
 .editable:hover { color: var(--accent); }
-.device-name-field { display: flex; flex-direction: column; gap: 0.4rem; max-width: 360px; margin-bottom: 1rem; }
-.device-name-field .field-label { color: var(--text-muted); font-size: 0.8rem; }
-.device-name-field .field-hint { color: var(--text-faint); font-size: 0.72rem; }
-.device-name-field input { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.95rem; padding: 0.45rem 0.6rem; }
-.device-name-field input:focus { outline: none; border-color: var(--accent); }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg-ok); color: var(--text); }
 .status-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
 .status-tag.online { background: var(--tag-bg-ok); color: var(--success); }

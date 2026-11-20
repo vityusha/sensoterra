@@ -49,14 +49,17 @@ public class TelemetryController {
             @Nullable @QueryValue Long sensorChipId,
             @Nullable @QueryValue Instant since,
             @Nullable @QueryValue Instant to,
-            @Nullable @QueryValue Integer limit) {
+            @Nullable @QueryValue Integer limit,
+            @Nullable @QueryValue String lastField) {
         if (deviceId == null && sensorChipId == null) {
             return List.of();
         }
         deviceId = requireSensorTelemetryAccess(deviceId, sensorChipId);
         // Длинные окна (> 7 дней — по часу, > 90 дней — по суткам) и окна старше срока
         // хранения сырых данных отдаём из непрерывных агрегатов: те же поля, значения — средние.
-        Resolution resolution = TelemetryAggregateService.choose(since, to, Instant.now());
+        Resolution resolution = lastField == null
+                ? TelemetryAggregateService.choose(since, to, Instant.now())
+                : Resolution.RAW;
         if (resolution != Resolution.RAW) {
             List<SensorTelemetry> points = aggregates.load(resolution, deviceId, sensorChipId, since, to,
                     limit != null && limit > 0 ? limit : TelemetryAggregateService.MAX_POINTS);
@@ -76,6 +79,19 @@ public class TelemetryController {
         if (to != null) {
             jpql.append(" AND t.time <= :to");
         }
+        if (lastField != null) {
+            String property = switch (lastField) {
+                case "v0" -> "moistureAdc";
+                case "v1" -> "temperature";
+                case "v2" -> "humidity";
+                case "v3" -> "light";
+                case "battery" -> "battery";
+                case "batload" -> "batload";
+                case "rssi" -> "rssi";
+                default -> throw new HttpStatusException(HttpStatus.BAD_REQUEST, "Unknown measurement field");
+            };
+            jpql.append(" AND t.").append(property).append(" IS NOT NULL");
+        }
         jpql.append(" ORDER BY t.time DESC");
         var q = em.createQuery(jpql.toString(), SensorTelemetry.class);
         if (deviceId != null) {
@@ -91,7 +107,8 @@ public class TelemetryController {
             q.setParameter("to", to);
         }
         // limit=1 — «последние данные» вне выбранного периода: одна строка вместо 500.
-        q.setMaxResults(limit != null && limit > 0 ? Math.min(limit, 500) : 500);
+        int pageSize = limit != null && limit > 0 ? Math.min(limit, 500) : 500;
+        q.setMaxResults(lastField != null ? 1 : pageSize);
         return q.getResultList();
     }
 

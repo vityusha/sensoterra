@@ -1,8 +1,8 @@
 <template>
   <div class="field-gradient">
     <div class="header-row">
-      <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-      <h2>{{ title }}</h2>
+      <button type="button" @click="goBack" class="btn small back-btn" aria-label="Назад"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+      <h2>Настройка уведомлений</h2>
       <button type="button" class="btn small back-btn save-icon-btn" title="Сохранить" aria-label="Сохранить" @click="save">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
       </button>
@@ -85,9 +85,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { backFromNotifications } from '../utils/sensorNavigation'
 import { getSensorScale, setSensorScale, clearSensorScale, getSensorCatalog, getSensorThreshold, saveSensorThreshold } from '../api/auth'
 import { moistureGradientCss } from '../utils/gradient'
-import { getFieldName, getFieldUnit } from '../store/settings'
+import { getFieldUnit } from '../store/settings'
 import { pushNotification } from '../store/notifications'
 
 const route = useRoute()
@@ -95,16 +96,11 @@ const router = useRouter()
 const chipId = Number(route.params.chipId)
 const deviceId = route.query.deviceId ? Number(route.query.deviceId) : null
 const fieldKey = route.params.fieldKey
-const nameFromQuery = route.query.name || null
-
-const FIELD_LABELS = { v1: 'Температура', v2: 'Влажность воздуха', v3: 'Освещённость' }
-
 const sensorType = ref(0)
-const title = computed(() => {
-  const local = getFieldName(sensorType.value, fieldKey)
-  const fallback = FIELD_LABELS[fieldKey] || fieldKey
-  return `Градиент: ${nameFromQuery || (local !== fieldKey ? local : fallback)}`
-})
+
+function goBack() {
+  backFromNotifications(router, route, fieldKey)
+}
 
 const minValue = ref(null)
 const maxValue = ref(null)
@@ -260,7 +256,7 @@ async function save() {
       }, deviceId)
     }
     pushNotification('Градиент сохранён', 'success')
-    router.back()
+    goBack()
   } catch (e) {
     message.value = formatApiError(e, 'Не удалось сохранить настройки')
     pushNotification(message.value, 'error')

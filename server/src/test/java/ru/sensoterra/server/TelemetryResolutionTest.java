@@ -105,6 +105,7 @@ class TelemetryResolutionTest {
             sql("INSERT INTO sensor_telemetry (time, device_id, sensor_chip_id, moisture_adc) VALUES ('"
                     + Timestamp.from(t) + "', " + DEVICE + ", " + DEVICE + ", " + (1000 + i) + ")");
         }
+        sql("UPDATE sensor_telemetry SET temperature = 21.5 WHERE device_id = " + DEVICE + " AND moisture_adc = 1001");
     }
 
     @BeforeEach
@@ -140,6 +141,18 @@ class TelemetryResolutionTest {
         assertEquals(1000, ((Number) rows.get(0).get("moistureAdc")).intValue(), "новые первыми");
         assertNull(rows.get(0).get("resolution"));
         verify(aggregates, never()).load(any(), any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void latestFieldSkipsNewerRowsWithoutTheMeasurement() {
+        List<Map> rows = client.toBlocking().retrieve(
+                HttpRequest.GET("/api/telemetry/sensor?deviceId=" + DEVICE + "&sensorChipId=" + DEVICE
+                        + "&lastField=v1").bearerAuth(adminToken),
+                Argument.listOf(Map.class));
+
+        assertEquals(1, rows.size());
+        assertEquals(21.5, ((Number) rows.getFirst().get("temperature")).doubleValue());
+        assertEquals(now.minus(Duration.ofHours(2)), Instant.parse(rows.getFirst().get("time").toString()));
     }
 
     @Test

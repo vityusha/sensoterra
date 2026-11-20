@@ -1,206 +1,252 @@
 <template>
-  <div class="sensor">
-    <header class="page-header">
+  <div v-if="!route.meta.measurementNotifications" class="sensor">
+    <header v-if="measurement" class="page-header">
       <div class="header-top">
-        <button @click="router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-        <h2>{{ displayName }}</h2>
-        <AlarmBell />
-        <div class="menu-wrap" ref="menuRef">
-          <button
-            class="menu-toggle"
-            :aria-expanded="menuOpen"
-            aria-haspopup="menu"
-            aria-label="Меню"
-            @click="menuOpen = !menuOpen"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
-              <circle cx="12" cy="5" r="2" />
-              <circle cx="12" cy="12" r="2" />
-              <circle cx="12" cy="19" r="2" />
-            </svg>
-          </button>
-          <div v-if="menuOpen" class="menu-dropdown" role="menu">
-            <button role="menuitem" @click="goMenu('/settings')">Настройки</button>
-            <button role="menuitem" @click="goMenu('/profile')">Профиль</button>
-            <div class="menu-sep"></div>
-            <button v-if="catalogEntry && canEditPrefs && isIndividual" role="menuitem" @click="openSettingsFromMenu">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-              </svg>
-              Настройка
-            </button>
-            <button v-if="catalogEntry && canEditPrefs" role="menuitem" @click="openCalibrateFromMenu">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-13c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
-              </svg>
-              Калибровка 0% влажности
-            </button>
-            <button v-if="catalogEntry && canEditPrefs && calibSectionVisible" role="menuitem" @click="openCalibSettings">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
-              </svg>
-              Калибровка пределов
-            </button>
-            <button v-if="catalogEntry && canEditPrefs" role="menuitem" @click="openDisplaySettings">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-              </svg>
-              Показ измерений
-            </button>
-            <div class="menu-sep"></div>
-            <button role="menuitem" class="menu-danger" @click="handleLogout">Выйти</button>
-          </div>
+        <button type="button" class="btn small back-btn" aria-label="Назад к датчику" @click="backToSensor"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+        <div class="measurement-heading">
+          <h2>{{ label(measurement.key) }}</h2>
+          <p>{{ displayName }}</p>
         </div>
-      </div>
-      <div class="header-meta">
-        <span class="type-tag">{{ typeLabel }}</span>
       </div>
     </header>
-    <div class="device-id">ID: {{ chipId }}</div>
+    <template v-else>
+      <header class="page-header">
+        <div class="header-top">
+          <button @click="router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+          <h2>{{ displayName }}</h2>
+          <AlarmBell />
+          <div class="menu-wrap" ref="menuRef">
+            <button
+              class="menu-toggle"
+              :aria-expanded="menuOpen"
+              aria-haspopup="menu"
+              aria-label="Меню"
+              @click="menuOpen = !menuOpen"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </button>
+            <div v-if="menuOpen" class="menu-dropdown" role="menu">
+              <button role="menuitem" @click="goMenu('/settings')">Настройки</button>
+              <button role="menuitem" @click="goMenu('/profile')">Профиль</button>
+              <div class="menu-sep"></div>
+              <button v-if="catalogEntry && canEditPrefs && isIndividual" role="menuitem" @click="openSettingsFromMenu">
+                <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                </svg>
+                Настройка датчика
+              </button>
+              <button v-if="catalogEntry && canEditPrefs && calibSectionVisible" role="menuitem" @click="openCalibSettings">
+                <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
+                </svg>
+                Калибровка пределов
+              </button>
+              <button v-if="catalogEntry && canEditPrefs" role="menuitem" @click="openDisplaySettings">
+                <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                </svg>
+                Показ измерений
+              </button>
+              <div class="menu-sep"></div>
+              <button role="menuitem" class="menu-danger" @click="handleLogout">Выйти</button>
+            </div>
+          </div>
+        </div>
+        <div class="header-meta">
+          <span class="type-tag">{{ typeLabel }}</span>
+        </div>
+      </header>
+      <div class="device-id">ID: {{ chipId }}</div>
 
-    <div v-if="isIndividual && canEditPrefs" class="device-name-field">
-      <span class="field-label">Название</span>
-      <input type="text" v-model="editNameVal" maxlength="32" placeholder="Введите название" @focus="nameFocused = true" @blur="onNameBlur" @keyup.enter="saveName" @keyup.esc="editNameVal = editableName" />
-      <span class="field-hint">до 32 символов</span>
-    </div>
+      <DeviceNameField v-if="pageReady && isIndividual && canEditPrefs" :name="editableName" @save="saveName" />
+    </template>
 
-    <section class="section" v-if="latest">
-      <h3>Последние данные</h3>
-      <div class="last-received" v-if="latest.time">
-        Получено: <b>{{ fmtEventTimeWithZone(latest.time, tzOffset) }}</b>
-        <span v-if="latest.numMessage != null" class="msg-num">[{{ latest.numMessage }}]</span>
+    <PageLoadState v-if="!pageReady" :error="pageError" @retry="loadPage" />
+    <template v-else>
+    <section class="section" v-if="reading || measurement">
+      <h3>{{ measurement ? 'Последнее значение' : 'Последние данные' }}</h3>
+      <div class="last-received" v-if="reading?.time">
+        Получено: <b>{{ fmtEventTimeWithZone(reading.time, tzOffset) }}</b>
+        <span v-if="reading.numMessage != null" class="msg-num">[{{ reading.numMessage }}]</span>
         <span class="ago">({{ agoText }})</span>
       </div>
-      <div class="immersion-warning" v-if="immersionWarningShown">
+      <div class="immersion-warning" v-if="!measurement && immersionWarningShown">
         Проверьте уровень погружения датчика в почву
       </div>
-      <div class="latest-grid">
-        <div class="latest-cell" v-for="che in cellCharts" :key="'l' + che.key" :style="cellBackground(che)" :class="{ 'gradient-editable': isGradientField(che.key) }" :role="isGradientField(che.key) ? 'button' : undefined" :tabindex="isGradientField(che.key) ? 0 : undefined" :aria-label="isGradientField(che.key) ? `Настройка цвета и порогов: ${label(che.key)}` : undefined" @click="isGradientField(che.key) && openGradient(che.key)" @keydown.enter.stop="isGradientField(che.key) && openGradient(che.key)" @keydown.space.prevent.stop="isGradientField(che.key) && openGradient(che.key)">
+      <div v-if="reading" class="latest-grid">
+        <component
+          :is="measurement ? 'div' : 'button'"
+          v-for="che in visibleCells"
+          :key="che.key"
+          class="latest-cell"
+          :class="{ 'measurement-link': !measurement }"
+          :style="cellBackground(che)"
+          :type="measurement ? undefined : 'button'"
+          @click="!measurement && openMeasurement(che.key)"
+        >
           <span class="l-label" :class="{ 'has-gradient': isGradientField(che.key) }"><span>{{ labelParts(che.key).first }}<br v-if="labelParts(che.key).rest" />{{ labelParts(che.key).rest }}</span></span>
           <span v-if="thresholdNotificationFields.has(che.key)" class="threshold-indicator" title="Включены уведомления по порогу" aria-label="Включены уведомления по порогу"><svg class="threshold-bell" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.75a3 3 0 0 0-3 3v1.1c0 1.25-.38 2.48-1.1 3.5L3 10.75h10l-.9-1.4A6.5 6.5 0 0 1 11 5.85v-1.1a3 3 0 0 0-3-3ZM6.3 12a1.75 1.75 0 0 0 3.4 0" /></svg></span>
-          <span class="l-value"><span class="l-reading" :class="{ 'alarm-active': openThresholdFields.has(che.key) }">{{ cellValue(che, latest) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span></span><span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null"></span></span>
-        </div>
+          <span class="l-value"><span class="l-reading" :class="{ 'alarm-active': openThresholdFields.has(che.key) }">{{ cellValue(che, reading) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span></span><span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null"></span></span>
+        </component>
       </div>
+      <div v-else class="empty small">{{ loading ? 'Загрузка...' : 'Нет данных' }}</div>
     </section>
 
-    <div class="battery-runtime">
-      <span class="battery-label">Время работы батареи:</span>
-      <b v-if="batteryRuntimeText">{{ batteryRuntimeText }}</b>
-      <span v-else-if="!batteryStartLoaded" class="muted">…</span>
-      <span v-else class="muted">информация недоступна</span>
-    </div>
-
-    <!-- Ключ для комплектного листа: его копирует админ и отдаёт покупателю вместе с датчиком. -->
-    <section v-if="isAdmin && isIndividual" class="section">
-      <div class="section-head">
-        <h3>Ключ для комплектного листа</h3>
-        <button class="btn small" @click="toggleKey" :disabled="keyBusy">{{ keyBusy ? '...' : (deviceKey ? 'Скрыть' : 'Показать') }}</button>
+    <template v-if="!measurement">
+      <div class="battery-runtime">
+        <span class="battery-label">Время работы батареи:</span>
+        <b v-if="batteryRuntimeText">{{ batteryRuntimeText }}</b>
+        <span v-else-if="!batteryStartLoaded" class="muted">…</span>
+        <span v-else class="muted">информация недоступна</span>
       </div>
-      <div v-if="deviceKey" class="invite-box">
-        <div class="invite-link">ID {{ chipId }} · ключ {{ deviceKey }}</div>
-        <div class="invite-note">Распечатайте на листе, который едет в комплекте с датчиком.
-          Покупатель введёт эту пару при регистрации.</div>
-        <div class="invite-actions">
-          <button class="btn small" @click="copyKey">Скопировать</button>
-          <button class="btn small danger" @click="regenKey">Перевыпустить</button>
+
+      <!-- Ключ для комплектного листа: его копирует админ и отдаёт покупателю вместе с датчиком. -->
+      <section v-if="isAdmin && isIndividual" class="section">
+        <div class="section-head">
+          <h3>Ключ для комплектного листа</h3>
+          <button class="btn small" @click="toggleKey" :disabled="keyBusy">{{ keyBusy ? '...' : (deviceKey ? 'Скрыть' : 'Показать') }}</button>
         </div>
-      </div>
-    </section>
-
-    <template v-if="isIndividual">
-      <InvitePanel :chip-id="chipId" eternal />
-      <!-- Кто ещё имеет доступ к датчику и на каких условиях. -->
-      <section v-if="accessList.length" class="section">
-        <div class="section-head"><h3>Доступ</h3></div>
-        <p v-if="adminLocked" class="muted admin-locked">
-          У датчика есть владелец ({{ deviceInfo.ownerUsername }}): управлять им и доступом может
-          только владелец. Админу остаются просмотр и сервисные операции.
-        </p>
-        <div class="relay-card access-card">
-          <div class="access-entry" v-for="a in accessList" :key="a.userId">
-            <span class="access-who">
-              {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
-            </span>
-            <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
-              <button class="btn small" @click="swapAccessRole(a)">
-                {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
-              </button>
-              <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
-            </div>
+        <div v-if="deviceKey" class="invite-box">
+          <div class="invite-link">ID {{ chipId }} · ключ {{ deviceKey }}</div>
+          <div class="invite-note">Распечатайте на листе, который едет в комплекте с датчиком.
+            Покупатель введёт эту пару при регистрации.</div>
+          <div class="invite-actions">
+            <button class="btn small" @click="copyKey">Скопировать</button>
+            <button class="btn small danger" @click="regenKey">Перевыпустить</button>
           </div>
         </div>
       </section>
+
+      <template v-if="isIndividual">
+        <InvitePanel :chip-id="chipId" eternal />
+        <!-- Кто ещё имеет доступ к датчику и на каких условиях. -->
+        <section v-if="accessList.length" class="section">
+          <div class="section-head">
+            <h3>Доступ</h3>
+            <button class="btn small ghost" type="button" :aria-expanded="accessSectionOpen" @click="accessSectionOpen = !accessSectionOpen">
+              {{ accessSectionOpen ? 'Скрыть' : 'Показать' }}
+            </button>
+          </div>
+          <div v-if="accessSectionOpen" class="collapsible-content">
+            <p v-if="adminLocked" class="muted admin-locked">
+              У датчика есть владелец ({{ deviceInfo.ownerUsername }}): управлять им и доступом может
+              только владелец. Админу остаются просмотр и сервисные операции.
+            </p>
+            <div class="relay-card access-card">
+              <div class="access-entry" v-for="a in accessList" :key="a.userId">
+                <span class="access-who">
+                  {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
+                </span>
+                <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
+                  <button class="btn small" @click="swapAccessRole(a)">
+                    {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
+                  </button>
+                  <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </template>
     </template>
 
-    <section class="section">
-      <h3>Статистика измерений</h3>
-      <div class="range-select">
-        <button v-for="r in ranges" :key="r.label" class="btn small" :class="{ active: range === r.value }" @click="setRange(r.value)">{{ r.label }}</button>
-        <button class="btn small" :class="{ active: range === 'custom' }" @click="showCustom = !showCustom">{{ showCustom ? 'Скрыть' : 'Свой период' }}</button>
-      </div>
-      <div v-if="showCustom" class="custom-range">
-        <label>С <input v-model="customFrom" type="datetime-local" /></label>
-        <label>По <input v-model="customTo" type="datetime-local" /></label>
-        <span class="zone-label">{{ zoneLabel(tzOffset ?? undefined) }}</span>
-        <button class="btn small" @click="applyCustom">Применить</button>
-      </div>
-      <RangeTimeline
-        v-if="baseFromMs != null && baseToMs != null && baseToMs > baseFromMs"
-        :from="baseFromMs"
-        :to="baseToMs"
-        :selection="selection"
-        :zone-offset="tzOffset ?? undefined"
-        @shift="shiftRange"
-        @update:selection="applyTimelineSelection"
-      />
-      <div class="range-hint">Выделите период на графике мышью или пальцем</div>
-      <div v-if="loading" class="empty small">Загрузка...</div>
-      <template v-else-if="rows.length">
-        <div class="chart-section" v-for="che in chartSections" :key="che.key">
-          <div class="chart-head">
-            <h4>{{ label(che.key) }}<span class="unit" v-if="chartUnit(che)">, {{ chartUnit(che) }}</span></h4>
-            <div class="y-edit" v-if="isYEditable(che.key) && canEditPrefs">
-              <label>min <input type="number" step="any" v-model="yEdit(che.key).min" @keyup.enter="applyY(che.key)" /></label>
-              <label>max <input type="number" step="any" v-model="yEdit(che.key).max" @keyup.enter="applyY(che.key)" /></label>
-              <button class="btn small" @click="applyY(che.key)">ОК</button>
-              <button class="btn small ghost" @click="resetY(che.key)">Авто</button>
-            </div>
-          </div>
-          <LineChart :labels="timeLabels" :datasets="chartDatasets(che)" :unit="chartUnit(che)" :zone-offset="tzOffset ?? undefined" :x-min="statsXMin" :x-max="statsXMax" :y-min="yBounds(che.key).min" :y-max="yBounds(che.key).max" :y-bands="che.key === 'rssi' ? RSSI_BANDS : []" selectable @select-range="applySelectedRange" />
+    <section v-if="measurement || catalogEntry || !loading" class="section">
+      <h3>
+        <template v-if="measurement">Статистика измерений</template>
+        <button v-else class="stats-toggle" type="button" :aria-expanded="showStats" @click="showStats = !showStats">
+          Статистика измерений {{ showStats ? '▾' : '▸' }}
+        </button>
+      </h3>
+      <template v-if="measurement || showStats">
+        <div class="range-select">
+          <button v-for="r in ranges" :key="r.label" class="btn small" :class="{ active: range === r.value }" @click="setRange(r.value)">{{ r.label }}</button>
+          <button class="btn small" :class="{ active: range === 'custom' }" @click="showCustom = !showCustom">{{ showCustom ? 'Скрыть' : 'Свой период' }}</button>
         </div>
-        <div class="chart-section transmission-section" v-if="transmissionMarkers.length || isAdmin">
-          <div class="chart-head">
-            <h4>Передача данных</h4>
-            <div class="transmission-actions">
-              <div v-if="isAdmin" class="transmission-toggle" role="group" aria-label="Вид передачи данных">
-                <button class="btn small" :class="{ active: transmissionView === 'graph' }" @click="transmissionView = 'graph'">График</button>
-                <button class="btn small" :class="{ active: transmissionView === 'errors' }" @click="showErrors">Ошибки</button>
+        <div v-if="showCustom" class="custom-range">
+          <label>С <input v-model="customFrom" type="datetime-local" /></label>
+          <label>По <input v-model="customTo" type="datetime-local" /></label>
+          <span class="zone-label">{{ zoneLabel(tzOffset ?? undefined) }}</span>
+          <button class="btn small" @click="applyCustom">Применить</button>
+        </div>
+        <RangeTimeline
+          v-if="baseFromMs != null && baseToMs != null && baseToMs > baseFromMs"
+          :from="baseFromMs"
+          :to="baseToMs"
+          :selection="selection"
+          :zone-offset="tzOffset ?? undefined"
+          @shift="shiftRange"
+          @update:selection="applyTimelineSelection"
+        />
+        <div v-if="chartSections.length || !measurement" class="range-hint">Выделите период на графике мышью или пальцем</div>
+        <div v-if="loading" class="empty small">Загрузка...</div>
+        <template v-else-if="measurement ? chartSections.length : rows.length">
+          <div class="chart-section" v-for="che in chartSections" :key="che.key">
+            <div class="chart-head">
+              <h4>{{ label(che.key) }}<span class="unit" v-if="chartUnit(che)">, {{ chartUnit(che) }}</span></h4>
+              <div class="y-edit" v-if="isYEditable(che.key) && canEditPrefs">
+                <label>min <input type="number" step="any" v-model="yEdit(che.key).min" @keyup.enter="applyY(che.key)" /></label>
+                <label>max <input type="number" step="any" v-model="yEdit(che.key).max" @keyup.enter="applyY(che.key)" /></label>
+                <button class="btn small" @click="applyY(che.key)">ОК</button>
+                <button class="btn small ghost" @click="resetY(che.key)">Авто</button>
               </div>
-              <span class="transmission-count" v-if="transmissionView === 'graph' || !isAdmin">{{ transmissionMarkers.length }} сообщ.</span>
-              <span class="transmission-count" v-else>{{ errorsExhausted ? `${errorRows.length} ошибок` : `Показано ${errorRows.length}` }}</span>
+            </div>
+            <LineChart :labels="timeLabels" :datasets="chartDatasets(che)" :unit="chartUnit(che)" :zone-offset="tzOffset ?? undefined" :x-min="statsXMin" :x-max="statsXMax" :y-min="yBounds(che.key).min" :y-max="yBounds(che.key).max" :y-bands="che.key === 'rssi' ? RSSI_BANDS : []" selectable @select-range="applySelectedRange" />
+          </div>
+          <div class="chart-section transmission-section" v-if="!measurement && (transmissionMarkers.length || isAdmin)">
+            <div class="chart-head">
+              <h4>Передача данных</h4>
+              <div class="transmission-actions">
+                <div v-if="isAdmin" class="transmission-toggle" role="group" aria-label="Вид передачи данных">
+                  <button class="btn small" :class="{ active: transmissionView === 'graph' }" @click="transmissionView = 'graph'">График</button>
+                  <button class="btn small" :class="{ active: transmissionView === 'errors' }" @click="showErrors">Ошибки</button>
+                </div>
+                <span class="transmission-count" v-if="transmissionView === 'graph' || !isAdmin">{{ transmissionMarkers.length }} сообщ.</span>
+                <span class="transmission-count" v-else>{{ errorsExhausted ? `${errorRows.length} ошибок` : `Показано ${errorRows.length}` }}</span>
+              </div>
+            </div>
+            <LineChart v-if="transmissionView === 'graph' || !isAdmin" :markers="transmissionMarkers" :x-min="statsXMin" :x-max="statsXMax" :zone-offset="tzOffset ?? undefined" timeline selectable :aria-label="`Передача данных: ${transmissionMarkers.length} сообщений`" @select-range="applySelectedRange" />
+            <div v-else class="error-list-wrap">
+              <div v-if="errorsLoading" class="empty small">Загружаю ошибки…</div>
+              <table v-if="errorRows.length" class="error-list">
+                <thead><tr><th>Дата</th><th>№ сообщения</th><th>Ошибка</th></tr></thead>
+                <tbody>
+                  <tr v-for="(row, index) in errorRows" :key="`${row.time}-${index}`">
+                    <td>{{ fmtEventTimeWithZone(row.time, tzOffset) }}</td>
+                    <td>{{ row.numMessage ?? '—' }}</td>
+                    <td>{{ row.error }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else-if="!errorsLoading" class="empty small">Ошибок в сохранённой истории нет</div>
+              <button v-if="!errorsExhausted && !errorsLoading" class="btn small load-more-errors" @click="loadMoreErrors">Загрузить ещё</button>
             </div>
           </div>
-          <LineChart v-if="transmissionView === 'graph' || !isAdmin" :markers="transmissionMarkers" :x-min="statsXMin" :x-max="statsXMax" :zone-offset="tzOffset ?? undefined" timeline selectable :aria-label="`Передача данных: ${transmissionMarkers.length} сообщений`" @select-range="applySelectedRange" />
-          <div v-else class="error-list-wrap">
-            <div v-if="errorsLoading" class="empty small">Загружаю ошибки…</div>
-            <table v-if="errorRows.length" class="error-list">
-              <thead><tr><th>Дата</th><th>№ сообщения</th><th>Ошибка</th></tr></thead>
-              <tbody>
-                <tr v-for="(row, index) in errorRows" :key="`${row.time}-${index}`">
-                  <td>{{ fmtEventTimeWithZone(row.time, tzOffset) }}</td>
-                  <td>{{ row.numMessage ?? '—' }}</td>
-                  <td>{{ row.error }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div v-else-if="!errorsLoading" class="empty small">Ошибок в сохранённой истории нет</div>
-            <button v-if="!errorsExhausted && !errorsLoading" class="btn small load-more-errors" @click="loadMoreErrors">Загрузить ещё</button>
-          </div>
-        </div>
-        <div class="empty small" v-if="!chartSections.length && !transmissionMarkers.length">За выбранный период данных нет</div>
+          <div class="empty small" v-if="!chartSections.length && !transmissionMarkers.length">За выбранный период данных нет</div>
+        </template>
+        <div v-else class="empty small">Нет данных за выбранный период</div>
       </template>
-      <div v-else class="empty small">Нет данных за выбранный период</div>
     </section>
+
+    <div v-if="measurement && catalogEntry" class="measurement-actions">
+      <button v-if="isGradientField(measurement.key)" type="button" class="btn" @click="openNotifications">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M10 3h4l.5 2.6 1.6.9 2.5-.9 2 3.5-2 1.7v1.9l2 1.7-2 3.5-2.5-.9-1.6.9L14 21h-4l-.5-2.6-1.6-.9-2.5.9-2-3.5 2-1.7v-1.9l-2-1.7 2-3.5 2.5.9 1.6-.9zM12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/></svg>
+        Настройка уведомлений
+      </button>
+      <button v-if="measurement.key === 'v0' && canEditPrefs" type="button" class="btn" @click="zeroCalibrationOpen = true">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c-2 3-6 7-6 11a6 6 0 0 0 12 0c0-4-4-8-6-11Z"/><path d="M9 14h6"/></svg>
+        Калибровка 0% влажности
+      </button>
+    </div>
+    <SensorCalibrate
+      v-if="measurement?.key === 'v0' && canEditPrefs && zeroCalibrationOpen"
+      modal
+      :device-id="resolvedDeviceId"
+      @close="zeroCalibrationOpen = false"
+    />
 
     <div v-if="displaySettingsOpen" class="modal-overlay" @click.self="displaySettingsOpen = false">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="display-settings-title">
@@ -244,11 +290,15 @@
         </div>
       </div>
     </div>
+    </template>
   </div>
+  <RouterView />
 </template>
 
 <script setup>
 import AlarmBell from '../components/AlarmBell.vue'
+import PageLoadState from '../components/PageLoadState.vue'
+import DeviceNameField from '../components/DeviceNameField.vue'
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSensorCatalog, getSensorTelemetry, getSensorErrors, getSensorFirstMessage, getDevice, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getSensorThreshold, getDeviceKey, regenerateDeviceKey, listAlarms } from '../api/auth'
@@ -264,8 +314,11 @@ import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs }
 import LineChart from '../components/LineChart.vue'
 import RangeTimeline from '../components/RangeTimeline.vue'
 import InvitePanel from '../components/InvitePanel.vue'
+import SensorCalibrate from './SensorCalibrate.vue'
 
 const route = useRoute()
+const pageReady = ref(false)
+const pageError = ref('')
 const router = useRouter()
 const chipId = Number(route.params.chipId)
 const queryDeviceId = route.query.deviceId ? Number(route.query.deviceId) : null
@@ -308,24 +361,11 @@ const displayName = computed(() => {
   return catalogEntry.value?.name || 'Датчик'
 })
 
-const nameFocused = ref(false)
-const editNameVal = ref('')
 const editableName = computed(() => getIndividualName(chipId) || catalogEntry.value?.name || '')
 
-watch(editableName, (name) => {
-  if (!nameFocused.value) editNameVal.value = name
-}, { immediate: true })
-
-function saveName() {
+function saveName(name) {
   if (!canEditPrefs.value) return
-  const name = editNameVal.value.trim()
-  editNameVal.value = name
   setIndividualName(chipId, name)
-}
-
-function onNameBlur() {
-  nameFocused.value = false
-  saveName()
 }
 
 const typeLabel = computed(() => {
@@ -355,8 +395,8 @@ async function refreshThresholdConfig() {
 watch(() => alarmState.version, refreshOpenThresholds)
 
 const sensorType = computed(() => {
-  const last = rows.value.slice().reverse().find(r => r.sensorType != null)
-  return last?.sensorType ?? 0
+  const last = rows.value.findLast(r => r.sensorType != null)
+  return lastAny.value?.sensorType ?? last?.sensorType ?? catalogEntry.value?.sensorType ?? 0
 })
 
 const timeLabels = computed(() => rows.value.map(r => r.time))
@@ -417,6 +457,8 @@ const transmissionMarkers = computed(() => {
  */
 const accessRole = ref(null)
 const accessList = ref([])
+const accessSectionOpen = ref(false)
+const showStats = ref(false)
 const deviceInfo = ref(null)
 const resolvedDeviceId = ref(null)
 
@@ -502,6 +544,7 @@ const menuOpen = ref(false)
 const menuRef = ref(null)
 const displaySettingsOpen = ref(false)
 const calibDialogOpen = ref(false)
+const zeroCalibrationOpen = ref(false)
 
 function closeMenuOnOutsideClick(e) {
   if (menuOpen.value && !menuRef.value?.contains(e.target)) menuOpen.value = false
@@ -529,11 +572,6 @@ function handleLogout() {
 function openSettingsFromMenu() {
   menuOpen.value = false
   openSettings()
-}
-
-function openCalibrateFromMenu() {
-  menuOpen.value = false
-  openCalibrate()
 }
 
 function openDisplaySettings() {
@@ -626,11 +664,6 @@ async function saveCalib() {
   }
 }
 
-/** Страница калибровки 0% (value2): показана всем, кроме viewer. */
-function openCalibrate() {
-  router.push(`/sensor/${chipId}/calibrate${queryDeviceId ? `?deviceId=${queryDeviceId}` : ''}`)
-}
-
 /** Настройки автономного датчика: только не-viewer, только индивидуальный. */
 function openSettings() {
   router.push(`/sensor/${chipId}/settings`)
@@ -641,18 +674,28 @@ function isGradientField(key) {
   return ['v0', 'v1', 'v2', 'v3'].includes(key)
 }
 
-function gradientTitle(key) {
-  if (key === 'v0') return 'Градиент влажности'
-  return `Градиент: ${label(key)}`
+function openMeasurement(fieldKey) {
+  router.push({
+    name: 'sensor-measurement',
+    params: { chipId, fieldKey },
+    query: route.query,
+    state: { fromSensorPage: true },
+  })
 }
 
-/** Цветовой градиент поля — отдельная страница настройки. */
-function openGradient(key) {
-  if (key === 'v0') {
-    router.push({ path: `/sensor/${chipId}/moisture-gradient`, query: { deviceId: resolvedDeviceId.value } })
-  } else {
-    router.push({ path: `/sensor/${chipId}/field-gradient/${key}`, query: { name: label(key), deviceId: resolvedDeviceId.value } })
-  }
+function backToSensor() {
+  if (window.history.state?.fromSensorPage) router.back()
+  else router.replace({ name: 'sensor', params: { chipId }, query: route.query })
+}
+
+function openNotifications() {
+  const fieldKey = measurement.value.key
+  router.push({
+    name: fieldKey === 'v0' ? 'sensor-moisture-notifications' : 'sensor-field-notifications',
+    params: { chipId, fieldKey },
+    query: { ...route.query, deviceId: resolvedDeviceId.value },
+    state: { fromMeasurementPage: true },
+  })
 }
 
 /**
@@ -665,7 +708,7 @@ const latest = computed(() => lastAny.value || (rows.value.length ? rows.value[r
 
 /** Текущее время для подписи «сколько назад» — обновляется вместе с таймером освежения. */
 const nowTick = ref(Date.now())
-const agoText = computed(() => fmtAgo(latest.value?.time, nowTick.value))
+const agoText = computed(() => fmtAgo(reading.value?.time, nowTick.value))
 
 const batteryStart = ref(null)
 const batteryStartLoaded = ref(false)
@@ -716,8 +759,8 @@ const fieldScales = ref({})
 
 const latestPct = computed(() => {
   const cal = moistureCal.value
-  if (!cal || latest.value?.moistureAdc == null) return null
-  return adcToPercent(latest.value.moistureAdc, cal)
+  if (!cal || reading.value?.moistureAdc == null) return null
+  return adcToPercent(reading.value.moistureAdc, cal)
 })
 
 const pctColor = computed(() => moistureScaleColor(moistureScale.value, latestPct.value))
@@ -731,13 +774,13 @@ function fieldColor(che, row) {
 
 /** Цветовой прямоугольник поля: null — градиент не настроен, рисуем пустую рамку. */
 function cellGradientColor(che) {
-  return che.key === 'v0' ? pctColor.value : fieldColor(che, latest.value)
+  return che.key === 'v0' ? pctColor.value : fieldColor(che, reading.value)
 }
 
 /** RSSI tile: a translucent signal-quality background behind the value. */
 function cellBackground(che) {
   if (che.key !== 'rssi') return null
-  const bg = rssiBackground(latest.value?.rssi)
+  const bg = rssiBackground(reading.value?.rssi)
   return bg ? { background: `linear-gradient(${bg}, ${bg}), var(--bg-card)` } : null
 }
 
@@ -759,6 +802,40 @@ const charts = computed(() => [
   { key: 'rssi', value: r => r.rssi, color: '#1abc9c' },
 ])
 
+const measurement = computed(() => charts.value.find(chart => chart.key === route.params.fieldKey))
+const lastFieldReading = ref(null)
+
+watch([measurement, lastAny, resolvedDeviceId], async ([chart, newest, deviceId], previous, onCleanup) => {
+  if (chart !== previous[0]) {
+    lastFieldReading.value = null
+    zeroCalibrationOpen.value = false
+  }
+  if (!chart || !deviceId || hasValue(chart, newest)) return
+
+  let current = true
+  onCleanup(() => { current = false })
+  try {
+    const [row] = await getSensorTelemetry(deviceId, chipId, undefined, undefined, 1, chart.key)
+    if (current && hasValue(chart, row)) lastFieldReading.value = row
+  } catch {
+    // Keep the most recent available sample while the next refresh retries.
+  }
+})
+
+const reading = computed(() => {
+  const chart = measurement.value
+  if (!chart) return latest.value
+  if (hasValue(chart, lastAny.value)) return lastAny.value
+  return lastFieldReading.value || rows.value.findLast(row => hasValue(chart, row))
+})
+
+function hasValue(chart, row) {
+  const value = row && chart.value(row)
+  return value != null && Number.isFinite(Number(value))
+}
+
+const visibleCells = computed(() => measurement.value ? [measurement.value] : cellCharts.value)
+
 const availableCharts = computed(() => charts.value.filter(c => {
   if (isFieldHidden(chipId, c.key)) return false
   return rows.value.some(r => c.value(r) != null && !isNaN(c.value(r)))
@@ -775,7 +852,11 @@ const cellCharts = computed(() => charts.value.filter(c => {
 }))
 
 /** Графики-секции: BatLoad не рисуется отдельно, а входит в график батареи. */
-const chartSections = computed(() => availableCharts.value.filter(c => !c.onBattery))
+const chartSections = computed(() => {
+  const chart = measurement.value
+  if (chart) return rows.value.some(row => hasValue(chart, row)) ? [chart] : []
+  return availableCharts.value.filter(c => !c.onBattery)
+})
 
 /** Подпись канала — из настроек (страница «Настройки»); дефолты для батареи/RSSI. */
 function label(key) {
@@ -834,7 +915,7 @@ function chartData(che) {
 /** На графике батареи второй линией — BatLoad (нагрузка), если по датчику есть. */
 function chartDatasets(che) {
   const ds = [{ label: label(che.key), data: chartData(che), color: che.color }]
-  if (che.key === 'battery') {
+  if (che.key === 'battery' && !measurement.value) {
     const bl = availableCharts.value.find(c => c.key === 'batload')
     if (bl) ds.push({ label: label('batload'), data: chartData(bl), color: bl.color })
   }
@@ -1076,10 +1157,7 @@ async function loadData(silent = false) {
 
 let refreshTimer = null
 
-onMounted(() => {
-  connectWs()
-  refreshOpenThresholds()
-  loadData().then(refreshThresholdConfig)
+function refreshScales() {
   getMoistureScale(chipId).then(s => { moistureScale.value = s }).catch(() => {})
   getSensorScales(chipId).then(list => {
     const map = {}
@@ -1088,7 +1166,37 @@ onMounted(() => {
     }
     fieldScales.value = map
   }).catch(() => { fieldScales.value = {} })
-  refreshTimer = setInterval(() => { nowTick.value = Date.now(); loadData(true) }, 30000)
+}
+
+watch(() => route.meta.measurementNotifications, (open, wasOpen) => {
+  if (!open && wasOpen) {
+    refreshScales()
+    refreshThresholdConfig()
+    refreshOpenThresholds()
+  }
+})
+
+async function loadPage() {
+  pageError.value = ''
+  try {
+    await loadData()
+    pageReady.value = true
+    refreshThresholdConfig()
+  } catch {
+    pageError.value = 'Не удалось загрузить данные датчика'
+  }
+}
+
+onMounted(() => {
+  connectWs()
+  refreshOpenThresholds()
+  loadPage()
+  refreshScales()
+  refreshTimer = setInterval(() => {
+    if (!pageReady.value || loading.value) return
+    nowTick.value = Date.now()
+    loadData(true).catch(() => {})
+  }, 30000)
   document.addEventListener('click', closeMenuOnOutsideClick)
   document.addEventListener('keydown', closeMenuOnEscape)
 })
@@ -1104,6 +1212,13 @@ onUnmounted(() => {
 .page-header { position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 0.75rem 1rem 1rem; background: var(--bg); }
 .header-top { display: flex; align-items: center; gap: 0.75rem; }
 .header-top h2 { color: var(--text-strong); flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.measurement-heading { flex: 1; min-width: 0; }
+.measurement-heading h2 { white-space: normal; overflow-wrap: anywhere; }
+.measurement-heading p { margin-top: 0.25rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.measurement-actions { display: flex; flex-direction: column; width: max-content; max-width: 100%; gap: 0.65rem; margin-bottom: 2rem; }
+.measurement-actions button { display: inline-flex; align-items: center; gap: 0.45rem; text-align: left; }
+.measurement-actions svg { width: 1.25rem; height: 1.25rem; flex: none; }
+.measurement-actions svg:not([fill]) { fill: currentColor; }
 .header-meta { display: flex; justify-content: flex-start; margin-top: 0.35rem; }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg); color: var(--tag-text); }
 .menu-wrap { position: relative; flex: none; margin-left: auto; }
@@ -1125,6 +1240,9 @@ onUnmounted(() => {
 .battery-runtime .muted { color: var(--text-dim); }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .section-head h3 { margin: 0; }
+.collapsible-content { margin-top: 0.6rem; }
+.stats-toggle { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; background: none; border: 0; border-bottom: 1px dashed var(--border); cursor: pointer; }
+.stats-toggle:hover { color: var(--accent); }
 .invite-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; margin-top: 0.6rem; }
 .invite-link { color: var(--accent); font-family: monospace; font-size: 0.75rem; word-break: break-all; margin-bottom: 0.4rem; }
 .invite-note { color: var(--text-dim); font-size: 0.75rem; line-height: 1.4; margin-bottom: 0.5rem; }
@@ -1143,10 +1261,10 @@ onUnmounted(() => {
 .threshold-bell { width: 16px; height: 16px; flex: none; fill: none; stroke: #ffe066; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 :global(html[data-theme="light"] .threshold-bell) { stroke: #2563eb !important; }
 .latest-cell { position: relative; display: grid; grid-template-rows: 2.25rem 1.5rem; row-gap: 0.25rem; }
-.latest-cell.gradient-editable { border: 1px solid var(--border-soft); padding: calc(0.7rem - 1px) calc(0.9rem - 1px); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s; }
-.latest-cell.gradient-editable:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.latest-cell.gradient-editable:active { border-color: var(--accent); background: var(--bg-soft); box-shadow: 0 0 0 1px var(--accent); }
-.latest-cell.gradient-editable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.latest-cell.measurement-link { border: 1px solid var(--border-soft); padding: calc(0.7rem - 1px) calc(0.9rem - 1px); text-align: left; font: inherit; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s; }
+.latest-cell.measurement-link:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.latest-cell.measurement-link:active { border-color: var(--accent); background: var(--bg-soft); box-shadow: 0 0 0 1px var(--accent); }
+.latest-cell.measurement-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.small { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
 .btn.secondary { background: var(--bg-accent); }
@@ -1172,11 +1290,6 @@ onUnmounted(() => {
 .l-reading { display: inline-flex; align-items: center; min-height: 1.5rem; box-sizing: border-box; padding: 0.15rem 0.35rem; border: 1px solid transparent; border-radius: 5px; }
 .l-reading.alarm-active { border-color: var(--danger); }
 .pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin: 0.2em 0 0 auto; flex: none; border: 1px solid #fff; border-radius: 2px; }
-.device-name-field { display: flex; flex-direction: column; gap: 0.4rem; max-width: 360px; margin-bottom: 1rem; }
-.device-name-field .field-label { color: var(--text-muted); font-size: 0.8rem; }
-.device-name-field .field-hint { color: var(--text-faint); font-size: 0.72rem; }
-.device-name-field input { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.95rem; padding: 0.45rem 0.6rem; }
-.device-name-field input:focus { outline: none; border-color: var(--accent); }
 
 .l-unit { color: var(--text); font-size: 1rem; font-weight: 500; }
 .chart-section { margin-bottom: 1.5rem; }
