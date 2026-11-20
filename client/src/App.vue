@@ -3,19 +3,24 @@
   <router-view v-if="!auth.loading" />
   <main v-else class="startup">
     <section class="startup-notice" :class="{ 'startup-warning': startupWarning }">
-      <h1 role="status">{{ startupWarning || 'Загрузка…' }}</h1>
+      <h1 role="status">
+        <template v-if="startupWarning">{{ startupWarning }}</template>
+        <span v-else class="loading-label">Загрузка…</span>
+      </h1>
       <p>Для настройки блока или автономного датчика подключитесь к его сети Wi-Fi.</p>
       <a class="btn startup-ap-link" href="http://192.168.4.1" target="_blank" rel="noopener noreferrer">
         Настройка в AP режиме
       </a>
     </section>
   </main>
+  <PageScrollButtons />
 </template>
 
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import { auth, loadUser } from './store/auth'
 import ToastHost from './components/ToastHost.vue'
+import PageScrollButtons from './components/PageScrollButtons.vue'
 import { applyTheme } from './store/settings'
 
 let vvFrame = 0
@@ -286,6 +291,23 @@ label:has(> input[type='checkbox']) {
   cursor: pointer;
 }
 
+.modal-close { width: 2rem; height: 2rem; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--text-dim); font-size: 1rem; cursor: pointer; }
+.modal-close:hover { background: var(--bg-primary); color: var(--text); }
+.loading-label { display: inline-flex; align-items: center; gap: 0.5em; }
+.loading-label::before {
+  content: '';
+  flex: none;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: loading-spin 0.8s linear infinite;
+}
+@keyframes loading-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) {
+  .loading-label::before { animation: none; }
+}
 .startup {
   min-height: 100dvh;
   display: grid;

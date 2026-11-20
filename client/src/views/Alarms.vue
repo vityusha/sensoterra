@@ -3,36 +3,20 @@
     <div class="header-row">
       <button @click="goBack" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>Уведомления</h2>
-      <!-- Acts on the current tab only. -->
-      <div class="menu-wrap" ref="menuRef">
-        <button
-          class="menu-toggle"
-          :aria-expanded="menuOpen"
-          aria-haspopup="menu"
-          aria-label="Меню"
-          @click="menuOpen = !menuOpen"
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
-            <circle cx="12" cy="5" r="2" />
-            <circle cx="12" cy="12" r="2" />
-            <circle cx="12" cy="19" r="2" />
+      <HeaderActions>
+        <button role="menuitem" :disabled="!hasUnreadFinished || busy" @click="readAll">
+          <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z"/>
           </svg>
+          Прочитать все
         </button>
-        <div v-if="menuOpen" class="menu-dropdown" role="menu">
-          <button role="menuitem" :disabled="!hasUnreadFinished || busy" @click="readAll">
-            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z"/>
-            </svg>
-            Прочитать все
-          </button>
-          <button role="menuitem" class="menu-danger" :disabled="!hasDeletableRead || busy" @click="removeRead">
-            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-            </svg>
-            Удалить все прочитанные
-          </button>
-        </div>
-      </div>
+        <button role="menuitem" class="menu-danger" :disabled="!hasDeletableRead || busy" @click="removeRead">
+          <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+          </svg>
+          Удалить все прочитанные
+        </button>
+      </HeaderActions>
     </div>
 
     <div class="tabs" role="tablist">
@@ -64,7 +48,7 @@
     <p class="hint">Жирным — активные и непросмотренные завершённые. Нажмите на завершённое, чтобы отметить его прочитанным.</p>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-else-if="loading && !rows.length" class="empty">Загрузка...</p>
+    <p v-else-if="loading && !rows.length" class="empty" role="status"><span class="loading-label">Загрузка…</span></p>
     <p v-else-if="!rows.length" class="empty">
       {{ activeTab.tracked ? 'Уведомлений нет' : 'Этот тип уведомлений пока не отслеживается' }}
     </p>
@@ -121,6 +105,7 @@
 </template>
 
 <script setup>
+import HeaderActions from '../components/HeaderActions.vue'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { listAlarms, getAlarmSummary, getUser, markAlarmsSeen, markAlarmRead, markAllAlarmsRead, deleteAlarm, deleteReadAlarms } from '../api/auth'
@@ -182,17 +167,6 @@ const activeDescription = computed(() => {
 })
 const hasDeletableRead = computed(() => rows.value.some(a => a.endedAt && a.read && a.canDelete))
 const hasUnreadFinished = computed(() => rows.value.some(a => a.endedAt && !a.read))
-
-const menuOpen = ref(false)
-const menuRef = ref(null)
-
-function closeMenuOnOutsideClick(e) {
-  if (menuOpen.value && !menuRef.value?.contains(e.target)) menuOpen.value = false
-}
-
-function closeMenuOnEscape(e) {
-  if (e.key === 'Escape') menuOpen.value = false
-}
 
 function goBack() {
   if (window.history.state?.back) router.back()
@@ -357,7 +331,6 @@ async function remove(a) {
 }
 
 async function readAll() {
-  menuOpen.value = false
   busy.value = true
   try {
     await markAllAlarmsRead(activeType.value, scopeUserId.value)
@@ -372,7 +345,6 @@ async function readAll() {
 }
 
 async function removeRead() {
-  menuOpen.value = false
   if (!confirm(`Удалить все прочитанные уведомления на вкладке «${activeTab.value.label}»?`)) return
   busy.value = true
   try {
@@ -387,7 +359,6 @@ async function removeRead() {
 }
 
 watch(activeType, () => {
-  menuOpen.value = false
   rows.value = []
   load()
 })
@@ -412,14 +383,10 @@ onMounted(() => {
   markCurrentScopeSeen()
   refreshAlarmSummary()
   tickTimer = setInterval(() => { now.value = Date.now() }, 30000)
-  document.addEventListener('click', closeMenuOnOutsideClick)
-  document.addEventListener('keydown', closeMenuOnEscape)
 })
 
 onBeforeUnmount(() => {
   clearInterval(tickTimer)
-  document.removeEventListener('click', closeMenuOnOutsideClick)
-  document.removeEventListener('keydown', closeMenuOnEscape)
 })
 </script>
 
@@ -443,16 +410,6 @@ onBeforeUnmount(() => {
 .hint { color: var(--text-dim); font-size: 0.72rem; line-height: 1.4; margin-bottom: 0.75rem; }
 .scope-hint { color: var(--text-muted); }
 
-.menu-wrap { position: relative; flex: none; }
-.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
-.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); }
-.menu-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 220px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
-.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; display: flex; align-items: center; gap: 0.55rem; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
-.menu-dropdown button:hover:not(:disabled) { background: var(--bg-primary); }
-.menu-dropdown button:disabled { color: var(--btn-disabled-text); cursor: not-allowed; }
-.menu-dropdown .menu-danger:not(:disabled) { color: var(--danger); }
-.menu-icon { width: 1rem; height: 1rem; flex: none; opacity: 0.9; }
 .empty { color: var(--text-dim); font-size: 0.9rem; padding: 1.5rem 0; text-align: center; }
 .error { color: var(--danger); font-size: 0.85rem; }
 

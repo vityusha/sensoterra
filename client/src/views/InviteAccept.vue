@@ -3,7 +3,7 @@
     <div class="invite-card">
       <h1>Приглашение</h1>
 
-      <div v-if="loading" class="muted">Загрузка...</div>
+      <div v-if="loading" class="muted" role="status"><span class="loading-label">Загрузка…</span></div>
 
       <template v-else-if="invite">
         <div class="device-box">

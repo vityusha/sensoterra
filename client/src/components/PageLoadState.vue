@@ -4,7 +4,7 @@
       <p>{{ error }}</p>
       <button type="button" class="btn small" @click="$emit('retry')">Повторить</button>
     </template>
-    <p v-else>Загрузка…</p>
+    <p v-else><span class="loading-label">Загрузка…</span></p>
   </div>
 </template>
 

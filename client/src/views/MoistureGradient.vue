@@ -6,6 +6,7 @@
       <button type="button" class="btn small back-btn save-icon-btn" title="Сохранить" aria-label="Сохранить" @click="save">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
       </button>
+      <HeaderActions />
     </div>
 
     <section class="section">
@@ -68,6 +69,7 @@
 </template>
 
 <script setup>
+import HeaderActions from '../components/HeaderActions.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { backFromNotifications } from '../utils/sensorNavigation'
@@ -249,7 +251,7 @@ function formatApiError(e, fallback) {
 <style scoped>
 .moisture-gradient { max-width: 600px; margin: 0 auto; padding: 1rem; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
-.header-row h2 { color: var(--text-strong); flex: 1; }
+.header-row h2 { color: var(--text-strong); flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .section { background: var(--bg); border-radius: 10px; padding: 1rem; }
 .hint { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 1rem; }
 .form { display: flex; flex-direction: column; gap: 1rem; }

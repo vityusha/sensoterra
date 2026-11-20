@@ -3,7 +3,7 @@
     <div class="header-row">
       <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>Пользователи</h2>
-      <AlarmBell />
+      <HeaderActions />
     </div>
 
     <!-- Accounts are not created here: buyers register themselves, admins are created only
@@ -143,7 +143,7 @@
 </template>
 
 <script setup>
-import AlarmBell from '../components/AlarmBell.vue'
+import HeaderActions from '../components/HeaderActions.vue'
 import { ref, reactive, onMounted } from 'vue'
 import {
   listUsers, getUserDevices, deleteUser, assignDevice, unassignDevice,

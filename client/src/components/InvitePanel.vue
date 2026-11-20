@@ -1,78 +1,69 @@
 <template>
-  <section v-if="canShare" class="section">
+  <div>
     <div class="section-head">
-      <h3>Приглашение</h3>
-      <button class="btn small ghost" type="button" :aria-expanded="inviteSectionOpen" @click="inviteSectionOpen = !inviteSectionOpen">
-        {{ inviteSectionOpen ? 'Скрыть' : 'Показать' }}
+      <select v-model="inviteAccessRole" class="role-select">
+        <option value="USER">с управлением</option>
+        <option value="VIEWER">только чтение</option>
+      </select>
+      <button class="btn small" @click="makeInvite" :disabled="inviteBusy">
+        {{ inviteBusy ? '...' : 'Создать ссылку' }}
       </button>
     </div>
-    <div v-if="inviteSectionOpen" class="collapsible-content">
-      <div class="section-head">
-        <select v-model="inviteAccessRole" class="role-select">
-          <option value="USER">с управлением</option>
-          <option value="VIEWER">только чтение</option>
-        </select>
-        <button class="btn small" @click="makeInvite" :disabled="inviteBusy">
-          {{ inviteBusy ? '...' : 'Создать ссылку' }}
+    <div v-if="inviteError" class="invite-error">{{ inviteError }}</div>
+    <div v-if="lastInvite" class="invite-box">
+      <div class="invite-link">{{ inviteUrl(lastInvite.token) }}</div>
+      <div class="invite-note">
+        <template v-if="eternal || !lastInvite.expiresAt">
+          Ссылка одноразовая, без срока действия.
+        </template>
+        <template v-else>
+          Ссылка одноразовая, действует до {{ fmtDate(lastInvite.expiresAt) }}.
+        </template>
+        Отправьте её тому, кому нужен доступ{{ lastInvite.accessRole === 'VIEWER' ? ' только на чтение' : '' }}.
+      </div>
+      <button class="btn small" @click="copyInvite(lastInvite.token)">Скопировать</button>
+    </div>
+    <div v-if="invites.length" class="invite-list">
+      <div class="invite-row" v-for="i in invites" :key="i.id">
+        <code class="invite-token">{{ i.token.slice(0, 8) }}…</code>
+        <span class="invite-state" :class="i.usable ? 'ok' : 'no'">
+          <template v-if="i.usable">
+            <template v-if="i.expiresAt">до {{ fmtDate(i.expiresAt) }}</template>
+            <template v-else>бессрочно</template>
+          </template>
+          <template v-else-if="i.acceptedAt">принято<span v-if="i.acceptedBy"> ({{ i.acceptedBy }})</span></template>
+          <template v-else>отозвано</template>
+        </span>
+        <span class="invite-role">{{ i.accessRole === 'VIEWER' ? 'чтение' : 'управление' }}</span>
+        <button v-if="i.usable" class="btn small danger" @click="dropInvite(i)">Отозвать</button>
+      </div>
+      <div class="invite-cleanup">
+        <button
+          v-if="removableInvites.length"
+          class="btn small secondary"
+          :disabled="clearBusy"
+          @click="clearFinished"
+        >
+          {{ clearBusy ? '...' : `Очистить завершённые (${removableInvites.length})` }}
+        </button>
+        <button
+          v-if="invites.length"
+          class="btn small danger"
+          :disabled="clearBusy"
+          title="Удалить все ссылки, включая те, что ещё работают"
+          @click="clearEverything"
+        >
+          Удалить все ({{ invites.length }})
         </button>
       </div>
-      <div v-if="inviteError" class="invite-error">{{ inviteError }}</div>
-      <div v-if="lastInvite" class="invite-box">
-        <div class="invite-link">{{ inviteUrl(lastInvite.token) }}</div>
-        <div class="invite-note">
-          <template v-if="eternal || !lastInvite.expiresAt">
-            Ссылка одноразовая, без срока действия.
-          </template>
-          <template v-else>
-            Ссылка одноразовая, действует до {{ fmtDate(lastInvite.expiresAt) }}.
-          </template>
-          Отправьте её тому, кому нужен доступ{{ lastInvite.accessRole === 'VIEWER' ? ' только на чтение' : '' }}.
-        </div>
-        <button class="btn small" @click="copyInvite(lastInvite.token)">Скопировать</button>
-      </div>
-      <div v-if="invites.length" class="invite-list">
-        <div class="invite-row" v-for="i in invites" :key="i.id">
-          <code class="invite-token">{{ i.token.slice(0, 8) }}…</code>
-          <span class="invite-state" :class="i.usable ? 'ok' : 'no'">
-            <template v-if="i.usable">
-              <template v-if="i.expiresAt">до {{ fmtDate(i.expiresAt) }}</template>
-              <template v-else>бессрочно</template>
-            </template>
-            <template v-else-if="i.acceptedAt">принято<span v-if="i.acceptedBy"> ({{ i.acceptedBy }})</span></template>
-            <template v-else>отозвано</template>
-          </span>
-          <span class="invite-role">{{ i.accessRole === 'VIEWER' ? 'чтение' : 'управление' }}</span>
-          <button v-if="i.usable" class="btn small danger" @click="dropInvite(i)">Отозвать</button>
-        </div>
-        <div class="invite-cleanup">
-          <button
-            v-if="removableInvites.length"
-            class="btn small secondary"
-            :disabled="clearBusy"
-            @click="clearFinished"
-          >
-            {{ clearBusy ? '...' : `Очистить завершённые (${removableInvites.length})` }}
-          </button>
-          <button
-            v-if="invites.length"
-            class="btn small danger"
-            :disabled="clearBusy"
-            title="Удалить все ссылки, включая те, что ещё работают"
-            @click="clearEverything"
-          >
-            Удалить все ({{ invites.length }})
-          </button>
-        </div>
-      </div>
     </div>
-  </section>
+  </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { listInvites, createInvite, revokeInvite, clearFinishedInvites, clearAllInvites, listDeviceAccess } from '../api/auth'
+import { listInvites, createInvite, revokeInvite, clearFinishedInvites, clearAllInvites } from '../api/auth'
 import { pushNotification } from '../store/notifications'
-import { auth, isAdmin, isOwnerRole } from '../store/auth'
 
 const props = defineProps({
   chipId: { type: Number, required: true },
@@ -80,30 +71,14 @@ const props = defineProps({
   eternal: { type: Boolean, default: false }
 })
 
-const accessList = ref([])
 const invites = ref([])
-const inviteSectionOpen = ref(false)
 const inviteAccessRole = ref('USER')
 const lastInvite = ref(null)
 const inviteBusy = ref(false)
 const inviteError = ref('')
 const clearBusy = ref(false)
 
-const myAccessRole = computed(() => accessList.value.find(a => a.userId === auth.user?.id)?.accessRole)
-// Сервер запрещает админу выдавать ссылки (403) — доступ он раздаёт напрямую.
-// Invites are sent only by the owner.
-const canShare = computed(() => !isAdmin() && isOwnerRole(myAccessRole.value))
-
-async function loadAccess() {
-  try {
-    accessList.value = await listDeviceAccess(props.chipId)
-  } catch {
-    accessList.value = []
-  }
-}
-
 async function loadInvites() {
-  if (!canShare.value) return
   try {
     invites.value = await listInvites(props.chipId)
   } catch {
@@ -190,18 +165,11 @@ async function dropInvite(invite) {
   await loadInvites()
 }
 
-onMounted(async () => {
-  await loadAccess()
-  await loadInvites()
-})
+onMounted(loadInvites)
 </script>
 
 <style scoped>
-.section { margin-bottom: 2rem; }
-.section h3 { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-.section-head h3 { margin: 0; }
-.collapsible-content { margin-top: 0.6rem; }
 .btn { padding: 0.4rem 0.8rem; border: 1px solid var(--btn-border); border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--btn-bg); color: var(--btn-text); }
 .btn:hover:not(:disabled) { background: var(--btn-bg-hover); border-color: var(--btn-border); }
 .btn.small { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
