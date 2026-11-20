@@ -7,6 +7,21 @@
           <h2>{{ label(measurement.key) }}</h2>
           <p>{{ displayName }}</p>
         </div>
+        <HeaderActions>
+          <button v-if="pageReady && catalogEntry && isGradientField(measurement.key)" type="button" role="menuitem" @click="openNotifications">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+            </svg>
+            Настройка уведомлений
+          </button>
+          <button v-if="pageReady && catalogEntry && measurement.key === 'v0' && canEditPrefs" type="button" role="menuitem" aria-haspopup="dialog" @click="zeroCalibrationOpen = true">
+            <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3c-2 3-6 7-6 11a6 6 0 0 0 12 0c0-4-4-8-6-11Z"/>
+              <path d="M9 14h6"/>
+            </svg>
+            Калибровка 0% влажности
+          </button>
+        </HeaderActions>
       </div>
     </header>
     <template v-else>
@@ -14,47 +29,35 @@
         <div class="header-top">
           <button @click="router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
           <h2>{{ displayName }}</h2>
-          <AlarmBell />
-          <div class="menu-wrap" ref="menuRef">
-            <button
-              class="menu-toggle"
-              :aria-expanded="menuOpen"
-              aria-haspopup="menu"
-              aria-label="Меню"
-              @click="menuOpen = !menuOpen"
-            >
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
-                <circle cx="12" cy="5" r="2" />
-                <circle cx="12" cy="12" r="2" />
-                <circle cx="12" cy="19" r="2" />
+          <HeaderActions>
+            <button v-if="catalogEntry && canEditPrefs && isIndividual" role="menuitem" @click="openSettings">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m13 10-8.5 8.5a1.4 1.4 0 0 0 2 2L15 12"/>
+                <path d="m10 7 4-4 6 6-4 4z"/>
               </svg>
+              Настройка датчика
             </button>
-            <div v-if="menuOpen" class="menu-dropdown" role="menu">
-              <button role="menuitem" @click="goMenu('/settings')">Настройки</button>
-              <button role="menuitem" @click="goMenu('/profile')">Профиль</button>
-              <div class="menu-sep"></div>
-              <button v-if="catalogEntry && canEditPrefs && isIndividual" role="menuitem" @click="openSettingsFromMenu">
-                <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-                </svg>
-                Настройка датчика
-              </button>
-              <button v-if="catalogEntry && canEditPrefs && calibSectionVisible" role="menuitem" @click="openCalibSettings">
-                <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
-                </svg>
-                Калибровка пределов
-              </button>
-              <button v-if="catalogEntry && canEditPrefs" role="menuitem" @click="openDisplaySettings">
-                <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-                </svg>
-                Показ измерений
-              </button>
-              <div class="menu-sep"></div>
-              <button role="menuitem" class="menu-danger" @click="handleLogout">Выйти</button>
-            </div>
-          </div>
+            <button v-if="catalogEntry && canEditPrefs && calibSectionVisible" role="menuitem" @click="openCalibSettings">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2c-5.33 5.33-8 8.67-8 12 0 4.42 3.58 8 8 8s8-3.58 8-8c0-3.33-2.67-6.67-8-12zm0 18c-3.31 0-6-2.69-6-6 0-2.22 1.86-5.03 6-9.36 4.14 4.33 6 7.14 6 9.36 0 3.31-2.69 6-6 6z"/>
+              </svg>
+              Калибровка пределов
+            </button>
+            <button v-if="catalogEntry && canEditPrefs" role="menuitem" @click="openDisplaySettings">
+              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+              </svg>
+              Показ измерений
+            </button>
+            <button v-if="pageReady && isIndividual && accessList.length" type="button" role="menuitem" aria-haspopup="dialog" @click="sharingDialog = 'access'">
+              <DeviceSharingIcon kind="access" class="menu-icon" />
+              Доступ
+            </button>
+            <button v-if="pageReady && canInvite" type="button" role="menuitem" aria-haspopup="dialog" @click="sharingDialog = 'invite'">
+              <DeviceSharingIcon kind="invite" class="menu-icon" />
+              Приглашение
+            </button>
+          </HeaderActions>
         </div>
         <div class="header-meta">
           <span class="type-tag">{{ typeLabel }}</span>
@@ -93,7 +96,10 @@
           <span class="l-value"><span class="l-reading" :class="{ 'alarm-active': openThresholdFields.has(che.key) }">{{ cellValue(che, reading) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span></span><span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null"></span></span>
         </component>
       </div>
-      <div v-else class="empty small">{{ loading ? 'Загрузка...' : 'Нет данных' }}</div>
+      <div v-else class="empty small">
+        <span v-if="loading" class="loading-label" role="status">Загрузка…</span>
+        <template v-else>Нет данных</template>
+      </div>
     </section>
 
     <template v-if="!measurement">
@@ -122,35 +128,29 @@
       </section>
 
       <template v-if="isIndividual">
-        <InvitePanel :chip-id="chipId" eternal />
+        <DeviceSharingDialog v-if="canInvite" kind="invite" title="Приглашение" :open="sharingDialog === 'invite'" @close="sharingDialog = null">
+          <InvitePanel :chip-id="chipId" eternal />
+        </DeviceSharingDialog>
         <!-- Кто ещё имеет доступ к датчику и на каких условиях. -->
-        <section v-if="accessList.length" class="section">
-          <div class="section-head">
-            <h3>Доступ</h3>
-            <button class="btn small ghost" type="button" :aria-expanded="accessSectionOpen" @click="accessSectionOpen = !accessSectionOpen">
-              {{ accessSectionOpen ? 'Скрыть' : 'Показать' }}
-            </button>
-          </div>
-          <div v-if="accessSectionOpen" class="collapsible-content">
-            <p v-if="adminLocked" class="muted admin-locked">
-              У датчика есть владелец ({{ deviceInfo.ownerUsername }}): управлять им и доступом может
-              только владелец. Админу остаются просмотр и сервисные операции.
-            </p>
-            <div class="relay-card access-card">
-              <div class="access-entry" v-for="a in accessList" :key="a.userId">
-                <span class="access-who">
-                  {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
-                </span>
-                <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
-                  <button class="btn small" @click="swapAccessRole(a)">
-                    {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
-                  </button>
-                  <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
-                </div>
+        <DeviceSharingDialog v-if="accessList.length" kind="access" title="Доступ" :open="sharingDialog === 'access'" @close="sharingDialog = null">
+          <p v-if="adminLocked" class="muted admin-locked">
+            У датчика есть владелец ({{ deviceInfo.ownerUsername }}): управлять им и доступом может
+            только владелец. Админу остаются просмотр и сервисные операции.
+          </p>
+          <div class="relay-card access-card">
+            <div class="access-entry" v-for="a in accessList" :key="a.userId">
+              <span class="access-who">
+                {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
+              </span>
+              <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
+                <button class="btn small" @click="swapAccessRole(a)">
+                  {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
+                </button>
+                <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
               </div>
             </div>
           </div>
-        </section>
+        </DeviceSharingDialog>
       </template>
     </template>
 
@@ -182,7 +182,7 @@
           @update:selection="applyTimelineSelection"
         />
         <div v-if="chartSections.length || !measurement" class="range-hint">Выделите период на графике мышью или пальцем</div>
-        <div v-if="loading" class="empty small">Загрузка...</div>
+        <div v-if="loading" class="empty small" role="status"><span class="loading-label">Загрузка…</span></div>
         <template v-else-if="measurement ? chartSections.length : rows.length">
           <div class="chart-section" v-for="che in chartSections" :key="che.key">
             <div class="chart-head">
@@ -210,7 +210,7 @@
             </div>
             <LineChart v-if="transmissionView === 'graph' || !isAdmin" :markers="transmissionMarkers" :x-min="statsXMin" :x-max="statsXMax" :zone-offset="tzOffset ?? undefined" timeline selectable :aria-label="`Передача данных: ${transmissionMarkers.length} сообщений`" @select-range="applySelectedRange" />
             <div v-else class="error-list-wrap">
-              <div v-if="errorsLoading" class="empty small">Загружаю ошибки…</div>
+              <div v-if="errorsLoading" class="empty small" role="status"><span class="loading-label">Загружаю ошибки…</span></div>
               <table v-if="errorRows.length" class="error-list">
                 <thead><tr><th>Дата</th><th>№ сообщения</th><th>Ошибка</th></tr></thead>
                 <tbody>
@@ -231,16 +231,6 @@
       </template>
     </section>
 
-    <div v-if="measurement && catalogEntry" class="measurement-actions">
-      <button v-if="isGradientField(measurement.key)" type="button" class="btn" @click="openNotifications">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M10 3h4l.5 2.6 1.6.9 2.5-.9 2 3.5-2 1.7v1.9l2 1.7-2 3.5-2.5-.9-1.6.9L14 21h-4l-.5-2.6-1.6-.9-2.5.9-2-3.5 2-1.7v-1.9l-2-1.7 2-3.5 2.5.9 1.6-.9zM12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/></svg>
-        Настройка уведомлений
-      </button>
-      <button v-if="measurement.key === 'v0' && canEditPrefs" type="button" class="btn" @click="zeroCalibrationOpen = true">
-        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c-2 3-6 7-6 11a6 6 0 0 0 12 0c0-4-4-8-6-11Z"/><path d="M9 14h6"/></svg>
-        Калибровка 0% влажности
-      </button>
-    </div>
     <SensorCalibrate
       v-if="measurement?.key === 'v0' && canEditPrefs && zeroCalibrationOpen"
       modal
@@ -251,7 +241,12 @@
     <div v-if="displaySettingsOpen" class="modal-overlay" @click.self="displaySettingsOpen = false">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="display-settings-title">
         <div class="modal-head">
-          <h3 id="display-settings-title">Показ измерений</h3>
+          <h3 id="display-settings-title" class="display-settings-title">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+            </svg>
+            Показ измерений
+          </h3>
           <button class="modal-close" aria-label="Закрыть" @click="displaySettingsOpen = false">✕</button>
         </div>
         <div class="field-toggles">
@@ -296,13 +291,15 @@
 </template>
 
 <script setup>
-import AlarmBell from '../components/AlarmBell.vue'
+import DeviceSharingDialog from '../components/DeviceSharingDialog.vue'
+import DeviceSharingIcon from '../components/DeviceSharingIcon.vue'
+import HeaderActions from '../components/HeaderActions.vue'
 import PageLoadState from '../components/PageLoadState.vue'
 import DeviceNameField from '../components/DeviceNameField.vue'
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSensorCatalog, getSensorTelemetry, getSensorErrors, getSensorFirstMessage, getDevice, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, saveSensorCalibration, getMoistureScale, getSensorScales, getSensorThreshold, getDeviceKey, regenerateDeviceKey, listAlarms } from '../api/auth'
-import { auth, logout, deviceAccess, rememberDeviceAccess, rememberDeviceOwner, isOwnerRole } from '../store/auth'
+import { auth, deviceAccess, rememberDeviceAccess, rememberDeviceOwner, isOwnerRole } from '../store/auth'
 import { getIndividualName, setIndividualName, getBlockName, getFieldName, getFieldUnit, isFieldHidden, toggleField, getFieldY, setFieldY, fieldKeys } from '../store/settings'
 import { pushNotification, connectWs } from '../store/notifications'
 import { alarmState } from '../store/alarms'
@@ -457,7 +454,8 @@ const transmissionMarkers = computed(() => {
  */
 const accessRole = ref(null)
 const accessList = ref([])
-const accessSectionOpen = ref(false)
+const sharingDialog = ref(null)
+watch(() => route.fullPath, () => { sharingDialog.value = null })
 const showStats = ref(false)
 const deviceInfo = ref(null)
 const resolvedDeviceId = ref(null)
@@ -510,6 +508,7 @@ async function loadAccess(deviceId) {
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 
 const myAccessRole = computed(() => accessList.value.find(a => a.userId === auth.user?.id)?.accessRole)
+const canInvite = computed(() => isIndividual.value && !isAdmin.value && isOwnerRole(myAccessRole.value))
 const othersDevice = computed(() => !!deviceInfo.value?.ownerUsername
   && deviceInfo.value.ownerUsername !== auth.user?.username)
 const adminLocked = computed(() => isAdmin.value && othersDevice.value && !deviceInfo.value?.ownerAdminAccess)
@@ -540,47 +539,22 @@ async function revokeAccess(a) {
   }
 }
 
-const menuOpen = ref(false)
-const menuRef = ref(null)
 const displaySettingsOpen = ref(false)
 const calibDialogOpen = ref(false)
 const zeroCalibrationOpen = ref(false)
 
-function closeMenuOnOutsideClick(e) {
-  if (menuOpen.value && !menuRef.value?.contains(e.target)) menuOpen.value = false
-}
-
-function closeMenuOnEscape(e) {
+function closeDialogsOnEscape(e) {
   if (e.key === 'Escape') {
-    menuOpen.value = false
     displaySettingsOpen.value = false
     calibDialogOpen.value = false
   }
 }
 
-function goMenu(path) {
-  menuOpen.value = false
-  router.push({ path, query: { returnTo: router.currentRoute.value.fullPath } })
-}
-
-function handleLogout() {
-  menuOpen.value = false
-  logout()
-  router.push('/login')
-}
-
-function openSettingsFromMenu() {
-  menuOpen.value = false
-  openSettings()
-}
-
 function openDisplaySettings() {
-  menuOpen.value = false
   displaySettingsOpen.value = true
 }
 
 function openCalibSettings() {
-  menuOpen.value = false
   initCalibForm()
   calibDialogOpen.value = true
 }
@@ -858,7 +832,7 @@ const chartSections = computed(() => {
   return availableCharts.value.filter(c => !c.onBattery)
 })
 
-/** Подпись канала — из настроек (страница «Настройки»); дефолты для батареи/RSSI. */
+/** Подпись канала — из настроек (страница «Общая настройка»); дефолты для батареи/RSSI. */
 function label(key) {
   const name = getFieldName(sensorType.value, key)
   if (name !== key) return name
@@ -1197,13 +1171,11 @@ onMounted(() => {
     nowTick.value = Date.now()
     loadData(true).catch(() => {})
   }, 30000)
-  document.addEventListener('click', closeMenuOnOutsideClick)
-  document.addEventListener('keydown', closeMenuOnEscape)
+  document.addEventListener('keydown', closeDialogsOnEscape)
 })
 onUnmounted(() => {
   clearInterval(refreshTimer)
-  document.removeEventListener('click', closeMenuOnOutsideClick)
-  document.removeEventListener('keydown', closeMenuOnEscape)
+  document.removeEventListener('keydown', closeDialogsOnEscape)
 })
 </script>
 
@@ -1215,23 +1187,9 @@ onUnmounted(() => {
 .measurement-heading { flex: 1; min-width: 0; }
 .measurement-heading h2 { white-space: normal; overflow-wrap: anywhere; }
 .measurement-heading p { margin-top: 0.25rem; color: var(--text-muted); overflow-wrap: anywhere; }
-.measurement-actions { display: flex; flex-direction: column; width: max-content; max-width: 100%; gap: 0.65rem; margin-bottom: 2rem; }
-.measurement-actions button { display: inline-flex; align-items: center; gap: 0.45rem; text-align: left; }
-.measurement-actions svg { width: 1.25rem; height: 1.25rem; flex: none; }
-.measurement-actions svg:not([fill]) { fill: currentColor; }
 .header-meta { display: flex; justify-content: flex-start; margin-top: 0.35rem; }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg); color: var(--tag-text); }
-.menu-wrap { position: relative; flex: none; margin-left: auto; }
 /* The bell sits right next to the menu button. */
-.alarm-bell + .menu-wrap { margin-left: -0.6rem; }
-.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
-.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text-strong); }
-.menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 200px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
-.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; display: flex; align-items: center; gap: 0.55rem; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
-.menu-dropdown button:hover { background: var(--bg-primary); }
-.menu-sep { height: 1px; margin: 0.3rem 0; background: var(--border-soft); }
-.menu-dropdown .menu-danger { color: var(--danger); }
-.menu-icon { width: 1rem; height: 1rem; flex: none; opacity: 0.9; }
 .ago { color: var(--text-dim); font-size: 0.85em; margin-left: 0.35rem; }
 .msg-num { color: var(--text-dim); font-size: 0.85em; margin-left: 0.25rem; }
 .battery-runtime { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.4rem; background: var(--bg); border-left: 3px solid var(--accent); border-radius: 10px; padding: 0.7rem 1rem; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
@@ -1240,7 +1198,6 @@ onUnmounted(() => {
 .battery-runtime .muted { color: var(--text-dim); }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .section-head h3 { margin: 0; }
-.collapsible-content { margin-top: 0.6rem; }
 .stats-toggle { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; background: none; border: 0; border-bottom: 1px dashed var(--border); cursor: pointer; }
 .stats-toggle:hover { color: var(--accent); }
 .invite-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; margin-top: 0.6rem; }
@@ -1272,6 +1229,7 @@ onUnmounted(() => {
 .section { margin-bottom: 2rem; }
 .section h3 { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
 .range-select { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.range-select > button { flex: 1 1 auto; }
 .custom-range { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: var(--bg-card); border-radius: 10px; }
 .custom-range label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.78rem; }
 .custom-range input { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.8rem; padding: 0.3rem 0.5rem; }
@@ -1323,8 +1281,8 @@ onUnmounted(() => {
 .modal { width: 100%; max-width: 420px; max-height: 85vh; overflow-y: auto; padding: 1.25rem; background: var(--bg-card); border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.9rem; }
 .modal h3 { color: var(--text-strong); font-size: 1rem; text-transform: none; letter-spacing: 0; margin: 0; }
-.modal-close { width: 2rem; height: 2rem; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--text-dim); font-size: 1rem; cursor: pointer; }
-.modal-close:hover { background: var(--bg-primary); color: var(--text); }
+.display-settings-title { display: flex; align-items: center; gap: 0.75rem; }
+.display-settings-title svg { width: 1.5rem; height: 1.5rem; flex: none; }
 .modal-actions { display: flex; justify-content: center; gap: 0.6rem; margin-top: 1rem; }
 .modal-actions .btn { display: inline-flex; align-items: center; justify-content: center; width: 8rem; height: 2rem; padding: 0 0.6rem; }
 .empty.small { color: var(--text-faint); text-align: center; padding: 1rem; font-size: 0.85rem; }

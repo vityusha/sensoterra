@@ -17,9 +17,10 @@
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
       </button>
+      <HeaderActions />
     </div>
 
-    <div v-if="loading" class="loading">Загрузка...</div>
+    <div v-if="loading" class="loading" role="status"><span class="loading-label">Загрузка…</span></div>
     <div v-else-if="!relay" class="empty small">Канал не найден</div>
     <template v-else>
       <div v-if="!isOnline" class="offline-banner">
@@ -226,6 +227,7 @@
 </template>
 
 <script setup>
+import HeaderActions from '../components/HeaderActions.vue'
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, getDeviceStatuses, sendRelayParams, getMoistureScale, getSensorScale } from '../api/auth'

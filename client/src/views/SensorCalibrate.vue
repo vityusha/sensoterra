@@ -1,9 +1,8 @@
 <template>
   <component :is="modal ? 'dialog' : 'div'" ref="panel" class="sensor-calibrate" :class="{ 'calibrate-dialog': modal }" :aria-labelledby="modal ? 'zero-calibration-title' : undefined" @cancel.prevent="cancel">
     <div class="header-row">
-      <button type="button" @click="cancel" class="btn small back-btn" :aria-label="modal ? 'Закрыть' : 'Назад'">
-        <span v-if="modal" aria-hidden="true">✕</span>
-        <svg v-else class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      <button type="button" @click="cancel" class="btn small back-btn" aria-label="Назад">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
       </button>
       <h2 id="zero-calibration-title">Калибровка 0% влажности</h2>
       <button
@@ -16,6 +15,7 @@
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
       </button>
+      <HeaderActions v-if="!modal" />
     </div>
 
     <section class="section">
@@ -41,6 +41,7 @@
 </template>
 
 <script setup>
+import HeaderActions from '../components/HeaderActions.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSensorCatalog, getSensorTelemetry, getDevice, saveSensorCalibrationValue2 } from '../api/auth'
@@ -194,7 +195,7 @@ onUnmounted(() => {
 .calibrate-dialog .header-row { position: static; margin-bottom: 0.8rem; background: var(--bg-card); }
 .calibrate-dialog .section, .calibrate-dialog .cal-status { margin-bottom: 0; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
-.header-row h2 { color: var(--text-strong); flex: 1; }
+.header-row h2 { color: var(--text-strong); flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .save-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: var(--success); }
 .save-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

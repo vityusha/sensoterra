@@ -6,18 +6,16 @@
       <span v-if="pageReady && isBlock" class="status-tag" :class="isOnline ? 'online' : 'offline'">
         {{ isOnline ? 'online' : 'offline' }}
       </span>
-      <AlarmBell />
-      <div class="menu-wrap" ref="menuRef">
-        <button class="menu-toggle" :aria-expanded="menuOpen" aria-haspopup="menu" aria-label="Меню" @click="menuOpen = !menuOpen">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
+      <HeaderActions>
+        <button v-if="pageReady && accessList.length" type="button" role="menuitem" aria-haspopup="dialog" @click="sharingDialog = 'access'">
+          <DeviceSharingIcon kind="access" class="menu-icon" />
+          Доступ
         </button>
-        <div v-if="menuOpen" class="menu-dropdown" role="menu">
-          <button role="menuitem" @click="goMenu('/settings')">Настройки</button>
-          <button role="menuitem" @click="goMenu('/profile')">Профиль</button>
-          <div class="menu-sep"></div>
-          <button role="menuitem" class="menu-danger" @click="handleLogout">Выйти</button>
-        </div>
-      </div>
+        <button v-if="pageReady && canInvite" type="button" role="menuitem" aria-haspopup="dialog" @click="sharingDialog = 'invite'">
+          <DeviceSharingIcon kind="invite" class="menu-icon" />
+          Приглашение
+        </button>
+      </HeaderActions>
     </div>
     <div class="device-id">ID: {{ chipId }}</div>
 
@@ -53,23 +51,16 @@
     </section>
 
     <!-- Приглашение: доступ выдаётся по одноразовой ссылке, оплата для этого не нужна. -->
-    <section v-if="canShare && device?.deviceType !== 'INDIVIDUAL_SENSOR' && !blockClosed" class="section">
-      <div class="section-head">
-        <h3>Приглашение</h3>
-        <button class="btn small ghost" type="button" :aria-expanded="inviteSectionOpen" @click="inviteSectionOpen = !inviteSectionOpen">
-          {{ inviteSectionOpen ? 'Скрыть' : 'Показать' }}
+    <DeviceSharingDialog v-if="canInvite" kind="invite" title="Приглашение" :open="sharingDialog === 'invite'" @close="sharingDialog = null">
+      <div class="section-head invite-create-head">
+        <select v-model="inviteAccessRole" class="role-select">
+          <option value="USER">с управлением</option>
+          <option value="VIEWER">только чтение</option>
+        </select>
+        <button class="btn small" @click="makeInvite" :disabled="inviteBusy">
+          {{ inviteBusy ? '...' : 'Создать ссылку' }}
         </button>
       </div>
-      <div v-if="inviteSectionOpen" class="collapsible-content">
-        <div class="section-head invite-create-head">
-          <select v-model="inviteAccessRole" class="role-select">
-            <option value="USER">с управлением</option>
-            <option value="VIEWER">только чтение</option>
-          </select>
-          <button class="btn small" @click="makeInvite" :disabled="inviteBusy">
-            {{ inviteBusy ? '...' : 'Создать ссылку' }}
-          </button>
-        </div>
       <div v-if="inviteError" class="invite-error">{{ inviteError }}</div>
       <div v-if="lastInvite" class="invite-box">
         <div class="invite-link">{{ inviteUrl(lastInvite.token) }}</div>
@@ -111,8 +102,7 @@
           </button>
         </div>
       </div>
-      </div>
-    </section>
+    </DeviceSharingDialog>
 
     <!-- Ключ для комплектного листа: его копирует админ и отдаёт покупателю вместе с устройством. -->
     <section v-if="auth.user?.role === 'ADMIN'" class="section">
@@ -132,34 +122,26 @@
     </section>
 
     <!-- Кто ещё имеет доступ к этому устройству и на каких условиях. -->
-    <section v-if="accessList.length" class="section">
-      <div class="section-head">
-        <h3>Доступ</h3>
-        <button class="btn small ghost" type="button" :aria-expanded="accessSectionOpen" @click="accessSectionOpen = !accessSectionOpen">
-          {{ accessSectionOpen ? 'Скрыть' : 'Показать' }}
-        </button>
-      </div>
-      <div v-if="accessSectionOpen" class="collapsible-content">
-        <p v-if="adminLocked" class="muted admin-locked">
-          У устройства есть владелец ({{ device.ownerUsername }}): управлять им, его настройками и
-          доступом может только владелец. Админу остаются просмотр и сервисные операции.
-        </p>
-        <div class="relay-card access-card">
-          <div class="access-entry" v-for="a in accessList" :key="a.userId">
-            <span class="access-who">
-              {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
-            </span>
-            <!-- The owner's row has no actions: ownership moves only through the admin page. -->
-            <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
-              <button class="btn small" @click="swapAccessRole(a)">
-                {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
-              </button>
-              <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
-            </div>
+    <DeviceSharingDialog v-if="accessList.length" kind="access" title="Доступ" :open="sharingDialog === 'access'" @close="sharingDialog = null">
+      <p v-if="adminLocked" class="muted admin-locked">
+        У устройства есть владелец ({{ device.ownerUsername }}): управлять им, его настройками и
+        доступом может только владелец. Админу остаются просмотр и сервисные операции.
+      </p>
+      <div class="relay-card access-card">
+        <div class="access-entry" v-for="a in accessList" :key="a.userId">
+          <span class="access-who">
+            {{ a.username }} — {{ accessRoleLabel(a.accessRole) }}<span v-if="a.userId === auth.user?.id" class="access-self"> (вы)</span>
+          </span>
+          <!-- The owner's row has no actions: ownership moves only through the admin page. -->
+          <div v-if="canManageAccess && a.userId !== auth.user?.id && a.accessRole !== 'OWNER'" class="access-actions">
+            <button class="btn small" @click="swapAccessRole(a)">
+              {{ a.accessRole === 'VIEWER' ? 'дать управление' : 'оставить на чтение' }}
+            </button>
+            <button class="btn small danger" @click="revokeAccess(a)">Отозвать</button>
           </div>
         </div>
       </div>
-    </section>
+    </DeviceSharingDialog>
 
     <template v-if="device?.deviceType === 'BLOCK'">
       <label v-if="isAdmin" class="t-item vacc-toggle">
@@ -402,7 +384,9 @@
 </template>
 
 <script setup>
-import AlarmBell from '../components/AlarmBell.vue'
+import DeviceSharingDialog from '../components/DeviceSharingDialog.vue'
+import DeviceSharingIcon from '../components/DeviceSharingIcon.vue'
+import HeaderActions from '../components/HeaderActions.vue'
 import PageLoadState from '../components/PageLoadState.vue'
 import DeviceNameField from '../components/DeviceNameField.vue'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
@@ -412,7 +396,7 @@ import { getBlockName, setBlockName, getIndividualName, setIndividualName, getFi
 import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
 import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
-import { auth, logout, rememberDeviceAccess, rememberDeviceOwner, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
+import { auth, rememberDeviceAccess, rememberDeviceOwner, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
 import { loadCalibration, calibrationFor } from '../store/calibration'
 import { adcToPercent, immersionWarning } from '../utils/moisture'
 import { moistureScaleColor, sensorScaleColor } from '../utils/gradient'
@@ -426,8 +410,6 @@ const route = useRoute()
 const pageReady = ref(false)
 const pageError = ref('')
 const router = useRouter()
-const menuOpen = ref(false)
-const menuRef = ref(null)
 const chipId = route.params.chipId
 const device = ref(null)
 const relays = ref([])
@@ -843,24 +825,9 @@ let lastUptimeFetch = 0
 const isOnline = computed(() => statusesMap.value[chipId]?.status === 'online')
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 
-function goMenu(path) {
-  menuOpen.value = false
-  router.push({ path, query: { returnTo: router.currentRoute.value.fullPath } })
-}
 
-function handleLogout() {
-  menuOpen.value = false
-  logout()
-  router.push('/login')
-}
 
-function closeMenuOnOutsideClick(event) {
-  if (menuOpen.value && !menuRef.value?.contains(event.target)) menuOpen.value = false
-}
 
-function closeMenuOnEscape(event) {
-  if (event.key === 'Escape') menuOpen.value = false
-}
 
 // Оплата блока: срок общий для всех, кто имеет доступ, поэтому гейт смотрит на блок.
 const payment = ref(null)
@@ -953,6 +920,7 @@ const canControl = computed(() => (isAdmin.value && !adminLocked.value)
 // этого не нужна — приглашение открывает доступ, а не возможность управлять. Админу
 // приглашение не показываем: у него другие механизмы (ключ комплектного листа, доступ).
 const canShare = computed(() => !isAdmin.value && isOwnerRole(myAccessRole.value))
+const canInvite = computed(() => canShare.value && device.value?.deviceType !== 'INDIVIDUAL_SENSOR' && !blockClosed.value)
 // Changing or revoking other accounts' access: the owner or an admin (server enforces it too).
 const canManageAccess = computed(() => (isAdmin.value && !adminLocked.value) || isOwnerRole(myAccessRole.value))
 
@@ -964,8 +932,7 @@ function accessRoleLabel(role) {
 const invites = ref([])
 const inviteAccessRole = ref('USER')
 const accessList = ref([])
-const inviteSectionOpen = ref(false)
-const accessSectionOpen = ref(false)
+const sharingDialog = ref(null)
 const deviceKey = ref(null)
 const keyBusy = ref(false)
 
@@ -1188,8 +1155,6 @@ const editableName = computed(() => {
 watch(() => alarmState.version, refreshThresholdAlarms)
 
 onMounted(async () => {
-  document.addEventListener('click', closeMenuOnOutsideClick)
-  document.addEventListener('keydown', closeMenuOnEscape)
   await loadPage()
 })
 
@@ -1297,8 +1262,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', closeMenuOnOutsideClick)
-  document.removeEventListener('keydown', closeMenuOnEscape)
   if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null }
   if (liveTimer) { clearInterval(liveTimer); liveTimer = null }
   if (agoTimer) { clearInterval(agoTimer); agoTimer = null }
@@ -1715,14 +1678,6 @@ async function shiftBlockRange(direction) {
 .pay-admin-row input[type='number'] { width: 90px; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; }
-.menu-wrap { position: relative; flex: none; }
-.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
-.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); }
-.menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 200px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.45); }
-.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: 0; border-radius: 6px; display: flex; align-items: center; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; cursor: pointer; }
-.menu-dropdown button:hover { background: var(--bg-primary); }
-.menu-sep { height: 1px; margin: 0.3rem 0; background: var(--border-soft); }
-.menu-dropdown .menu-danger { color: var(--danger); }
 .editable { cursor: pointer; border-bottom: 1px dashed var(--border); }
 .editable:hover { color: var(--accent); }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg-ok); color: var(--text); }
@@ -1797,6 +1752,7 @@ async function shiftBlockRange(direction) {
 .relay-switch.on .relay-switch-thumb { left: calc(100% - 1.8rem); background: var(--success); }
 .relay-actions .relay-settings { width: 100%; min-width: 0; box-sizing: border-box; min-height: 2.35rem; border-radius: 999px; }
 .relay-stats { margin-top: 0.6rem; }
+.relay-stats > button { width: 100%; }
 /* Раньше ghost был с прозрачным фоном и рамкой того же тона, что карточка — сливался. */
 .btn.ghost { background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--btn-text); }
 .btn.ghost:hover:not(:disabled) { background: var(--btn-bg-hover); border-color: var(--btn-border); color: var(--btn-text); }
@@ -1850,6 +1806,7 @@ async function shiftBlockRange(direction) {
 .vacc-toggle input { margin: 0; }
 .empty.small { color: var(--text-faint); text-align: center; padding: 1rem; font-size: 0.85rem; }
 .range-select { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.range-select > button { flex: 1 1 auto; }
 .custom-range { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: var(--bg-card); border-radius: 10px; }
 .custom-range label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.78rem; }
 .custom-range input { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.8rem; padding: 0.3rem 0.5rem; }

@@ -3,69 +3,34 @@
     <header class="page-header">
       <div class="header-top">
         <h2>Устройства</h2>
-        <AlarmBell class="header-bell" />
-        <div class="menu-wrap" ref="menuRef">
-          <button
-            class="menu-toggle"
-            :aria-expanded="menuOpen"
-            aria-haspopup="menu"
-            aria-label="Меню"
-            @click="menuOpen = !menuOpen"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
-              <circle cx="12" cy="5" r="2" />
-              <circle cx="12" cy="12" r="2" />
-              <circle cx="12" cy="19" r="2" />
+        <HeaderActions account-first>
+          <button role="menuitem" @click="openApDialog">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
             </svg>
+            Настройка в AP режиме
           </button>
-          <div v-if="menuOpen" class="menu-dropdown" role="menu">
-            <button role="menuitem" @click="go('/settings')">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-              </svg>
-              Настройки
-            </button>
-            <button role="menuitem" @click="go('/profile')">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-              </svg>
-              Профиль
-            </button>
-            <button role="menuitem" @click="openApDialog">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
-              </svg>
-              Настройка в AP режиме
-            </button>
-            <button v-if="showClaimButton" role="menuitem" @click="openClaimDialog">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-              </svg>
-              Добавить устройство
-            </button>
-            <!-- Owner: trust the admins with full control of all my devices, or take it back. -->
-            <button v-if="showAdminAccessItem" role="menuitem" @click="toggleAdminAccess"
-              :class="{ 'menu-warn': auth.user?.adminAccess }">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-              </svg>
-              {{ auth.user?.adminAccess ? 'Отозвать доступ администратора' : 'Доступ администратора к устройствам' }}
-            </button>
-            <button v-if="auth.user?.role === 'ADMIN'" role="menuitem" @click="go('/admin/users')">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-              </svg>
-              Пользователи
-            </button>
-            <div class="menu-sep"></div>
-            <button role="menuitem" class="menu-danger" @click="handleLogout">
-              <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-              </svg>
-              Выйти
-            </button>
-          </div>
-        </div>
+          <button v-if="showClaimButton" role="menuitem" @click="openClaimDialog">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
+            Добавить устройство
+          </button>
+          <!-- Owner: trust the admins with full control of all my devices, or take it back. -->
+          <button v-if="showAdminAccessItem" role="menuitem" @click="toggleAdminAccess"
+            :class="{ 'menu-warn': auth.user?.adminAccess }">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+            </svg>
+            {{ auth.user?.adminAccess ? 'Отозвать доступ администратора' : 'Доступ администратора к устройствам' }}
+          </button>
+          <button v-if="auth.user?.role === 'ADMIN'" role="menuitem" @click="router.push('/admin/users')">
+            <svg class="menu-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+            </svg>
+            Пользователи
+          </button>
+        </HeaderActions>
       </div>
       <div class="header-meta">
         <span class="user-info" v-if="auth.user">{{ auth.user.username }} ({{ auth.user.role }})</span>
@@ -115,7 +80,7 @@
       <button class="btn small" @click="showAllDevices">Показать все</button>
     </div>
 
-    <div v-if="loading || viewedLoading" class="loading">Загрузка...</div>
+    <div v-if="loading || viewedLoading" class="loading" role="status"><span class="loading-label">Загрузка…</span></div>
     <template v-else>
       <div v-if="showingCachedDashboard" class="cached-dashboard-note" role="status">
         Сервис недоступен — показан последний сохранённый список устройств
@@ -295,10 +260,10 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Paginator from '../components/Paginator.vue'
-import AlarmBell from '../components/AlarmBell.vue'
+import HeaderActions from '../components/HeaderActions.vue'
 import { usePager } from '../composables/usePager'
 import { getUser, getUserDevices, listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments, setAdminAccess } from '../api/auth'
-import { auth, logout, devicePayment, rememberPayment, rememberDeviceOwner, adminLockedDevice, adminTrustedDevice } from '../store/auth'
+import { auth, devicePayment, rememberPayment, rememberDeviceOwner, adminLockedDevice, adminTrustedDevice } from '../store/auth'
 import { paymentLabel } from '../utils/payment'
 import { batteryLabel, batteryWarningV } from '../utils/battery'
 import { getBlockName, getIndividualName } from '../store/settings'
@@ -401,34 +366,13 @@ const conflictDialog = ref(null)
 const keepBlockId = ref(null)
 const resolving = ref(false)
 const apDialog = ref(false)
-const menuOpen = ref(false)
-const menuRef = ref(null)
-
-function go(path) {
-  menuOpen.value = false
-  if (path === '/settings' || path === '/profile') {
-    router.push({ path, query: { returnTo: router.currentRoute.value.fullPath } })
-  } else {
-    router.push(path)
-  }
-}
 
 function openApDialog() {
-  menuOpen.value = false
   apDialog.value = true
 }
 
 function openClaimDialog() {
-  menuOpen.value = false
   claimOpen.value = !claimOpen.value
-}
-
-function closeMenuOnOutsideClick(e) {
-  if (menuOpen.value && !menuRef.value?.contains(e.target)) menuOpen.value = false
-}
-
-function closeMenuOnEscape(e) {
-  if (e.key === 'Escape') menuOpen.value = false
 }
 
 function openApPage() {
@@ -522,7 +466,6 @@ function fmtSince(value) {
 }
 
 async function toggleAdminAccess() {
-  menuOpen.value = false
   const enable = !auth.user?.adminAccess
   const question = enable
     ? 'Дать администратору полный доступ ко всем вашим устройствам?\n\n'
@@ -622,8 +565,6 @@ onMounted(async () => {
   })
   liveTimer = setInterval(refreshLive, 10000)
   document.addEventListener('visibilitychange', onVisibilityChange)
-  document.addEventListener('click', closeMenuOnOutsideClick)
-  document.addEventListener('keydown', closeMenuOnEscape)
   window.addEventListener('online', onOnline)
 })
 
@@ -632,8 +573,6 @@ onBeforeUnmount(() => {
   if (liveTimer) clearInterval(liveTimer)
   if (catalogRefreshTimer) clearTimeout(catalogRefreshTimer)
   document.removeEventListener('visibilitychange', onVisibilityChange)
-  document.removeEventListener('click', closeMenuOnOutsideClick)
-  document.removeEventListener('keydown', closeMenuOnEscape)
   window.removeEventListener('online', onOnline)
 })
 
@@ -696,7 +635,6 @@ async function resolveConflict() {
   }
 }
 
-
 function blockSensorName(s) {
   if (s.name && !/^Sens\d*$/i.test(s.name) && !/moisture sensor/i.test(s.name)) return s.name
   const slot = s.blockRoles?.[0]?.slot
@@ -736,12 +674,6 @@ function sensorConfigText(s) {
     parts.push(`порог ${s.warningVoltage != null ? Math.round(s.warningVoltage) / 1000 : batteryWarningV(s.batteryType)} В`)
   }
   return parts.join(' · ')
-}
-
-function handleLogout() {
-  menuOpen.value = false
-  logout()
-  router.push('/login')
 }
 
 function scheduleCatalogRefresh() {
@@ -850,8 +782,6 @@ async function removeBlock(d) {
 .page-header { position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 0.75rem 1rem 1rem; background: var(--bg); }
 .header-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
 /* The bell sits right next to the menu button: the auto margin goes to the bell only. */
-.header-bell { margin-left: auto; }
-.header-bell + .menu-wrap { margin-left: -0.6rem; }
 h2 { color: var(--text-strong); margin: 0; }
 .header-meta { display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; margin-top: 0.35rem; overflow: hidden; white-space: nowrap; }
 .cached-dashboard-note { margin: 0 0 1rem; padding: 0.65rem 0.85rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 8px; color: var(--text-muted); font-size: 0.82rem; }
@@ -859,15 +789,6 @@ h2 { color: var(--text-strong); margin: 0; }
 .connection-status { flex: none; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
 .connection-status.online { background: var(--tag-bg-ok); color: var(--success); }
 .connection-status.offline { background: var(--bg-accent); color: var(--danger); }
-.menu-wrap { position: relative; margin-left: auto; }
-.menu-toggle { width: 2.2rem; height: 2.2rem; padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-strong); cursor: pointer; }
-.menu-toggle:hover, .menu-toggle[aria-expanded='true'] { background: var(--bg-primary); color: var(--text-strong); }
-.menu-dropdown { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; min-width: 220px; padding: 0.35rem; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
-.menu-dropdown button { width: 100%; padding: 0.55rem 0.7rem; border: none; border-radius: 6px; display: flex; align-items: center; gap: 0.55rem; background: transparent; color: var(--text); font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer; }
-.menu-dropdown button:hover { background: var(--bg-primary); }
-.menu-dropdown .menu-danger { color: var(--danger); }
-.menu-icon { width: 1rem; height: 1rem; flex: none; opacity: 0.9; }
-.menu-sep { height: 1px; margin: 0.3rem 0; background: var(--border-soft); }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.secondary { background: var(--bg-accent); }
 .btn.danger { background: var(--bg-accent); color: var(--on-accent); flex-shrink: 0; }
@@ -888,7 +809,6 @@ h2 { color: var(--text-strong); margin: 0; }
 .trust-badge.view { color: var(--text-faint); }
 .admin-access-banner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.75rem; border: 1px solid var(--warn); border-left-width: 4px; border-radius: 12px; padding: 0.7rem 1rem; margin-bottom: 1rem; background: var(--bg-card); font-size: 0.85rem; line-height: 1.45; }
 .admin-access-text b { color: var(--warn); }
-.menu-dropdown .menu-warn { color: var(--warn); }
 .device-card.locked .device-name { color: var(--warn); }
 .empty.small { padding: 1rem; font-size: 0.85rem; }
 .section { margin-bottom: 2rem; }
