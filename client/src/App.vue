@@ -1,7 +1,7 @@
 <template>
   <ToastHost />
   <router-view v-if="!auth.loading" />
-  <main v-else class="startup">
+  <main v-else class="startup" :class="{ 'startup-loading': !startupWarning }">
     <section class="startup-notice" :class="{ 'startup-warning': startupWarning }">
       <h1 role="status">
         <template v-if="startupWarning">{{ startupWarning }}</template>
@@ -293,14 +293,25 @@ label:has(> input[type='checkbox']) {
 
 .modal-close { width: 2rem; height: 2rem; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--text-dim); font-size: 1rem; cursor: pointer; }
 .modal-close:hover { background: var(--bg-primary); color: var(--text); }
-.loading-label { display: inline-flex; align-items: center; gap: 0.5em; }
+.loading-label {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding-top: 5.25rem;
+  color: var(--text-strong);
+  pointer-events: none;
+}
 .loading-label::before {
   content: '';
-  flex: none;
-  width: 1em;
-  height: 1em;
-  border: 2px solid currentColor;
-  border-inline-end-color: transparent;
+  position: absolute;
+  inset: calc(50% - 1.5rem) auto auto calc(50% - 1.5rem);
+  width: 3rem;
+  height: 3rem;
+  border: 4px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
   border-radius: 50%;
   animation: loading-spin 0.8s linear infinite;
 }
@@ -313,6 +324,12 @@ label:has(> input[type='checkbox']) {
   display: grid;
   place-items: center;
   padding: 1rem;
+}
+.startup-loading { grid-template-rows: 1fr 1fr; }
+.startup-loading .startup-notice {
+  grid-row: 2;
+  align-self: start;
+  margin-top: 4rem;
 }
 .startup-notice {
   max-width: 26rem;

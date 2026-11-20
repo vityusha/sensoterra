@@ -73,8 +73,10 @@ onUnmounted(() => {
   width: 2.75rem;
   height: 2.75rem;
   padding: 0;
+  border: 1px solid currentColor;
   border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  cursor: pointer;
 }
 .page-scroll-up { top: calc(0.75rem + max(var(--header-bottom), env(safe-area-inset-top, 0px))); }
 .page-scroll-down { bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); }
