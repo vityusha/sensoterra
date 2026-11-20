@@ -1,12 +1,15 @@
 <template>
   <ToastHost />
   <router-view v-if="!auth.loading" />
-  <main v-else-if="startupWarning" class="startup-unavailable">
-    <section class="startup-notice" role="status">
-      <h1>{{ startupWarning }}</h1>
+  <main v-else class="startup">
+    <section class="startup-notice" :class="{ 'startup-warning': startupWarning }">
+      <h1 role="status">{{ startupWarning || 'Загрузка…' }}</h1>
+      <p>Для настройки блока или автономного датчика подключитесь к его сети Wi-Fi.</p>
+      <a class="btn startup-ap-link" href="http://192.168.4.1" target="_blank" rel="noopener noreferrer">
+        Настройка в AP режиме
+      </a>
     </section>
   </main>
-  <div v-else class="app-loading">Загрузка...</div>
 </template>
 
 <script setup>
@@ -283,8 +286,7 @@ label:has(> input[type='checkbox']) {
   cursor: pointer;
 }
 
-.app-loading { color: var(--text-sub); text-align: center; padding: 3rem; }
-.startup-unavailable {
+.startup {
   min-height: 100dvh;
   display: grid;
   place-items: center;
@@ -293,12 +295,15 @@ label:has(> input[type='checkbox']) {
 .startup-notice {
   max-width: 26rem;
   background: var(--bg-card);
-  border: 1px solid var(--warn);
+  border: 1px solid var(--border-soft);
   border-radius: 12px;
   padding: 1.25rem;
   text-align: center;
 }
+.startup-notice.startup-warning { border-color: var(--warn); }
 .startup-notice h1 { font-size: 1.15rem; }
+.startup-notice p { margin: 0.75rem 0; color: var(--text-muted); }
+.startup-ap-link { display: inline-flex; align-items: center; min-height: 2.75rem; text-decoration: none; }
 .btn.btn.save { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); }
 .btn.btn.save:hover:not(:disabled) { background: var(--save-bg-hover); border-color: var(--save-border); }
 .btn.btn.save:disabled { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); opacity: 0.55; cursor: not-allowed; }

@@ -59,16 +59,19 @@
       <section class="section">
         <h3>Изменение</h3>
         <form class="settings-form" @submit.prevent="save">
-          <div v-if="isBlock" class="field" :class="{ disabled: !settable }">
-            <span class="field-label">Название</span>
-            <input type="text" v-model="form.name" maxlength="32" :disabled="!settable" />
-            <span class="field-hint">до 32 символов</span>
-          </div>
+          <DeviceNameField
+            v-if="isBlock"
+            class="field settings-name"
+            :class="{ disabled: !settable }"
+            :name="form.name"
+            :disabled="!settable"
+            @save="form.name = $event"
+          />
 
           <div class="field" :class="{ disabled: !settable }">
             <span class="field-label">Интервал сна (мин)</span>
             <span class="field-row">
-              <input class="half" type="number" min="0.5" step="0.5" v-model.number="form.sleepMin" :disabled="!settable" />
+              <input type="number" min="0.5" step="0.5" v-model.number="form.sleepMin" :disabled="!settable" />
               <span class="field-unit">мин</span>
             </span>
             <span class="field-hint">от 0,5 мин (30 с), кратно 0,5</span>
@@ -78,9 +81,9 @@
           <div class="field" :class="{ disabled: !settable }">
             <span class="field-label">Интервал отправки</span>
             <span class="field-row">
-              <input class="half" type="number" min="0" max="24" step="1" v-model.number="form.sendHours" :disabled="!settable" />
+              <input type="number" min="0" max="24" step="1" v-model.number="form.sendHours" :disabled="!settable" />
               <span class="field-unit">ч</span>
-              <input class="half" type="number" min="0" max="59" step="1" v-model.number="form.sendMinutes" :disabled="!settable" />
+              <input type="number" min="0" max="59" step="1" v-model.number="form.sendMinutes" :disabled="!settable" />
               <span class="field-unit">мин</span>
             </span>
             <span class="field-hint">от {{ minSendText }} до 24 часов, не меньше интервала сна</span>
@@ -88,14 +91,20 @@
           </div>
 
           <div v-if="!oldStandalone" class="field" :class="{ disabled: !settable }">
-            <span class="field-label">Предел отличия от соседнего измерения (%)</span>
-            <input type="number" min="5" max="20" step="1" v-model.number="form.percentN" :disabled="!settable" />
+            <span class="field-label">Предел отличия от соседнего измерения</span>
+            <span class="field-row">
+              <input type="number" min="5" max="20" step="1" v-model.number="form.percentN" :disabled="!settable" />
+              <span class="field-unit">%</span>
+            </span>
             <span class="field-hint">от 5 до 20 %</span>
           </div>
 
           <div v-if="!oldStandalone" class="field" :class="{ disabled: !settable }">
-            <span class="field-label">Предел отличия от последнего переданного измерения (%)</span>
-            <input type="number" min="5" max="20" step="1" v-model.number="form.percentS" :disabled="!settable" />
+            <span class="field-label">Предел отличия от последнего переданного измерения</span>
+            <span class="field-row">
+              <input type="number" min="5" max="20" step="1" v-model.number="form.percentS" :disabled="!settable" />
+              <span class="field-unit">%</span>
+            </span>
             <span class="field-hint">от 5 до 20 %</span>
           </div>
 
@@ -110,7 +119,7 @@
           <div v-if="!oldStandalone" class="field" :class="{ disabled: !settable }">
             <span class="field-label">Минимальное напряжение (1,8–2,9 В)</span>
             <span class="field-row">
-              <input class="half" type="number" min="1.8" max="2.9" step="0.1" v-model.number="form.minVoltageV" :disabled="!settable" />
+              <input type="number" min="1.8" max="2.9" step="0.1" v-model.number="form.minVoltageV" :disabled="!settable" />
               <span class="field-unit">В</span>
             </span>
           </div>
@@ -133,6 +142,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import DeviceNameField from '../components/DeviceNameField.vue'
 import { getDevice, getDeviceSensors, getDeviceStatuses, sendSensorParams, clearRetainedSettings } from '../api/auth'
 import { getIndividualName } from '../store/settings'
 import { BATTERY_TYPES, batteryLabel, batteryMinVoltageV, batteryWarningV } from '../utils/battery'
@@ -455,13 +465,14 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .field.disabled { opacity: 0.5; }
 .field-label { color: var(--text-muted); font-size: 0.8rem; }
 .field-hint { color: var(--text-faint); font-size: 0.72rem; }
-.field input[type="text"], .field input[type="number"], .field select { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.95rem; padding: 0.45rem 0.6rem; }
+.field input[type="number"], .field select { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 6px; color: var(--text); font-size: 0.95rem; padding: 0.45rem 0.6rem; }
+.field input[type="number"] { width: 5rem; flex-shrink: 0; }
+.settings-name { width: max-content; max-width: 100%; }
 .field input.invalid { border-color: var(--danger); }
 .field-error { color: var(--danger); font-size: 0.72rem; }
-.field select { cursor: pointer; }
+.field select { cursor: pointer; align-self: flex-start; max-width: 100%; }
 .field-row { display: flex; align-items: center; gap: 0.4rem; }
 .field-unit { color: var(--text-faint); font-size: 0.8rem; }
-.field-row input.half { width: 5rem; }
 .form-actions { display: flex; justify-content: center; gap: 0.6rem; margin-top: 0.5rem; }
 
 /* Телефон: поля в ряд не влезают — переносим. */

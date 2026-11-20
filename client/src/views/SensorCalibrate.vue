@@ -1,8 +1,11 @@
 <template>
-  <div class="sensor-calibrate">
+  <component :is="modal ? 'dialog' : 'div'" ref="panel" class="sensor-calibrate" :class="{ 'calibrate-dialog': modal }" :aria-labelledby="modal ? 'zero-calibration-title' : undefined" @cancel.prevent="cancel">
     <div class="header-row">
-      <button @click="cancel" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-      <h2>Калибровка 0% влажности</h2>
+      <button type="button" @click="cancel" class="btn small back-btn" :aria-label="modal ? 'Закрыть' : 'Назад'">
+        <span v-if="modal" aria-hidden="true">✕</span>
+        <svg v-else class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+      <h2 id="zero-calibration-title">Калибровка 0% влажности</h2>
       <button
         type="button"
         class="btn small back-btn save-icon-btn"
@@ -34,7 +37,7 @@
       </div>
 
     </section>
-  </div>
+  </component>
 </template>
 
 <script setup>
@@ -45,6 +48,9 @@ import { loadCalibration, calibrationFor, setCalibration } from '../store/calibr
 import { pushNotification, onWsMessage } from '../store/notifications'
 import { fmtEventTimeWithZone, DEFAULT_ZONE_OFFSET_MIN } from '../utils/datetime'
 
+const props = defineProps({ modal: Boolean, deviceId: Number })
+const emit = defineEmits(['close'])
+const panel = ref(null)
 const route = useRoute()
 const router = useRouter()
 const chipId = Number(route.params.chipId)
@@ -76,8 +82,8 @@ const statusClass = computed(() => {
 let deviceId = null
 
 async function resolveDeviceId() {
-  if (queryDeviceId) {
-    deviceId = queryDeviceId
+  if (props.deviceId || queryDeviceId) {
+    deviceId = props.deviceId || queryDeviceId
     return
   }
   try {
@@ -94,7 +100,7 @@ async function resolveDeviceId() {
 }
 
 async function fetchLatest() {
-  const list = await getSensorTelemetry(deviceId, chipId)
+  const list = await getSensorTelemetry(deviceId, chipId, undefined, undefined, 1)
   return list?.[0] || null
 }
 
@@ -122,7 +128,7 @@ async function save() {
     const data = await saveSensorCalibrationValue2(chipId, candidate.value)
     setCalibration(chipId, { value1: data.value1, value2: data.value2, value3: data.value3 })
     pushNotification('Калибровка сохранена', 'success')
-    router.back()
+    close()
   } catch (e) {
     pushNotification(e?.response?.data?.message || 'Не удалось сохранить калибровку', 'error')
   } finally {
@@ -131,14 +137,21 @@ async function save() {
 }
 
 function cancel() {
-  router.back()
+  if (!busy.value) close()
 }
 
+function close() {
+  if (props.modal) emit('close')
+  else router.back()
+}
+
+let active = true
 let refreshTimer = null
 let wsUnsub = null
 let wsRefreshTimer = null
 
 onMounted(async () => {
+  if (props.modal) panel.value.showModal()
   await resolveDeviceId()
   try {
     const d = await getDevice(deviceId)
@@ -152,6 +165,7 @@ onMounted(async () => {
       ? fmtEventTimeWithZone(latest.time, zoneOffset.value)
       : 'нет данных'
   } catch { /* ignore */ }
+  if (!active) return
   refreshTimer = setInterval(async () => {
     try { consider(await fetchLatest()) } catch { /* ignore */ }
   }, 15000)
@@ -166,6 +180,7 @@ onMounted(async () => {
   })
 })
 onUnmounted(() => {
+  active = false
   clearInterval(refreshTimer)
   if (wsRefreshTimer) { clearTimeout(wsRefreshTimer); wsRefreshTimer = null }
   if (wsUnsub) wsUnsub()
@@ -174,6 +189,10 @@ onUnmounted(() => {
 
 <style scoped>
 .sensor-calibrate { max-width: 600px; margin: 0 auto; padding: 1rem; }
+.calibrate-dialog { width: min(560px, calc(100% - 2rem)); max-height: calc(100% - 2rem); margin: auto; color: var(--text); background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: 12px; }
+.calibrate-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+.calibrate-dialog .header-row { position: static; margin-bottom: 0.8rem; background: var(--bg-card); }
+.calibrate-dialog .section, .calibrate-dialog .cal-status { margin-bottom: 0; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; }
 .save-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; }
