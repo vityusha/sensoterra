@@ -275,6 +275,7 @@ const devices = ref([])
 const catalog = ref([])
 const statusMap = ref({})
 const loading = ref(true)
+const devicesLoaded = ref(false)
 const showingCachedDashboard = ref(false)
 
 function dashboardCacheKey() {
@@ -327,8 +328,9 @@ function payClass(chipId) {
   return 'no'
 }
 
-// Устройств нет вовсе — новый покупатель без блока: нужен ID + ключ с листа.
-const needsClaim = computed(() => !!auth.user && auth.user.role === 'USER' && devices.value.length === 0)
+// An empty cache or a failed request does not confirm that the account has no devices.
+const needsClaim = computed(
+  () => devicesLoaded.value && auth.user?.role === 'USER' && devices.value.length === 0)
 // Кнопка нужна ровно тогда, когда баннер уже не показывается, но привязать ещё есть что.
 const showClaimButton = computed(
   () => !!auth.user && auth.user.role === 'USER' && devices.value.length > 0)
@@ -529,6 +531,7 @@ async function refreshAll() {
   const map = {}
   for (const s of statuses) map[s.chipId] = s
   statusMap.value = map
+  devicesLoaded.value = true
   showingCachedDashboard.value = false
   saveDashboardCache()
 }
@@ -701,7 +704,7 @@ async function refreshLive() {
   if (document.visibilityState === 'hidden' || liveBusy) return
   liveBusy = true
   try {
-    if (showingCachedDashboard.value) await refreshAll()
+    if (!devicesLoaded.value || showingCachedDashboard.value) await refreshAll()
     else await Promise.all([refreshCatalog(), refreshStatuses()])
   } catch {
   } finally {
