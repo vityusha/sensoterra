@@ -220,6 +220,10 @@ body {
 /* Keep sticky page headers at the top of the visual viewport on iOS. */
 .header-row,
 .page-header { transform: translateY(var(--vv-offset-top, 0px)); }
+.header-row > button,
+.header-row > .header-actions,
+.header-top > button,
+.header-top > .header-actions { align-self: flex-start; }
 
 .device-id { color: var(--text-dim); font-size: 0.8rem; margin: -0.5rem 0 1rem; }
 
@@ -293,6 +297,13 @@ label:has(> input[type='checkbox']) {
 
 .modal-close { width: 2rem; height: 2rem; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--text-dim); font-size: 1rem; cursor: pointer; }
 .modal-close:hover { background: var(--bg-primary); color: var(--text); }
+.pct-color {
+  position: absolute;
+  inset: 10px 0.35rem 10px auto;
+  width: 0.55rem;
+  border: 1px solid #fff;
+  border-radius: 2px;
+}
 .loading-label {
   position: fixed;
   inset: 0;

@@ -91,9 +91,10 @@
           :type="measurement ? undefined : 'button'"
           @click="!measurement && openMeasurement(che.key)"
         >
-          <span class="l-label" :class="{ 'has-gradient': isGradientField(che.key) }"><span>{{ labelParts(che.key).first }}<br v-if="labelParts(che.key).rest" />{{ labelParts(che.key).rest }}</span></span>
+          <span class="l-label"><span>{{ labelParts(che.key).first }}<br v-if="labelParts(che.key).rest" />{{ labelParts(che.key).rest }}</span></span>
           <span v-if="thresholdNotificationFields.has(che.key)" class="threshold-indicator" title="Включены уведомления по порогу" aria-label="Включены уведомления по порогу"><svg class="threshold-bell" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.75a3 3 0 0 0-3 3v1.1c0 1.25-.38 2.48-1.1 3.5L3 10.75h10l-.9-1.4A6.5 6.5 0 0 1 11 5.85v-1.1a3 3 0 0 0-3-3ZM6.3 12a1.75 1.75 0 0 0 3.4 0" /></svg></span>
-          <span class="l-value"><span class="l-reading" :class="{ 'alarm-active': openThresholdFields.has(che.key) }">{{ cellValue(che, reading) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span></span><span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null"></span></span>
+          <span class="l-value" :class="{ 'l-value-moisture': che.key === 'v0' && moistureCal }"><span class="l-reading" :class="{ 'alarm-active': openThresholdFields.has(che.key) }">{{ cellValue(che, reading) }}<span class="l-unit" v-if="cellUnit(che)">&nbsp;{{ cellUnit(che) }}</span></span></span>
+          <span v-if="isGradientField(che.key)" class="pct-color" :style="cellGradientColor(che) ? { background: cellGradientColor(che) } : null" aria-hidden="true"></span>
         </component>
       </div>
       <div v-else class="empty small">
@@ -265,7 +266,7 @@
     <div v-if="calibDialogOpen" class="modal-overlay" @click.self="calibDialogOpen = false">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="calib-dialog-title">
         <div class="modal-head">
-          <h3 id="calib-dialog-title">Калибровка влажности</h3>
+          <h3 id="calib-dialog-title">Калибровка пределов влажности</h3>
           <button class="modal-close" aria-label="Закрыть" @click="calibDialogOpen = false">✕</button>
         </div>
         <div class="calib-row">
@@ -630,6 +631,7 @@ async function saveCalib() {
       // Обновляем кеш — график v0 в процентах сразу пересчитается.
       setCalibration(chipId, { value1: v.value1, value2: v.value2, value3: v.value3 })
     }
+    calibDialogOpen.value = false
     pushNotification('Калибровка сохранена', 'success')
   } catch (e) {
     pushNotification(e?.response?.data?.message || 'Не удалось сохранить калибровку', 'error')
@@ -1240,14 +1242,18 @@ onUnmounted(() => {
 .immersion-warning { color: var(--danger); background: #3a1518; font-weight: 600; font-size: 0.85rem; padding: 0.5rem 0.7rem; border-radius: 8px; margin-bottom: 0.7rem; }
 .latest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; }
 .latest-cell { background: var(--bg-card); border-radius: 10px; padding: 0.7rem 0.9rem; }
+.latest-cell:has(> .pct-color) { padding-inline-end: 1.15rem; }
+.latest-cell:has(> .pct-color) .threshold-indicator { right: 1rem; }
 .l-label { display: flex; align-items: flex-start; gap: 0.4rem; color: var(--text-sub); font-size: 0.8rem; line-height: 1.05rem; margin: 0; padding-right: 1.8rem; overflow: hidden; white-space: normal; }
 .l-label.has-threshold { gap: 0.08rem; }
-.l-label.has-gradient { padding-right: 2.5rem; }
 .l-label > span { display: -webkit-box; flex: 1; min-width: 0; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: flex; align-items: center; align-self: start; width: 100%; min-width: 0; min-height: 1.5rem; }
 .l-reading { display: inline-flex; align-items: center; min-height: 1.5rem; box-sizing: border-box; padding: 0.15rem 0.35rem; border: 1px solid transparent; border-radius: 5px; }
 .l-reading.alarm-active { border-color: var(--danger); }
-.pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin: 0.2em 0 0 auto; flex: none; border: 1px solid #fff; border-radius: 2px; }
+.l-value-moisture .l-reading { white-space: nowrap; }
+@media (max-width: 480px) {
+  .l-value-moisture .l-reading { font-size: 0.875rem; padding-inline: 0.15rem; }
+}
 
 .l-unit { color: var(--text); font-size: 1rem; font-weight: 500; }
 .chart-section { margin-bottom: 1.5rem; }

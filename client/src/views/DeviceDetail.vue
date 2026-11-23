@@ -1779,17 +1779,15 @@ async function shiftBlockRange(direction) {
 .sensor-chip-id { color: var(--text-muted); font-size: 0.85em; }
 .sensor-channels { color: var(--text-muted); font-size: 0.76rem; }
 .sensor-readings { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.sensor-readings-lines { flex-direction: column; align-items: flex-start; }
+.sensor-readings-lines { flex-direction: column; align-items: stretch; }
 .sensor-card.block-sensor-card .reading { background: transparent; }
 .sensor-readings-lines .reading { display: inline-flex; align-items: center; }
-.sensor-readings-lines .reading .pct-color { order: -1; margin: 0 0.4rem 0 0; }
 .reading { font-size: 0.8rem; color: var(--text-muted); background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px; }
-.pct-color { display: inline-block; width: 2.55em; height: 0.85em; margin-top: 0.2em; flex: none; border: 1px solid #fff; border-radius: 2px; }
+.reading:has(> .pct-color) { position: relative; display: inline-flex; align-items: center; min-height: 28px; padding-inline-end: 1.15rem; }
 
 .reading.muted { color: var(--text-faint); }
 .ago { color: var(--text-faint); font-size: 0.92em; margin-left: 0.3rem; }
 .msg-num { color: var(--text-faint); font-size: 0.92em; }
-.reading .pct-color { margin: 0 0 0 0.4rem; vertical-align: baseline; }
 .reading.immersion-warning { color: var(--danger); background: #3a1518; font-weight: 600; }
 .reading-value.threshold-alarm { color: var(--danger); font-weight: 700; }
 .sensor-config { margin-top: 0.5rem; }

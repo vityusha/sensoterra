@@ -252,6 +252,10 @@ function formatApiError(e, fallback) {
 .moisture-gradient { max-width: 600px; margin: 0 auto; padding: 1rem; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .header-row { gap: 0.375rem; }
+  .header-row h2 { font-size: 1rem; }
+}
 .section { background: var(--bg); border-radius: 10px; padding: 1rem; }
 .hint { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 1rem; }
 .form { display: flex; flex-direction: column; gap: 1rem; }
