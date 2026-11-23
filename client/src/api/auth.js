@@ -598,7 +598,7 @@ export async function markAlarmRead(id) {
 export async function markAllAlarmsRead(type, userId = null) {
   const params = { type }
   if (userId != null) params.userId = userId
-  const { data } = await api.post('/alarms/read', null, { params })
+  const { data } = await api.post('/alarms/read', {}, { params })
   return data
 }
 
