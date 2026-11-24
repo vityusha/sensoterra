@@ -129,6 +129,7 @@
 </template>
 
 <script setup>
+import { backFromAccountPage } from '../utils/accountNavigation'
 import HeaderActions from '../components/HeaderActions.vue'
 import { reactive, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -142,10 +143,7 @@ const route = useRoute()
 const router = useRouter()
 
 function goBack() {
-  const target = route.query.returnTo
-  if (typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')) router.push(target)
-  else if (window.history.state?.back) router.back()
-  else router.push('/')
+  backFromAccountPage(router, route.query.returnTo)
 }
 
 const form = reactive({ current: '', next: '', repeat: '' })

@@ -1784,6 +1784,15 @@ async function shiftBlockRange(direction) {
 .sensor-readings-lines .reading { display: inline-flex; align-items: center; }
 .reading { font-size: 0.8rem; color: var(--text-muted); background: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px; }
 .reading:has(> .pct-color) { position: relative; display: inline-flex; align-items: center; min-height: 28px; padding-inline-end: 1.15rem; }
+.sensor-readings-lines .reading:has(> .pct-color) { min-height: 0; padding-inline-end: 0.5rem; }
+.sensor-readings-lines .reading > .pct-color {
+  position: static;
+  order: -1;
+  flex: none;
+  width: 2.55em;
+  height: 0.85em;
+  margin-inline-end: 0.4rem;
+}
 
 .reading.muted { color: var(--text-faint); }
 .ago { color: var(--text-faint); font-size: 0.92em; margin-left: 0.3rem; }
