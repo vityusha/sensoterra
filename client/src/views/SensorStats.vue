@@ -257,7 +257,7 @@
           </label>
         </div>
         <p class="hint">
-          Каналы этого датчика: скрытые не показываются ни в последних данных, ни на графиках.
+          Скрытые измерения этого датчика не показываются ни в последних данных, ни на графиках.
           Выбор хранится в вашем аккаунте и переносится на другие устройства.
         </p>
       </div>
@@ -279,7 +279,7 @@
           дефолтные. Правка калибровки — только админом.
         </p>
         <div class="modal-actions">
-          <button class="btn small secondary" @click="calibDialogOpen = false">Закрыть</button>
+          <button class="btn small secondary close-btn" @click="calibDialogOpen = false">Закрыть</button>
           <button class="btn small save" :disabled="calibForm.busy" @click="saveCalib">
             {{ calibForm.busy ? '...' : 'Сохранить' }}
           </button>
@@ -1292,5 +1292,6 @@ onUnmounted(() => {
 .display-settings-title svg { width: 1.5rem; height: 1.5rem; flex: none; }
 .modal-actions { display: flex; justify-content: center; gap: 0.6rem; margin-top: 1rem; }
 .modal-actions .btn { display: inline-flex; align-items: center; justify-content: center; width: 8rem; height: 2rem; padding: 0 0.6rem; }
+.modal-actions .close-btn { font-weight: 700; }
 .empty.small { color: var(--text-faint); text-align: center; padding: 1rem; font-size: 0.85rem; }
 </style>

@@ -54,16 +54,15 @@
         </div>
       </div>
       <p class="hint">
-        По умолчанию скрыто: у блоков на сетевом питании колонка пустая. Включите для блоков,
+        По умолчанию скрыто: у блоков при питании от сети показ напряжения аккумулятора можно выключить. Включите показ для блоков,
         питающихся от аккумулятора. Настройка — своя у каждого блока и у каждого пользователя.
       </p>
     </section>
 
     <section class="section" v-if="!isAdmin()">
-      <h3>Каналы датчиков</h3>
+      <h3>Измерения датчиков</h3>
       <p class="hint">
-        У конкретного датчика аппаратно может не быть освещённости, а вместо влажности почвы он
-        меряет влажность воздуха. Поэтому скрытие задаётся для каждого датчика отдельно.
+        У конкретного датчика аппаратно может не быть освещённости, а возможно вы захотите скрыть лишние измерения. Поэтому скрытие задаётся для каждого датчика отдельно.
       </p>
       <div v-for="sn in sensors" :key="sn.chipId" class="type-group">
         <h4>{{ sensorLabel(sn) }}</h4>
@@ -439,6 +438,7 @@ function onTooltipMode(v) {
 .section h3 { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
 .field-list { display: flex; flex-direction: column; gap: 0.6rem; }
 .type-group { margin-bottom: 1rem; }
+.hint + .type-group { margin-top: 0.75rem; }
 .type-group h4 { color: var(--tag-text); font-size: 0.85rem; margin: 0 0 0.5rem; }
 .field-row { display: flex; align-items: center; gap: 0.7rem; background: var(--bg-card); padding: 0.7rem 1rem; border-radius: 8px; }
 .field-tag { font-family: monospace; color: var(--tag-text); width: 28px; }
