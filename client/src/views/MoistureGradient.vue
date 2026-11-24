@@ -1,11 +1,8 @@
 <template>
-  <div class="moisture-gradient">
+  <div class="moisture-gradient save-page">
     <div class="header-row">
       <button type="button" @click="goBack" class="btn small back-btn" aria-label="Назад"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>Настройка уведомлений</h2>
-      <button type="button" class="btn small back-btn save-icon-btn" title="Сохранить" aria-label="Сохранить" @click="save">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-      </button>
       <HeaderActions />
     </div>
 
@@ -65,6 +62,9 @@
         <div v-if="message" class="message">{{ message }}</div>
       </div>
     </section>
+    <footer class="save-bar">
+      <button type="button" class="btn save" @click="save">Сохранить</button>
+    </footer>
   </div>
 </template>
 
@@ -254,7 +254,6 @@ function formatApiError(e, fallback) {
 .header-row h2 { color: var(--text-strong); flex: 1; min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 480px) {
   .header-row { gap: 0.375rem; }
-  .header-row h2 { font-size: 1rem; }
 }
 .section { background: var(--bg); border-radius: 10px; padding: 1rem; }
 .hint { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 1rem; }
@@ -266,9 +265,6 @@ function formatApiError(e, fallback) {
 .preview { display: flex; flex-direction: column; gap: 0.4rem; }
 .swatch { width: 100%; height: 24px; border-radius: 6px; border: 1px solid var(--border-soft); }
 .labels { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.8rem; }
-.save-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: var(--success); }
-.save-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .actions { display: flex; justify-content: center; }
 .thresholds { display: flex; flex-direction: column; gap: 0.65rem; padding: 0.2rem 0 0.4rem; }
 .threshold-enable { display: flex; align-items: center; gap: 0.55rem; color: var(--text); font-size: 0.9rem; }

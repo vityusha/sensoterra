@@ -79,7 +79,7 @@ onUnmounted(() => {
   cursor: pointer;
 }
 .page-scroll-up { top: calc(0.75rem + max(var(--header-bottom), env(safe-area-inset-top, 0px))); }
-.page-scroll-down { bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); }
+.page-scroll-down { bottom: calc(0.75rem + var(--save-bar-height, 0px) + env(safe-area-inset-bottom, 0px)); }
 .page-scroll svg {
   width: 1.25rem;
   height: 1.25rem;

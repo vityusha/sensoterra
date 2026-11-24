@@ -354,7 +354,23 @@ label:has(> input[type='checkbox']) {
 .startup-notice h1 { font-size: 1.15rem; }
 .startup-notice p { margin: 0.75rem 0; color: var(--text-muted); }
 .startup-ap-link { display: inline-flex; align-items: center; min-height: 2.75rem; text-decoration: none; }
-.btn.btn.save { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); }
+#app:has(.save-bar) { --save-bar-height: 4rem; }
+.save-page { display: flex; flex-direction: column; min-height: 100dvh; }
+.save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 39;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: auto -1rem -1rem;
+  min-height: calc(var(--save-bar-height) + env(safe-area-inset-bottom, 0px));
+  padding: 0.65rem 1rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg);
+}
+.save-bar .save { min-width: 8rem; min-height: 2.5rem; }
+.btn.btn.save { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); font-weight: 700; }
 .btn.btn.save:hover:not(:disabled) { background: var(--save-bg-hover); border-color: var(--save-border); }
 .btn.btn.save:disabled { background: var(--save-bg); color: var(--save-text); border-color: var(--save-border); opacity: 0.55; cursor: not-allowed; }
 .back-arrow { display: inline-block; width: 1.5rem; height: 1.5rem; fill: currentColor; vertical-align: middle; }

@@ -1,20 +1,10 @@
 <template>
-  <component :is="modal ? 'dialog' : 'div'" ref="panel" class="sensor-calibrate" :class="{ 'calibrate-dialog': modal }" :aria-labelledby="modal ? 'zero-calibration-title' : undefined" @cancel.prevent="cancel">
+  <component :is="modal ? 'dialog' : 'div'" ref="panel" class="sensor-calibrate" :class="modal ? 'calibrate-dialog' : 'save-page'" :aria-labelledby="modal ? 'zero-calibration-title' : undefined" @cancel.prevent="cancel">
     <div class="header-row">
       <button type="button" @click="cancel" class="btn small back-btn" aria-label="Назад">
         <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
       </button>
       <h2 id="zero-calibration-title">Калибровка 0% влажности</h2>
-      <button
-        type="button"
-        class="btn small back-btn save-icon-btn"
-        :disabled="candidate == null || !candidateValid || busy"
-        :title="busy ? 'Сохранение...' : 'Сохранить'"
-        :aria-label="busy ? 'Сохранение...' : 'Сохранить'"
-        @click="save"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-      </button>
       <HeaderActions v-if="!modal" />
     </div>
 
@@ -37,6 +27,11 @@
       </div>
 
     </section>
+    <footer :class="modal ? 'calibrate-actions' : 'save-bar'">
+      <button type="button" class="btn save" :disabled="candidate == null || !candidateValid || busy" @click="save">
+        {{ busy ? 'Сохранение…' : 'Сохранить' }}
+      </button>
+    </footer>
   </component>
 </template>
 
@@ -196,9 +191,7 @@ onUnmounted(() => {
 .calibrate-dialog .section, .calibrate-dialog .cal-status { margin-bottom: 0; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
 .header-row h2 { color: var(--text-strong); flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.save-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; }
-.save-icon-btn svg { width: 1.5rem; height: 1.5rem; fill: var(--success); }
-.save-icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.calibrate-actions { display: flex; justify-content: center; margin-top: 1rem; }
 .section { margin-bottom: 2rem; }
 .cal-text { color: var(--text-sub); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1rem; }
 .cal-status { border-radius: 8px; padding: 0.7rem 0.9rem; font-size: 0.85rem; margin-bottom: 1rem; background: var(--bg); color: var(--text-muted); border-left: 3px solid var(--text-faint); }
