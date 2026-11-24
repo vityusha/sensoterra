@@ -1,5 +1,5 @@
 <template>
-  <div class="relay-settings">
+  <div class="relay-settings" @keydown="preventFraction" @beforeinput="preventFraction" @paste="preventFraction">
     <div class="header-row">
       <button @click="$router.back()" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>{{ displayName }} · {{ relayTitle }}</h2>
@@ -111,10 +111,10 @@
 
           <div v-if="isTypeOne" class="field" :class="{ disabled: !isOnline }">
             <span class="field-label">Порог включения канала<template v-if="oneThresholdUnit">, {{ oneThresholdUnit }}</template><template v-if="isOnePct"> ({{ thresholdMinPct }}–{{ thresholdMaxPct }})</template><template v-else-if="form.idSensor"> (0–65535)</template></span>
-            <input v-if="isOnePct" type="number" :min="thresholdMinPct" :max="thresholdMaxPct" step="0.1" v-model.number="limitPct" :disabled="!isOnline" />
+            <input v-if="isOnePct" type="number" :min="thresholdMinPct" :max="thresholdMaxPct" step="1" v-model.number="limitPct" :disabled="!isOnline" />
             <input v-else type="number" min="0" max="65535" step="1" v-model.number="form.limitSingle" :disabled="!isOnline" />
             <div v-if="isOnePct && sensorScale" class="scale-slider">
-              <input type="range" :min="thresholdMinPct" :max="thresholdMaxPct" step="0.1"
+              <input type="range" :min="thresholdMinPct" :max="thresholdMaxPct" step="1"
                      v-model.number="limitPct" :disabled="!isOnline" :style="sliderTrackStyle" />
               <div class="scale-labels">
                 <span>{{ thresholdMinPct }}%</span>
@@ -168,14 +168,14 @@
               <div class="threshold-inputs">
                 <label class="threshold-input">
                   <span>{{ isThresholdPct ? 'Верхний' : 'Нижний' }}</span>
-                  <input v-if="isThresholdPct" type="number" :min="thresholdSliderMin" :max="thresholdSliderMax" step="0.1"
+                  <input v-if="isThresholdPct" type="number" :min="thresholdSliderMin" :max="thresholdSliderMax" step="1"
                          v-model.number="lowPct" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" />
                   <input v-else type="number" :min="intMin" :max="intMax" step="1"
                          v-model.number="form.limitLow" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" @input="clampLow" />
                 </label>
                 <label class="threshold-input">
                   <span>{{ isThresholdPct ? 'Нижний' : 'Верхний' }}</span>
-                  <input v-if="isThresholdPct" type="number" :min="thresholdSliderMin" :max="thresholdSliderMax" step="0.1"
+                  <input v-if="isThresholdPct" type="number" :min="thresholdSliderMin" :max="thresholdSliderMax" step="1"
                          v-model.number="highPct" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" />
                   <input v-else type="number" :min="intMin" :max="intMax" step="1"
                          v-model.number="form.limitHigh" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" @input="clampHigh" />
@@ -184,9 +184,9 @@
               <template v-if="fieldScale">
                 <div class="dual-slider" :style="dualSliderStyle">
                   <template v-if="isThresholdPct">
-                    <input type="range" :min="thresholdSliderMin" :max="thresholdSliderMax" step="0.1"
+                    <input type="range" :min="thresholdSliderMin" :max="thresholdSliderMax" step="1"
                            v-model.number="lowPct" :disabled="!isOnline" @input="clampPctLow" />
-                    <input type="range" :min="thresholdSliderMin" :max="thresholdSliderMax" step="0.1"
+                    <input type="range" :min="thresholdSliderMin" :max="thresholdSliderMax" step="1"
                            v-model.number="highPct" :disabled="!isOnline" @input="clampPctHigh" />
                   </template>
                   <template v-else>
@@ -229,7 +229,7 @@
 <script setup>
 import HeaderActions from '../components/HeaderActions.vue'
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, getDeviceStatuses, sendRelayParams, getMoistureScale, getSensorScale } from '../api/auth'
 import { getBlockName, getFieldName, getFieldUnit } from '../store/settings'
 import { pushNotification } from '../store/notifications'
@@ -239,6 +239,7 @@ import { adcToPercent, percentToAdc } from '../utils/moisture'
 import { moistureGradientCss } from '../utils/gradient'
 
 const route = useRoute()
+const router = useRouter()
 
 const chipId = Number(route.params.chipId)
 const relayNumber = Number(route.params.relayNumber)
@@ -356,9 +357,9 @@ const pctAdcPreview = computed(() => (isOnePct.value ? percentToAdc(limitPct.val
 const sensorScale = ref(null)
 
 const thresholdMinPct = computed(() =>
-  isOnePct.value && sensorScale.value?.minPct != null ? Number(sensorScale.value.minPct) : 0)
+  isOnePct.value && sensorScale.value?.minPct != null ? Math.ceil(sensorScale.value.minPct) : 0)
 const thresholdMaxPct = computed(() =>
-  isOnePct.value && sensorScale.value?.maxPct != null ? Number(sensorScale.value.maxPct) : 100)
+  isOnePct.value && sensorScale.value?.maxPct != null ? Math.floor(sensorScale.value.maxPct) : 100)
 
 const sliderTrackStyle = computed(() => {
   if (!isOnePct.value || !sensorScale.value?.enabled) return null
@@ -378,7 +379,7 @@ function maybeLoadSensorScale(id) {
 
 function syncLimitPct() {
   if (!isOnePct.value) return
-  limitPct.value = adcToPercent(form.limitSingle, sensorCal.value) ?? 0
+  limitPct.value = Math.round(adcToPercent(form.limitSingle, sensorCal.value) ?? 0)
 }
 
 function maybeLoadSensorCalibration() {
@@ -403,11 +404,11 @@ const highPct = ref(0)
 
 /** Границы слайдера: из сохранённой шкалы (LimL/LimH как в прошивке), иначе int16. */
 const thresholdSliderMin = computed(() => {
-  if (fieldScale.value?.min != null) return fieldScale.value.min
+  if (fieldScale.value?.min != null) return Math.ceil(fieldScale.value.min)
   return isThresholdPct.value ? 0 : intMin
 })
 const thresholdSliderMax = computed(() => {
-  if (fieldScale.value?.max != null) return fieldScale.value.max
+  if (fieldScale.value?.max != null) return Math.floor(fieldScale.value.max)
   return isThresholdPct.value ? 100 : intMax
 })
 
@@ -439,12 +440,12 @@ function applyScaleDefaults() {
     return
   }
   if (isThresholdPct.value) {
-    lowPct.value = fieldScale.value.min
-    highPct.value = fieldScale.value.max
+    lowPct.value = thresholdSliderMin.value
+    highPct.value = thresholdSliderMax.value
     syncThresholdFromPct()
   } else {
-    form.limitLow = fieldScale.value.min
-    form.limitHigh = fieldScale.value.max
+    form.limitLow = thresholdSliderMin.value
+    form.limitHigh = thresholdSliderMax.value
   }
 }
 
@@ -503,8 +504,8 @@ function syncThresholdFromPct() {
 function syncThresholdPct() {
   if (!isThresholdPct.value) return
   // Обратный пересчёт влажности: limitHigh → Нижний %, limitLow → Верхний %.
-  lowPct.value = adcToPercent(form.limitHigh, sensorCal.value) ?? 0
-  highPct.value = adcToPercent(form.limitLow, sensorCal.value) ?? 0
+  lowPct.value = Math.round(adcToPercent(form.limitHigh, sensorCal.value) ?? 0)
+  highPct.value = Math.round(adcToPercent(form.limitLow, sensorCal.value) ?? 0)
   // Легаси-значения блока могли быть сохранены старым (прямым) маппингом:
   // limitLow > limitHigh. После конвертации это lowPct > highPct — меняем
   // местами и пересчитываем форму, чтобы валидация не блокировала сохранение.
@@ -612,27 +613,38 @@ const summary = computed(() => {
   return items
 })
 
+function preventFraction(event) {
+  if (event.target.type !== 'number') return
+  const key = !event.ctrlKey && !event.metaKey && event.key?.length === 1 ? event.key : ''
+  const text = event.clipboardData?.getData('text') ?? event.data ?? key
+  if (/[.,eE+]/.test(text)) event.preventDefault()
+}
+
+function integerInRange(value, min, max) {
+  return Number.isInteger(value) && value >= min && value <= max
+}
+
 const formValid = computed(() => {
-  if (!(form.worktimeFirst >= 1 && form.worktimeFirst <= 60)) return false
+  if (!integerInRange(form.worktimeFirst, 1, 60)) return false
   if (isTypeTime.value) {
-    if (fm(form.worktimeSecond) && !(form.worktimeSecond >= 0 && form.worktimeSecond <= 60)) return false
-    if (!(form.betweentime >= 1 && form.betweentime <= 168)) return false
+    if (fm(form.worktimeSecond) && !integerInRange(form.worktimeSecond, 0, 60)) return false
+    if (!integerInRange(form.betweentime, 1, 168)) return false
   }
   if (isTypeOne.value) {
     if (isOnePct.value) {
-      if (!(limitPct.value >= thresholdMinPct.value && limitPct.value <= thresholdMaxPct.value)) return false
-    } else if (!(form.limitSingle >= 0 && form.limitSingle <= 65535)) return false
+      if (!integerInRange(limitPct.value, thresholdMinPct.value, thresholdMaxPct.value)) return false
+    } else if (!integerInRange(form.limitSingle, 0, 65535)) return false
   }
   if (isTypeThreshold.value) {
     if (form.idSensor) {
       if (!(form.dataType >= 0 && form.dataType <= 3)) return false
     }
-    if (!(form.limitLow >= intMin && form.limitLow <= intMax)) return false
-    if (!(form.limitHigh >= intMin && form.limitHigh <= intMax)) return false
+    if (!integerInRange(form.limitLow, intMin, intMax)) return false
+    if (!integerInRange(form.limitHigh, intMin, intMax)) return false
     if (form.limitLow > form.limitHigh) return false
     if (isThresholdPct.value) {
-      if (!(lowPct.value >= thresholdSliderMin.value && lowPct.value <= thresholdSliderMax.value)) return false
-      if (!(highPct.value >= thresholdSliderMin.value && highPct.value <= thresholdSliderMax.value)) return false
+      if (!integerInRange(lowPct.value, thresholdSliderMin.value, thresholdSliderMax.value)) return false
+      if (!integerInRange(highPct.value, thresholdSliderMin.value, thresholdSliderMax.value)) return false
     }
   }
   return true
@@ -738,19 +750,12 @@ async function doSend() {
     pushNotification('Канал не найден — нельзя отправить настройки', 'error')
     return
   }
+  const submittedFrom = router.currentRoute.value
   sending.value = true
   try {
-    const previousSignature = relay.value ? relayParamSignature(relay.value) : null
     await sendRelayParams(relay.value.id, buildRequest())
     pushNotification(`Настройки канала R${relayNumber} отправлены на блок`, 'success')
-    // Блок подтверждает настройки асинхронно (STATE_R приходит после применения).
-    // Не перечитываем канал сразу: иначе форма и «Текущие настройки» откатятся
-    // к старым значениям из БД до прихода подтверждения.
-    const confirmed = await waitRelayUpdate(previousSignature)
-    if (confirmed) {
-      relay.value = confirmed
-      applyFromRelay(confirmed)
-    }
+    if (router.currentRoute.value === submittedFrom) router.back()
   } catch (e) {
     pushNotification(errorMessage(e, 'Не удалось отправить настройки'), 'error')
   } finally {
@@ -758,41 +763,6 @@ async function doSend() {
   }
 }
 
-/**
- * Отпечаток настроек канала без служебных полей. EVENT_R (сработка канала)
- * тоже обновляет updatedAt, но не трогает параметры — по одному updatedAt
- * нельзя отличить его от подтверждения STATE_R, иначе форма откатывалась
- * к старым настройкам (порог «возвращался» к прежнему значению).
- */
-function relayParamSignature(r) {
-  if (!r) return ''
-  return JSON.stringify([
-    r.name, r.activity, r.typeEnum, r.timerEnabled, r.dataType,
-    r.mainTime, r.durationMain, r.extraTime, r.durationExtra,
-    r.intervalH, r.sensorId, r.startTime, r.finishTime,
-    r.oneLimit, r.lowLimit, r.highLimit,
-  ])
-}
-
-/**
- * Ждём, пока блок пришлёт STATE_R с новыми настройками (изменится отпечаток).
- * Если подтверждение не пришло (тихий канал, блок пришлёт его позже), оставляем
- * в форме то, что отправили.
- */
-async function waitRelayUpdate(previousSignature, attempts = 6, delay = 400) {
-  if (previousSignature == null) return null
-  for (let i = 0; i < attempts; i++) {
-    await new Promise(resolve => setTimeout(resolve, delay))
-    try {
-      const relays = await getDeviceRelays(chipId)
-      const next = relays.find(r => Number(r.relayNumber) === relayNumber)
-      if (next && relayParamSignature(next) !== previousSignature) return next
-    } catch (e) {
-      // следующий опрос может пройти успешно
-    }
-  }
-  return null
-}
 
 function errorMessage(e, fallback) {
   const status = e?.response?.status
