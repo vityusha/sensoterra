@@ -264,6 +264,7 @@ import HeaderActions from '../components/HeaderActions.vue'
 import { usePager } from '../composables/usePager'
 import { getUser, getUserDevices, listDevices, getSensorCatalog, getDeviceStatuses, deleteDevice, resolveSensorConflict, claimDevice, listPayments, setAdminAccess } from '../api/auth'
 import { auth, devicePayment, rememberPayment, rememberDeviceOwner, adminLockedDevice, adminTrustedDevice } from '../store/auth'
+import { fmtMeasurementInterval } from '../utils/datetime'
 import { paymentLabel } from '../utils/payment'
 import { batteryLabel, batteryWarningV } from '../utils/battery'
 import { getBlockName, getIndividualName } from '../store/settings'
@@ -651,10 +652,6 @@ function individualSensorName(s) {
   return 'Имя датчика'
 }
 
-function roundHalf(v) {
-  return Math.round(v * 2) / 2
-}
-
 function fmtSend(seconds) {
   if (seconds == null) return null
   if (seconds >= 3600) {
@@ -668,7 +665,7 @@ function fmtSend(seconds) {
 
 function sensorConfigText(s) {
   const parts = []
-  if (s.sleep != null) parts.push(`сон ${s.sleep < 60 ? s.sleep + ' с' : roundHalf(s.sleep / 60) + ' мин'}`)
+  if (s.sleep != null) parts.push(`Изм. ${fmtMeasurementInterval(s.sleep)}`)
   if (s.send != null) parts.push(`отпр. ${fmtSend(s.send)}`)
   if (s.percentN != null || s.percentS != null) parts.push(`пределы ${s.percentN ?? 0}/${s.percentS ?? 0} %`)
   if (s.minVoltage != null) parts.push(`мин. напр. ${Math.round(s.minVoltage) / 1000} В`)

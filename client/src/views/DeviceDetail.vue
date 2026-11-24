@@ -151,7 +151,7 @@
       <section class="section">
         <h3>Телеметрия блока</h3>
         <div class="telemetry-row" v-if="blockTelemetry">
-          <span class="t-item">RSSI роутера: <b>{{ blockTelemetry.rssiR }}</b> dBm</span>
+          <span class="t-item">Уровень сигнала RSSI роутера: <b>{{ blockTelemetry.rssiR }}</b> dBm</span>
           <span class="t-item">Vbat: <b>{{ blockTelemetry.vbat?.toFixed(2) }}</b> В</span>
           <span class="t-item" v-if="showVacc">Vacc: <b>{{ blockTelemetry.vacc?.toFixed(2) }}</b> В</span>
           <span class="t-item" v-if="blockTelemetry?.time">Время: <b>{{ fmtEventTimeWithZone(blockTelemetry.time, device?.tzOffsetMinutes) }}</b></span>
@@ -192,8 +192,8 @@
           <span v-if="statusSummary.ongoing" class="ongoing">Связь не восстановлена</span>
         </div>
         <div class="chart-section" v-if="blockStatsData.length">
-          <h4>RSSI роутера, дБм</h4>
-          <LineChart :labels="timeLabels" :datasets="[{ label: 'RSSI роутера', data: blockStatsData.map(d => d.rssiR), color: '#3498db' }]" unit="дБм" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :y-bands="RSSI_BANDS" :y-min="blockRssiY.min" :y-max="blockRssiY.max" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
+          <h4>Уровень сигнала RSSI роутера, дБм</h4>
+          <LineChart :labels="timeLabels" :datasets="[{ label: 'Уровень сигнала RSSI роутера', data: blockStatsData.map(d => d.rssiR), color: '#3498db' }]" unit="дБм" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :y-bands="RSSI_BANDS" :y-min="blockRssiY.min" :y-max="blockRssiY.max" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="chart-section" v-if="blockStatsData.length">
           <h4>Батарея, В</h4>
@@ -331,7 +331,7 @@
             <span v-if="showField(s, 'v2')" class="reading">{{ getLabel(s, 'v2') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v2') }">{{ s.humidity }}<span v-if="getUnit(s, 'v2')">&nbsp;{{ getUnit(s, 'v2') }}</span></span><span class="pct-color" :style="fieldColor(s, 'v2', s.humidity) ? { background: fieldColor(s, 'v2', s.humidity) } : null"></span></span>
             <span v-if="showField(s, 'v3')" class="reading">{{ getLabel(s, 'v3') }}:&nbsp;<span class="reading-value" :class="{ 'threshold-alarm': hasThresholdAlarm(s, 'v3') }">{{ s.light }}<span v-if="getUnit(s, 'v3')">&nbsp;{{ getUnit(s, 'v3') }}</span></span><span class="pct-color" :style="fieldColor(s, 'v3', s.light) ? { background: fieldColor(s, 'v3', s.light) } : null"></span></span>
             <span v-if="s.battery != null" class="reading">Батарея:&nbsp;{{ s.battery }}&nbsp;В</span>
-            <span v-if="s.rssi != null" class="reading">RSSI блока:&nbsp;{{ s.rssi }}&nbsp;дБм</span>
+            <span v-if="s.rssi != null" class="reading">Уровень сигнала RSSI блока:&nbsp;{{ s.rssi }}&nbsp;дБм</span>
             <span v-if="s.power != null" class="reading">Power:&nbsp;{{ s.power }}</span>
             <span v-if="!hasAnyData(s)" class="reading muted">нет данных</span>
           </div>
@@ -393,7 +393,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, api, getDeviceStatuses, getBlockTelemetry, getDeviceStatusLog, getRelayTelemetry, getServerUptimeHistory, listInvites, createInvite, revokeInvite, deleteInvite, clearFinishedInvites, clearAllInvites, listDeviceAccess, grantDeviceAccess, revokeDeviceAccess, getDeviceKey, regenerateDeviceKey, getDevicePayment, setDevicePayment, extendDevicePayment, resetDeviceRegistrations, getMoistureScale, getSensorScales, listAlarms } from '../api/auth'
 import { getBlockName, setBlockName, getIndividualName, setIndividualName, getFieldName, getFieldUnit, isFieldHidden, isVaccHidden, setVaccVisible } from '../store/settings'
-import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs } from '../utils/datetime'
+import { fmtEventTimeWithZone, fmtAgo, zoneLabel, msToZoneInput, zoneInputToMs, fmtMeasurementInterval } from '../utils/datetime'
 import { computeDowntimes } from '../utils/uptime'
 import { onWsMessage, pushNotification, connectWs } from '../store/notifications'
 import { auth, rememberDeviceAccess, rememberDeviceOwner, rememberPayment, isDevicePaid, canControlRole, isOwnerRole } from '../store/auth'
@@ -1006,10 +1006,6 @@ function fmtDate(value) {
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-function roundHalf(v) {
-  return Math.round(v * 2) / 2
-}
-
 function fmtSend(seconds) {
   if (seconds == null) return null
   if (seconds >= 3600) {
@@ -1023,7 +1019,7 @@ function fmtSend(seconds) {
 
 function sensorConfigText(s) {
   const parts = []
-  if (s.sleep != null) parts.push(`сон ${s.sleep < 60 ? s.sleep + ' с' : roundHalf(s.sleep / 60) + ' мин'}`)
+  if (s.sleep != null) parts.push(`Изм. ${fmtMeasurementInterval(s.sleep)}`)
   if (s.send != null) parts.push(`отпр. ${fmtSend(s.send)}`)
   if (s.percentN != null || s.percentS != null) parts.push(`пределы ${s.percentN ?? 0}/${s.percentS ?? 0} %`)
   if (s.minVoltage != null) parts.push(`мин. напр. ${Math.round(s.minVoltage) / 1000} В`)

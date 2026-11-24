@@ -74,6 +74,17 @@ export function fmtDateTime(iso, offsetMin) {
   return `${fmtShortDate(iso, offsetMin)} ${fmtClock(iso, offsetMin)}`
 }
 
+export function fmtMeasurementInterval(totalSeconds) {
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor(totalSeconds / 60) % 60
+  const seconds = totalSeconds % 60
+  const parts = []
+  if (hours) parts.push(`${hours} ч`)
+  if (minutes) parts.push(`${minutes} мин`)
+  if (seconds || !parts.length) parts.push(`${seconds} сек`)
+  return parts.join(' ')
+}
+
 export function msToZoneInput(ms, offsetMin) {
   if (!Number.isFinite(ms)) return ''
   const offset = offsetMin ?? DEFAULT_ZONE_OFFSET_MIN

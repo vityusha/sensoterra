@@ -840,7 +840,7 @@ function label(key) {
   if (name !== key) return name
   if (key === 'battery') return 'Батарея'
   if (key === 'batload') return 'Батарея под нагрузкой'
-  if (key === 'rssi') return isIndividual.value ? 'RSSI роутера' : 'RSSI блока'
+  if (key === 'rssi') return isIndividual.value ? 'Уровень сигнала RSSI роутера' : 'Уровень сигнала RSSI блока'
   return name
 }
 
@@ -1216,7 +1216,7 @@ onUnmounted(() => {
 .admin-locked { font-size: 0.78rem; line-height: 1.45; color: var(--text-dim); margin: 0 0 0.6rem; }
 .btn.danger { background: var(--bg-accent); border-color: var(--bg-accent); color: var(--on-accent); }
 .btn.danger:hover:not(:disabled) { background: #7a2222; border-color: #7a2222; color: #fff; }
-.threshold-indicator { position: absolute; top: 0.45rem; right: 0.75rem; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.threshold-indicator { position: absolute; top: 0.45rem; right: 1.125rem; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
 .threshold-bell { width: 16px; height: 16px; flex: none; fill: none; stroke: #ffe066; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 :global(html[data-theme="light"] .threshold-bell) { stroke: #2563eb !important; }
 .latest-cell { position: relative; display: grid; grid-template-rows: 2.25rem 1.5rem; row-gap: 0.25rem; }
@@ -1243,9 +1243,10 @@ onUnmounted(() => {
 .latest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; }
 .latest-cell { background: var(--bg-card); border-radius: 10px; padding: 0.7rem 0.9rem; }
 .latest-cell:has(> .pct-color) { padding-inline-end: 1.15rem; }
-.latest-cell:has(> .pct-color) .threshold-indicator { right: 1rem; }
+.latest-cell:has(> .pct-color) .threshold-indicator { right: 1.5rem; }
 .l-label { display: flex; align-items: flex-start; gap: 0.4rem; color: var(--text-sub); font-size: 0.8rem; line-height: 1.05rem; margin: 0; padding-right: 1.8rem; overflow: hidden; white-space: normal; }
-.l-label.has-threshold { gap: 0.08rem; }
+.latest-cell:has(> .threshold-indicator) .l-label { padding-right: 2.175rem; }
+.latest-cell:has(> .pct-color):has(> .threshold-indicator) .l-label { padding-right: 2.3rem; }
 .l-label > span { display: -webkit-box; flex: 1; min-width: 0; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .l-value { color: var(--text); font-size: 1rem; font-weight: 500; display: flex; align-items: center; align-self: start; width: 100%; min-width: 0; min-height: 1.5rem; }
 .l-reading { display: inline-flex; align-items: center; min-height: 1.5rem; box-sizing: border-box; padding: 0.15rem 0.35rem; border: 1px solid transparent; border-radius: 5px; }

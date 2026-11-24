@@ -59,7 +59,7 @@
 
       <section class="section">
         <h3>Изменение</h3>
-        <form class="settings-form" @submit.prevent="save">
+        <form ref="settingsForm" class="settings-form" @submit.prevent="save">
           <DeviceNameField
             v-if="isBlock"
             class="field settings-name"
@@ -69,44 +69,38 @@
             @save="form.name = $event"
           />
 
-          <div class="field" :class="{ disabled: !settable }">
-            <span class="field-label">Интервал сна (мин)</span>
-            <span class="field-row">
-              <input type="number" min="0.5" step="0.5" v-model.number="form.sleepMin" :disabled="!settable" />
-              <span class="field-unit">мин</span>
-            </span>
-            <span class="field-hint">от 0,5 мин (30 с), кратно 0,5</span>
-            <span v-if="!sleepValid" class="field-error">Минимум 30 секунд, шаг 0,5 мин</span>
-          </div>
+          <label class="field-check">
+            <input type="checkbox" v-model="form.measureSoilMoisture" :disabled="!settable" @change="onMeasureSoilMoistureChange" />
+            Измерять влажность почвы
+          </label>
 
-          <div class="field" :class="{ disabled: !settable }">
-            <span class="field-label">Интервал отправки</span>
-            <span class="field-row">
-              <input type="number" min="0" max="24" step="1" v-model.number="form.sendHours" :disabled="!settable" />
-              <span class="field-unit">ч</span>
-              <input type="number" min="0" max="59" step="1" v-model.number="form.sendMinutes" :disabled="!settable" />
-              <span class="field-unit">мин</span>
-            </span>
-            <span class="field-hint">от {{ minSendText }} до 24 часов, не меньше интервала сна</span>
-            <span v-if="!sendValid" class="field-error">Интервал отправки должен быть от {{ minSendText }} до 24 ч и не меньше сна</span>
+          <div v-for="{ key, label } in intervalFields" :key="key" class="field" :class="{ disabled: isIntervalDisabled(key) }">
+            <span class="field-label">{{ label }} (чч:мм:сс)</span>
+            <div class="duration-picker" role="group" :aria-label="label">
+              <NumberPicker v-model="form[key].hours" :options="hourOptions" label="Часы" padded :disabled="isIntervalDisabled(key)" @change="onIntervalHoursChange(form[key])" />
+              <span aria-hidden="true">:</span>
+              <NumberPicker v-model="form[key].minutes" :options="minuteOptions" label="Минуты" padded :disabled="isIntervalDisabled(key) || form[key].hours === 24" />
+              <span aria-hidden="true">:</span>
+              <NumberPicker v-model="form[key].seconds" :options="secondOptions" label="Секунды" padded :disabled="isIntervalDisabled(key) || form[key].hours === 24" />
+            </div>
+            <template v-if="key === 'sleep'">
+              <span class="field-hint">от 30 сек до 24 часов, шаг 30 сек</span>
+              <span v-if="!sleepValid" class="field-error">Выберите интервал от 30 сек до 24 ч и секунды 00 или 30</span>
+            </template>
+            <template v-else>
+              <span class="field-hint">от {{ minSendText }} до 24 часов<span v-if="form.measureSoilMoisture">, не меньше интервала измерения</span></span>
+              <span v-if="!sendValid" class="field-error">Выберите интервал от {{ minSendText }} до 24 ч и секунды 00 или 30</span>
+            </template>
           </div>
 
           <div v-if="!oldStandalone" class="field" :class="{ disabled: !settable }">
             <span class="field-label">Предел отличия от соседнего измерения</span>
-            <span class="field-row">
-              <input type="number" min="5" max="20" step="1" v-model.number="form.percentN" :disabled="!settable" />
-              <span class="field-unit">%</span>
-            </span>
-            <span class="field-hint">от 5 до 20 %</span>
+            <NumberPicker v-model="form.percentN" :options="percentOptions" label="Предел отличия от соседнего измерения" suffix=" %" :disabled="!settable" />
           </div>
 
           <div v-if="!oldStandalone" class="field" :class="{ disabled: !settable }">
             <span class="field-label">Предел отличия от последнего переданного измерения</span>
-            <span class="field-row">
-              <input type="number" min="5" max="20" step="1" v-model.number="form.percentS" :disabled="!settable" />
-              <span class="field-unit">%</span>
-            </span>
-            <span class="field-hint">от 5 до 20 %</span>
+            <NumberPicker v-model="form.percentS" :options="percentOptions" label="Предел отличия от последнего переданного измерения" suffix=" %" :disabled="!settable" />
           </div>
 
           <div class="field" :class="{ disabled: !settable }">
@@ -142,33 +136,45 @@
 
 <script setup>
 import HeaderActions from '../components/HeaderActions.vue'
+import NumberPicker from '../components/NumberPicker.vue'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DeviceNameField from '../components/DeviceNameField.vue'
 import { getDevice, getDeviceSensors, getDeviceStatuses, sendSensorParams, clearRetainedSettings } from '../api/auth'
 import { getIndividualName } from '../store/settings'
 import { BATTERY_TYPES, batteryLabel, batteryMinVoltageV, batteryWarningV } from '../utils/battery'
-import { fmtEventTimeWithZone } from '../utils/datetime'
+import { fmtEventTimeWithZone, fmtMeasurementInterval } from '../utils/datetime'
 import { pushNotification } from '../store/notifications'
 import { canControlDevice, isAdmin, rememberDeviceOwner } from '../store/auth'
 
 const route = useRoute()
+const router = useRouter()
 
 const chipId = Number(route.params.chipId)
 const slot = Number(route.params.slot)
 const isBlock = route.params.slot !== undefined
 
 const loading = ref(true)
+const settingsForm = ref(null)
 const sending = ref(false)
 const device = ref(null)
 const sensor = ref(null)
 const statusMap = ref({})
 
+const percentOptions = Array.from({ length: 16 }, (_, index) => 5 + index)
+const hourOptions = Array.from({ length: 25 }, (_, index) => index)
+const minuteOptions = Array.from({ length: 60 }, (_, index) => index)
+const secondOptions = [0, 30]
+const intervalFields = [
+  { key: 'sleep', label: 'Интервал измерения' },
+  { key: 'send', label: 'Интервал отправки' },
+]
+
 const form = reactive({
   name: '',
-  sleepMin: 5,
-  sendHours: 1,
-  sendMinutes: 0,
+  measureSoilMoisture: true,
+  sleep: splitInterval(300),
+  send: splitInterval(3600),
   percentN: 10,
   percentS: 15,
   minVoltageV: 2.5,
@@ -187,10 +193,11 @@ const nowTick = ref(Date.now())
 function applyFromSensor(s) {
   applying = true
   form.name = isBlock ? (s?.name || '') : ''
-  form.sleepMin = (s?.sleep != null) ? roundHalf(s.sleep / 60) : 5
-  const sendS = s?.send != null ? Number(s.send) : 3600
-  form.sendHours = Math.floor(sendS / 3600)
-  form.sendMinutes = Math.round((sendS % 3600) / 60)
+  const sleep = s?.sleep ?? 300
+  const send = s?.send ?? 3600
+  form.measureSoilMoisture = sleep !== send
+  form.sleep = splitInterval(sleep)
+  form.send = splitInterval(send)
   form.percentN = s?.percentN ?? 10
   form.percentS = s?.percentS ?? 15
   form.batteryType = s?.batteryType || 'ALKALINE'
@@ -205,8 +212,12 @@ function onBatteryTypeChange() {
   }
 }
 
-function roundHalf(v) {
-  return Math.round(v * 2) / 2
+function splitInterval(totalSeconds) {
+  return {
+    hours: Math.floor(totalSeconds / 3600),
+    minutes: Math.floor(totalSeconds / 60) % 60,
+    seconds: totalSeconds % 60,
+  }
 }
 
 const displayName = computed(() =>
@@ -258,27 +269,50 @@ const lastMsgVerdict = computed(() => {
   return lastMsgState.value === 'alive' ? `живой · ${rel}` : `молчит · ${rel}`
 })
 
-const sleepSeconds = computed(() => Math.round((form.sleepMin || 0) * 60))
-const sendSeconds = computed(() => ((form.sendHours || 0) * 3600) + ((form.sendMinutes || 0) * 60))
+function intervalSeconds({ hours, minutes, seconds }) {
+  return hours * 3600 + minutes * 60 + seconds
+}
+
+const sleepSeconds = computed(() => intervalSeconds(form.sleep))
+const sendSeconds = computed(() => intervalSeconds(form.send))
+
+function onMeasureSoilMoistureChange() {
+  if (!form.measureSoilMoisture || sleepSeconds.value < sendSeconds.value) return
+  // A 30-second send interval leaves no room for a shorter measurement interval.
+  if (sendSeconds.value <= 30) form.send = splitInterval(60)
+  const suggested = Math.max(30, Math.floor((sendSeconds.value - 60) / 30) * 30)
+  form.sleep = splitInterval(suggested)
+}
+
+function isIntervalDisabled(key) {
+  return !settable.value || (key === 'sleep' && !form.measureSoilMoisture)
+}
+
+function onIntervalHoursChange(interval) {
+  if (interval.hours !== 24) return
+  interval.minutes = 0
+  interval.seconds = 0
+}
+
+function validInterval(seconds, min, savedSeconds) {
+  return Number.isInteger(seconds) && seconds >= min && seconds <= 86400 &&
+    (seconds % 30 === 0 || seconds === savedSeconds)
+}
+
 const sleepValid = computed(() =>
-  form.sleepMin != null && form.sleepMin >= 0.5 && (form.sleepMin * 2) % 1 === 0
+  !form.measureSoilMoisture || validInterval(sleepSeconds.value, 30, sensor.value?.sleep)
 )
+const minSendSeconds = computed(() => form.measureSoilMoisture ? Math.max(30, sleepSeconds.value) : 30)
 const sendValid = computed(() =>
-  sendSeconds.value > 0 && sendSeconds.value <= 86400 && sendSeconds.value >= sleepSeconds.value
+  validInterval(sendSeconds.value, minSendSeconds.value, sensor.value?.send)
 )
-const minSendText = computed(() => {
-  const s = sleepSeconds.value
-  if (s % 3600 === 0) return `${s / 3600} ч`
-  if (s % 60 === 0 && s >= 60) return `${s / 60} мин`
-  return `${s} с`
-})
+const minSendText = computed(() => fmtMeasurementInterval(minSendSeconds.value))
 const formValid = computed(() => {
   if (!sleepValid.value) return false
   if (!sendValid.value) return false
   if (!BATTERY_TYPES.some(t => t.value === form.batteryType)) return false
   if (oldStandalone.value) return true
-  if (!(form.percentN >= 5 && form.percentN <= 20)) return false
-  if (!(form.percentS >= 5 && form.percentS <= 20)) return false
+  if (!percentOptions.includes(form.percentN) || !percentOptions.includes(form.percentS)) return false
   if (!(form.minVoltageV >= 1.8 && form.minVoltageV <= 2.9)) return false
   return true
 })
@@ -289,8 +323,8 @@ const summary = computed(() => {
   const sendS = s.send
   const rows = [
     ...(isBlock ? [{ l: 'Название', v: s.name || '—' }] : []),
-    { l: 'Интервал сна', v: sleepS != null ? `${sleepS} с (${roundHalf(sleepS / 60)} мин)` : '—' },
-    { l: 'Интервал отправки', v: sendS != null ? fmtSend(sendS) : '—' },
+    { l: 'Интервал измерения', v: sleepS != null ? fmtMeasurementInterval(sleepS) : '—' },
+    { l: 'Интервал отправки', v: sendS != null ? fmtMeasurementInterval(sendS) : '—' },
     { l: 'Тип батарейки', v: batteryLabel(s.batteryType) },
     { l: 'Порог предупреждения', v: `${s.warningVoltage != null ? Math.round(s.warningVoltage) / 1000 : batteryWarningV(s.batteryType)} В` },
   ]
@@ -302,15 +336,9 @@ const summary = computed(() => {
   return rows
 })
 
-function fmtSend(seconds) {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.round((seconds % 3600) / 60)
-  return `${h} ч ${m} мин`
-}
-
 function buildRequest() {
   const req = {
-    sleep: sleepSeconds.value,
+    sleep: form.measureSoilMoisture ? sleepSeconds.value : sendSeconds.value,
     send: sendSeconds.value,
     batteryType: form.batteryType,
   }
@@ -339,6 +367,10 @@ async function save() {
     pushNotification('Проверьте введённые значения: часть полей вне допустимых пределов', 'error')
     return
   }
+  if (form.measureSoilMoisture && sleepSeconds.value === sendSeconds.value &&
+      !window.confirm('При равных интервалах измерения и отправки влажность почвы не будет измеряться. Вы хотите продолжить?')) {
+    return
+  }
   const name = isBlock ? (form.name || sensorTitle.value) : sensorTitle.value
   if (!window.confirm(`Отправить настройки датчика ${name}${isBlock ? ` (S${slot})` : ''}?\n\nНастройки будут переданы по MQTT и применятся к датчику.`)) {
     return
@@ -347,17 +379,12 @@ async function save() {
     pushNotification('Датчик не найден — нельзя отправить настройки', 'error')
     return
   }
+  const submittedFrom = router.currentRoute.value
   sending.value = true
   try {
     await sendSensorParams(sensor.value.id, buildRequest())
     pushNotification(`Настройки датчика ${isBlock ? `S${slot}` : chipId} отправлены`, 'success')
-    const sensors = await getDeviceSensors(chipId)
-    const next = sensors.find(x => isBlock ? Number(x.sensorNumber) === slot : x.sensorNumber == null)
-    if (next) {
-      sensor.value = next
-      applyFromSensor(next)
-    }
-    dirty.value = false
+    if (router.currentRoute.value === submittedFrom) router.back()
   } catch (e) {
     pushNotification(errorMessage(e, 'Не удалось отправить настройки'), 'error')
   } finally {
@@ -390,13 +417,19 @@ async function dropRetained() {
 let refreshTimer = null
 let tickTimer = null
 
+function isPickerOpen() {
+  return Boolean(settingsForm.value?.querySelector('.number-picker [aria-expanded="true"]'))
+}
+
 async function load(silent = false) {
+  if (silent && isPickerOpen()) return
   try {
     const [dev, sensors, statuses] = await Promise.all([
       getDevice(chipId),
       getDeviceSensors(chipId),
       getDeviceStatuses(),
     ])
+    if (silent && isPickerOpen()) return
     device.value = dev
     rememberDeviceOwner(dev)
     sensor.value = sensors.find(x => isBlock ? Number(x.sensorNumber) === slot : x.sensorNumber == null) || sensors[0] || null
@@ -420,7 +453,9 @@ onMounted(async () => {
   await load()
   // Спящие автономные датчики просыпаются редко, поэтому обновляем окно сами.
   refreshTimer = setInterval(() => load(true), 10000)
-  tickTimer = setInterval(() => { nowTick.value = Date.now() }, 1000)
+  tickTimer = setInterval(() => {
+    if (!isPickerOpen()) nowTick.value = Date.now()
+  }, 1000)
 })
 
 onUnmounted(() => {
@@ -473,6 +508,10 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; }
 .field input.invalid { border-color: var(--danger); }
 .field-error { color: var(--danger); font-size: 0.72rem; }
 .field select { cursor: pointer; align-self: flex-start; max-width: 100%; }
+.duration-picker { display: inline-flex; align-items: center; align-self: flex-start; gap: 0.2rem; }
+.field-check { display: flex; align-items: center; gap: 0.3rem; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; }
+.field-check input { cursor: pointer; }
+.field-check { margin-bottom: 0.5rem; }
 .field-row { display: flex; align-items: center; gap: 0.4rem; }
 .field-unit { color: var(--text-faint); font-size: 0.8rem; }
 .form-actions { display: flex; justify-content: center; gap: 0.6rem; margin-top: 0.5rem; }

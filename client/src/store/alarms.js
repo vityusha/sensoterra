@@ -3,8 +3,8 @@ import { getAlarmSummary, getToken } from '../api/auth'
 import { onWsMessage } from './notifications'
 
 /**
- * Bell state. unseen > 0 lights the red dot: alarms started or finished since the user last
- * opened the alarms page. open — active alarms per type (tab counters).
+ * Bell state. unseen counts alarms started or finished since the user last opened the
+ * alarms page. open counts active alarms per type. Both can keep the red dot lit.
  */
 export const alarmState = reactive({
   unseen: 0,
