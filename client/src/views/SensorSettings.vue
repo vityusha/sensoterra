@@ -99,7 +99,6 @@
             <select v-model="form.batteryType" :disabled="!settable" @change="onBatteryTypeChange">
               <option v-for="type in BATTERY_TYPES" :key="type.value" :value="type.value">{{ type.label }}</option>
             </select>
-            <span class="field-hint">Порог предупреждения: {{ batteryWarningV(form.batteryType) }} В (автоматически)</span>
           </div>
 
           <div v-if="!oldStandalone" class="field" :class="{ disabled: !settable }">
@@ -109,6 +108,16 @@
               <span class="field-unit">В</span>
             </span>
           </div>
+
+          <label class="field" :class="{ disabled: !settable }">
+            <span class="field-label">Порог уведомления</span>
+            <span class="field-row">
+              <input type="number" :min="minWarningVoltageMv / 1000" step="0.1" v-model.number="form.warningVoltageV" :disabled="!settable" />
+              <span class="field-unit">В</span>
+            </span>
+            <span class="field-hint">Минимум на 0,1 В выше минимального напряжения</span>
+            <span v-if="!warningVoltageValid" class="field-error">Укажите порог не ниже {{ minWarningVoltageMv / 1000 }} В</span>
+          </label>
 
           <!-- Настройки автономного датчика уходят на брокер retained: спящий датчик иначе
                их пропустит. Если датчик уже применил настройки, сообщение снимается само,
@@ -174,6 +183,7 @@ const form = reactive({
   percentN: 10,
   percentS: 15,
   minVoltageV: 2.5,
+  warningVoltageV: batteryWarningV('ALKALINE'),
   batteryType: 'ALKALINE',
 })
 
@@ -197,12 +207,14 @@ function applyFromSensor(s) {
   form.percentN = s?.percentN ?? 10
   form.percentS = s?.percentS ?? 15
   form.batteryType = s?.batteryType || 'ALKALINE'
-  form.minVoltageV = s?.minVoltage != null ? Math.round(s.minVoltage) / 1000 : 2.5
+  form.minVoltageV = s?.minVoltage != null ? Math.round(s.minVoltage) / 1000 : batteryMinVoltageV(form.batteryType)
+  form.warningVoltageV = s?.warningVoltage != null ? s.warningVoltage / 1000 : batteryWarningV(form.batteryType)
   applying = false
   dirty.value = false
 }
 
 function onBatteryTypeChange() {
+  form.warningVoltageV = batteryWarningV(form.batteryType)
   if (!oldStandalone.value) {
     form.minVoltageV = batteryMinVoltageV(form.batteryType)
   }
@@ -303,10 +315,23 @@ const sendValid = computed(() =>
   validInterval(sendSeconds.value, minSendSeconds.value, sensor.value?.send)
 )
 const minSendText = computed(() => fmtMeasurementInterval(minSendSeconds.value))
+const minWarningVoltageMv = computed(() => Math.round(
+  (oldStandalone.value ? batteryMinVoltageV(form.batteryType) : form.minVoltageV) * 1000
+) + 100)
+const warningVoltageMv = computed(() => Math.round(form.warningVoltageV * 1000))
+const warningVoltageValid = computed(() =>
+  Number.isFinite(form.warningVoltageV) &&
+  warningVoltageMv.value >= minWarningVoltageMv.value
+)
+watch(() => form.minVoltageV, value => {
+  if (applying || !Number.isFinite(value) || value < 1.8 || value > 2.9) return
+  if (!warningVoltageValid.value) form.warningVoltageV = minWarningVoltageMv.value / 1000
+}, { flush: 'sync' })
 const formValid = computed(() => {
   if (!sleepValid.value) return false
   if (!sendValid.value) return false
   if (!BATTERY_TYPES.some(t => t.value === form.batteryType)) return false
+  if (!warningVoltageValid.value) return false
   if (oldStandalone.value) return true
   if (!percentOptions.includes(form.percentN) || !percentOptions.includes(form.percentS)) return false
   if (!(form.minVoltageV >= 1.8 && form.minVoltageV <= 2.9)) return false
@@ -321,14 +346,16 @@ const summary = computed(() => {
     ...(isBlock ? [{ l: 'Название', v: s.name || '—' }] : []),
     { l: 'Интервал измерения', v: sleepS != null ? fmtMeasurementInterval(sleepS) : '—' },
     { l: 'Интервал отправки', v: sendS != null ? fmtMeasurementInterval(sendS) : '—' },
-    { l: 'Тип батарейки', v: batteryLabel(s.batteryType) },
-    { l: 'Порог предупреждения', v: `${s.warningVoltage != null ? Math.round(s.warningVoltage) / 1000 : batteryWarningV(s.batteryType)} В` },
   ]
   if (!oldStandalone.value) {
     rows.push({ l: 'Предел отличия от соседнего измерения', v: s.percentN != null ? `${s.percentN} %` : '—' })
     rows.push({ l: 'Предел отличия от последнего переданного измерения', v: s.percentS != null ? `${s.percentS} %` : '—' })
+  }
+  rows.push({ l: 'Тип батарейки', v: batteryLabel(s.batteryType) })
+  if (!oldStandalone.value) {
     rows.push({ l: 'Мин. напряжение', v: s.minVoltage != null ? `${Math.round(s.minVoltage) / 1000} В` : '—' })
   }
+  rows.push({ l: 'Порог уведомления', v: `${s.warningVoltage != null ? Math.round(s.warningVoltage) / 1000 : batteryWarningV(s.batteryType)} В` })
   return rows
 })
 
@@ -337,6 +364,7 @@ function buildRequest() {
     sleep: form.measureSoilMoisture ? sleepSeconds.value : sendSeconds.value,
     send: sendSeconds.value,
     batteryType: form.batteryType,
+    warningVoltage: warningVoltageMv.value,
   }
   if (isBlock) req.name = form.name
   if (!oldStandalone.value) {

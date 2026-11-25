@@ -6,7 +6,7 @@ public enum BatteryType {
     ALKALINE("Alkaline", 2000, 2500),
     NI_CD("Ni-Cd", 1800, 2200),
     NI_MH("Ni-MH", 1800, 2200),
-    LI_ION("Li-ion", 2700, 2900);
+    LI_ION("Li-ion", 2500, 2700);
 
     private final String label;
     private final int minVoltageMv;
