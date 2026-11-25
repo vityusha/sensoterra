@@ -690,17 +690,29 @@ const batteryStart = ref(null)
 const batteryStartLoaded = ref(false)
 const BATTERY_START_TTL_MS = 5 * 60 * 1000
 let batteryStartFetchedAt = 0
+let lastCountedMessage = null
+let batteryStartRequest = 0
 
-async function loadBatteryStart(deviceId) {
+async function loadBatteryStart(deviceId, latestMessage) {
+  if (latestMessage?.numMessage != null &&
+      (!lastCountedMessage || Date.parse(latestMessage.time) > Date.parse(lastCountedMessage.time))) {
+    // Match the server's restart rule and refresh before the cache expires.
+    if (lastCountedMessage && lastCountedMessage.numMessage - latestMessage.numMessage >= 2) {
+      batteryStartFetchedAt = 0
+    }
+    lastCountedMessage = latestMessage
+  }
   if (Date.now() - batteryStartFetchedAt < BATTERY_START_TTL_MS) return
+  const request = ++batteryStartRequest
   try {
     const row = await getSensorFirstMessage(deviceId, chipId)
+    if (request !== batteryStartRequest) return
     batteryStart.value = row?.time ?? null
     batteryStartFetchedAt = Date.now()
   } catch {
-    batteryStartFetchedAt = 0
+    if (request === batteryStartRequest) batteryStartFetchedAt = 0
   } finally {
-    batteryStartLoaded.value = true
+    if (request === batteryStartRequest) batteryStartLoaded.value = true
   }
 }
 
@@ -1112,13 +1124,12 @@ async function loadData(silent = false) {
     }
     const since = currentSince()
     const to = currentTo()
-    const batteryPromise = loadBatteryStart(deviceId)
     const [periodRows, fresh] = await Promise.all([
       getSensorTelemetry(deviceId, chipId, since || undefined, to || undefined),
       // Последняя запись без привязки к периоду; ошибка не обнуляет прежнее значение.
       getSensorTelemetry(deviceId, chipId, undefined, undefined, 1).catch(() => null),
     ])
-    await batteryPromise
+    await loadBatteryStart(deviceId, fresh?.[0])
     rows.value = periodRows
     rows.value.reverse()
     if (Array.isArray(fresh)) lastAny.value = fresh.length ? fresh[0] : null

@@ -188,10 +188,12 @@ class AlarmTest {
         sensor.setWarningVoltage(BatteryType.LI_ION.getWarningVoltageMv());
         sensorRepository.update(sensor);
 
+        alarms.onSensorData(chipId, chipId, null, 2.70f);
+        assertNotNull(open(chipId, AlarmService.BATTERY));
         alarms.onSensorData(chipId, chipId, null, 2.90f);
         assertNotNull(open(chipId, AlarmService.BATTERY));
-        alarms.onSensorData(chipId, chipId, null, 3.00f);
-        assertNull(open(chipId, AlarmService.BATTERY), "3.0 V closes even above the 0.2 V rise");
+        alarms.onSensorData(chipId, chipId, null, 2.91f);
+        assertNull(open(chipId, AlarmService.BATTERY), "A rise of more than 0.2 V clears the warning");
     }
 
     @Test

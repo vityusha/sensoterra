@@ -2,7 +2,7 @@ export const BATTERY_TYPES = [
   { value: 'ALKALINE', label: 'Alkaline', minVoltageV: 2.0, warningVoltageV: 2.5 },
   { value: 'NI_CD', label: 'Ni-Cd', minVoltageV: 1.8, warningVoltageV: 2.2 },
   { value: 'NI_MH', label: 'Ni-MH', minVoltageV: 1.8, warningVoltageV: 2.2 },
-  { value: 'LI_ION', label: 'Li-ion', minVoltageV: 2.7, warningVoltageV: 2.9 },
+  { value: 'LI_ION', label: 'Li-ion', minVoltageV: 2.5, warningVoltageV: 2.7 },
 ]
 
 export function batteryTypeInfo(type) {
