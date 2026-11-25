@@ -107,6 +107,18 @@ public class ParamCommandService {
             }
         }
 
+        Integer warningVoltage = request.getWarningVoltage();
+        if (warningVoltage != null) {
+            BatteryType effectiveType = batteryType != null ? batteryType : sensor.getBatteryType();
+            Integer minVoltage = request.getMinVoltage() != null ? request.getMinVoltage() : sensor.getMinVoltage();
+            int minimumMv = minVoltage != null ? minVoltage
+                    : (effectiveType != null ? effectiveType : BatteryType.ALKALINE).getMinVoltageMv();
+            if ((long) warningVoltage - minimumMv < 100) {
+                throw new HttpStatusException(HttpStatus.BAD_REQUEST,
+                        "Порог уведомления должен быть минимум на 0,1 В выше минимального напряжения");
+            }
+        }
+
         String topic;
         String payload;
         Long logDeviceId;
@@ -140,9 +152,12 @@ public class ParamCommandService {
         }
 
         commandLogRepository.save(log(logDeviceId, "SENSOR_PARAM", payload, topic));
-        if (batteryType != null) {
-            sensor.setBatteryType(batteryType);
-            sensor.setWarningVoltage(batteryType.getWarningVoltageMv());
+        if (batteryType != null || warningVoltage != null) {
+            if (batteryType != null && batteryType != sensor.getBatteryType()) {
+                sensor.setBatteryType(batteryType);
+                sensor.setWarningVoltage(batteryType.getWarningVoltageMv());
+            }
+            if (warningVoltage != null) sensor.setWarningVoltage(warningVoltage);
             sensorRepository.update(sensor);
         }
         return new CommandResult(logDeviceId, null, "SENSOR_PARAM", true);
@@ -287,6 +302,7 @@ public class ParamCommandService {
         private Integer percentN;
         private Integer percentS;
         private Integer minVoltage;
+        private Integer warningVoltage;
         private String batteryType;
 
         public String toBlockPayload(Sensor sensor, String timestr) {
@@ -344,6 +360,8 @@ public class ParamCommandService {
         public void setPercentS(Integer percentS) { this.percentS = percentS; }
         public Integer getMinVoltage() { return minVoltage; }
         public void setMinVoltage(Integer minVoltage) { this.minVoltage = minVoltage; }
+        public Integer getWarningVoltage() { return warningVoltage; }
+        public void setWarningVoltage(Integer warningVoltage) { this.warningVoltage = warningVoltage; }
         public String getBatteryType() { return batteryType; }
         public void setBatteryType(String batteryType) { this.batteryType = batteryType; }
     }

@@ -105,7 +105,7 @@
 
     <template v-if="!measurement">
       <div class="battery-runtime">
-        <span class="battery-label">Время работы батареи:</span>
+        <span class="battery-label">Время работы батарейки:</span>
         <b v-if="batteryRuntimeText">{{ batteryRuntimeText }}</b>
         <span v-else-if="!batteryStartLoaded" class="muted">…</span>
         <span v-else class="muted">информация недоступна</span>
@@ -850,8 +850,8 @@ const chartSections = computed(() => {
 function label(key) {
   const name = getFieldName(sensorType.value, key)
   if (name !== key) return name
-  if (key === 'battery') return 'Батарея'
-  if (key === 'batload') return 'Батарея под нагрузкой'
+  if (key === 'battery') return 'Батарейка'
+  if (key === 'batload') return 'Батарейка под нагрузкой'
   if (key === 'rssi') return isIndividual.value ? 'Уровень сигнала RSSI роутера' : 'Уровень сигнала RSSI блока'
   return name
 }

@@ -671,7 +671,7 @@ function sensorConfigText(s) {
   if (s.minVoltage != null) parts.push(`мин. напр. ${Math.round(s.minVoltage) / 1000} В`)
   if (s.batteryType != null || s.warningVoltage != null) {
     parts.push(`батарейка ${batteryLabel(s.batteryType)}`)
-    parts.push(`порог ${s.warningVoltage != null ? Math.round(s.warningVoltage) / 1000 : batteryWarningV(s.batteryType)} В`)
+    parts.push(`порог уведомления ${s.warningVoltage != null ? Math.round(s.warningVoltage) / 1000 : batteryWarningV(s.batteryType)} В`)
   }
   return parts.join(' · ')
 }

@@ -211,6 +211,19 @@ class AlarmTest {
         assertEquals(BatteryType.NI_CD, updated.getBatteryType());
         assertEquals(2200, updated.getWarningVoltage().intValue());
         assertNull(updated.getMinVoltage(), "standalone sensors without min voltage still save battery settings");
+
+        String params = "/api/sensors/" + sensor.getId() + "/params";
+        assertEquals(400, status(HttpRequest.POST(params, Map.of(
+                "batteryType", "NI_CD", "minVoltage", 2400, "warningVoltage", 2499)), ownerToken));
+        assertEquals(2200, sensorRepository.findById(sensor.getId()).orElseThrow().getWarningVoltage().intValue());
+
+        assertEquals(true, post(params, Map.of(
+                "sleep", 600, "send", 3600, "batteryType", "NI_CD", "minVoltage", 2400,
+                "warningVoltage", 2500), ownerToken).get("sent"));
+        assertEquals(2500, sensorRepository.findById(sensor.getId()).orElseThrow().getWarningVoltage().intValue());
+
+        post(params, Map.of("sleep", 600, "send", 3600, "batteryType", "NI_CD"), ownerToken);
+        assertEquals(2500, sensorRepository.findById(sensor.getId()).orElseThrow().getWarningVoltage().intValue());
     }
 
     @Test
