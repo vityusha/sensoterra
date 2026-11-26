@@ -3,7 +3,7 @@
     <button v-if="canScrollUp" type="button" class="btn page-scroll-up" :style="{ '--header-bottom': headerBottom + 'px' }" aria-label="На страницу вверх" title="На страницу вверх" @click="scrollPage(-1)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16l-8 11z"/></svg>
     </button>
-    <button v-if="canScrollDown" type="button" class="btn page-scroll-down" aria-label="На страницу вниз" title="На страницу вниз" @click="scrollPage(1)">
+    <button v-if="canScrollDown" type="button" class="btn page-scroll-down" :style="{ '--viewport-bottom-inset': viewportBottomInset + 'px' }" aria-label="На страницу вниз" title="На страницу вниз" @click="scrollPage(1)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16l-8 11z"/></svg>
     </button>
   </div>
@@ -17,15 +17,25 @@ const route = useRoute()
 const canScrollUp = ref(false)
 const canScrollDown = ref(false)
 const headerBottom = ref(0)
+const viewportBottomInset = ref(0)
 let resizeObserver
 let header
 
+function visibleViewport() {
+  const viewport = window.visualViewport
+  // Pinch-zoom pans within the page and should not change page-scroll controls.
+  return viewport?.scale === 1 && viewport.height > 0 ? viewport : null
+}
+
 function updateDirections() {
   const page = document.scrollingElement
-  const maxScroll = Math.max(0, page.scrollHeight - page.clientHeight)
-  // Scroll offsets can be fractional even though viewport and document heights are rounded.
-  canScrollUp.value = maxScroll > 0 && page.scrollTop > 0.5
-  canScrollDown.value = maxScroll > 0 && maxScroll - page.scrollTop > 0.5
+  const viewport = visibleViewport()
+  const height = Math.min(viewport?.height ?? page.clientHeight, page.clientHeight)
+  const top = Math.max(0, page.scrollTop, viewport?.pageTop ?? 0)
+  const scrollable = page.scrollHeight - page.clientHeight > 1
+  canScrollUp.value = scrollable && top > 1
+  canScrollDown.value = scrollable && page.scrollHeight - top - height > 1
+  viewportBottomInset.value = viewport ? Math.max(0, page.clientHeight - height - viewport.offsetTop) : 0
   if (canScrollUp.value) headerBottom.value = Math.max(0, header?.getBoundingClientRect().bottom ?? 0)
 }
 
@@ -41,7 +51,7 @@ function updateLayout() {
 
 function scrollPage(direction) {
   window.scrollBy({
-    top: direction * document.scrollingElement.clientHeight,
+    top: direction * (visibleViewport()?.height ?? document.scrollingElement.clientHeight),
     behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
   })
 }
@@ -54,11 +64,17 @@ onMounted(() => {
   updateLayout()
   window.addEventListener('scroll', updateDirections, { passive: true })
   window.addEventListener('resize', updateDirections)
+  window.addEventListener('pageshow', updateLayout)
+  window.visualViewport?.addEventListener('resize', updateDirections)
+  window.visualViewport?.addEventListener('scroll', updateDirections, { passive: true })
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', updateDirections)
   window.removeEventListener('resize', updateDirections)
+  window.removeEventListener('pageshow', updateLayout)
+  window.visualViewport?.removeEventListener('resize', updateDirections)
+  window.visualViewport?.removeEventListener('scroll', updateDirections)
   resizeObserver?.disconnect()
 })
 </script>
@@ -79,7 +95,7 @@ onUnmounted(() => {
   cursor: pointer;
 }
 .page-scroll-up { top: calc(0.75rem + max(var(--header-bottom), env(safe-area-inset-top, 0px))); }
-.page-scroll-down { bottom: calc(0.75rem + var(--save-bar-height, 0px) + env(safe-area-inset-bottom, 0px)); }
+.page-scroll-down { bottom: calc(0.75rem + var(--save-bar-height, 0px) + max(var(--viewport-bottom-inset), env(safe-area-inset-bottom, 0px))); }
 .page-scroll svg {
   width: 1.25rem;
   height: 1.25rem;

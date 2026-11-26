@@ -230,6 +230,8 @@ body {
 canvas, img, svg { max-width: 100%; }
 
 /* Safari рисует нативный color input овалом; задаём прямоугольник во всех браузерах. */
+input, textarea { caret-color: currentColor; }
+
 input[type='color'] {
   appearance: none;
   -webkit-appearance: none;

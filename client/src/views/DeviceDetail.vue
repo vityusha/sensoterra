@@ -4,7 +4,7 @@
       <button @click="$router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <h2>{{ displayName }}</h2>
       <span v-if="pageReady && isBlock" class="status-tag" :class="isOnline ? 'online' : 'offline'">
-        {{ isOnline ? 'online' : 'offline' }}
+        {{ isOnline ? 'онлайн' : 'офлайн' }}
       </span>
       <HeaderActions>
         <button v-if="pageReady && accessList.length" type="button" role="menuitem" aria-haspopup="dialog" @click="sharingDialog = 'access'">
@@ -205,7 +205,7 @@
         </div>
         <div class="chart-section" v-if="statusStatsData.length">
           <h4>Статус</h4>
-          <LineChart :labels="statusTimeLabels" :datasets="[{ label: 'online', data: statusStatsData.map(d => d.status === 'online' ? 1 : 0), color: '#2ecc71', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :continuous="true" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'оффлайн', 1: 'онлайн' }" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
+          <LineChart :labels="statusTimeLabels" :datasets="[{ label: 'онлайн', data: statusStatsData.map(d => d.status === 'online' ? 1 : 0), color: '#2ecc71', fill: true, stepped: true }]" :zone-offset="device?.tzOffsetMinutes" :downtimes="downtimes" :offline="offlineIntervals" :continuous="true" :y-min="0" :y-max="1" :y-step="1" :y-tick-map="{ 0: 'офлайн', 1: 'онлайн' }" :x-min="statsXMin" :x-max="statsXMax" selectable @select-range="applyBlockRange" />
         </div>
         <div class="empty small" v-if="!blockStatsData.length && !statusStatsData.length">Нет данных за выбранный период</div>
       </template>

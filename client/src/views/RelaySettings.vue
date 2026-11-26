@@ -160,16 +160,16 @@
                 <label class="threshold-input">
                   <span>{{ isThresholdPct ? 'Верхний' : 'Нижний' }}</span>
                   <input v-if="isThresholdPct" type="number" :min="thresholdSliderMin" :max="thresholdSliderMax" step="1"
-                         v-model.number="lowPct" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" />
+                         v-model.number="lowPct" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" @blur="clampPctLow" />
                   <input v-else type="number" :min="intMin" :max="intMax" step="1"
-                         v-model.number="form.limitLow" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" @input="clampLow" />
+                         v-model.number="form.limitLow" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" @blur="clampLow" />
                 </label>
                 <label class="threshold-input">
                   <span>{{ isThresholdPct ? 'Нижний' : 'Верхний' }}</span>
                   <input v-if="isThresholdPct" type="number" :min="thresholdSliderMin" :max="thresholdSliderMax" step="1"
-                         v-model.number="highPct" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" />
+                         v-model.number="highPct" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" @blur="clampPctHigh" />
                   <input v-else type="number" :min="intMin" :max="intMax" step="1"
-                         v-model.number="form.limitHigh" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" @input="clampHigh" />
+                         v-model.number="form.limitHigh" :disabled="!isOnline" :class="{ invalid: thresholdInvalid }" @blur="clampHigh" />
                 </label>
               </div>
               <template v-if="fieldScale">
@@ -516,29 +516,31 @@ function syncThresholdPct() {
 }
 
 function clampLow() {
+  if (!Number.isInteger(form.limitLow)) return
   if (form.limitLow < thresholdSliderMin.value) form.limitLow = thresholdSliderMin.value
   if (form.limitLow > thresholdSliderMax.value) form.limitLow = thresholdSliderMax.value
   if (form.limitLow > form.limitHigh) form.limitHigh = form.limitLow
 }
 
 function clampHigh() {
+  if (!Number.isInteger(form.limitHigh)) return
   if (form.limitHigh > thresholdSliderMax.value) form.limitHigh = thresholdSliderMax.value
   if (form.limitHigh < thresholdSliderMin.value) form.limitHigh = thresholdSliderMin.value
   if (form.limitHigh < form.limitLow) form.limitLow = form.limitHigh
 }
 
 function clampPctLow() {
+  if (!Number.isInteger(lowPct.value) || !Number.isInteger(highPct.value)) return
   if (lowPct.value > highPct.value) highPct.value = lowPct.value
   syncThresholdFromPct()
 }
 
 function clampPctHigh() {
+  if (!Number.isInteger(highPct.value) || !Number.isInteger(lowPct.value)) return
   if (highPct.value < lowPct.value) lowPct.value = highPct.value
   syncThresholdFromPct()
 }
 
-watch(lowPct, () => { if (isThresholdPct.value) syncThresholdFromPct() })
-watch(highPct, () => { if (isThresholdPct.value) syncThresholdFromPct() })
 watch(sensorCal, () => { syncLimitPct(); syncThresholdPct() })
 
 function fm(v) {
@@ -642,6 +644,7 @@ const formValid = computed(() => {
     if (isThresholdPct.value) {
       if (!integerInRange(lowPct.value, thresholdSliderMin.value, thresholdSliderMax.value)) return false
       if (!integerInRange(highPct.value, thresholdSliderMin.value, thresholdSliderMax.value)) return false
+      if (lowPct.value > highPct.value) return false
     }
   }
   return true
@@ -669,10 +672,12 @@ watch(() => [form.idSensor, form.dataType, form.type], () => {
   if (!resetThresholdsPending) syncThresholdPct()
 })
 
-const thresholdInvalid = computed(() =>
-  isTypeThreshold.value && typeof form.limitLow === 'number'
-    && typeof form.limitHigh === 'number' && form.limitLow > form.limitHigh
-)
+const thresholdInvalid = computed(() => {
+  if (!isTypeThreshold.value) return false
+  const low = isThresholdPct.value ? lowPct.value : form.limitLow
+  const high = isThresholdPct.value ? highPct.value : form.limitHigh
+  return Number.isInteger(low) && Number.isInteger(high) && low > high
+})
 
 function toggleActivate() {
   if (!isOnline.value) return
