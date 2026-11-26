@@ -27,7 +27,7 @@
     <template v-else>
       <header class="page-header">
         <div class="header-top">
-          <button @click="router.push('/')" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+          <button type="button" aria-label="Назад" @click="backFromSensor" class="btn small back-btn"><svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
           <h2>{{ displayName }}</h2>
           <HeaderActions>
             <button v-if="catalogEntry && canEditPrefs && isIndividual" role="menuitem" @click="openSettings">
@@ -657,6 +657,16 @@ function openMeasurement(fieldKey) {
     query: route.query,
     state: { fromSensorPage: true },
   })
+}
+
+function backFromSensor() {
+  const previous = window.history.state?.back
+  const from = previous ? router.resolve(previous) : null
+  if (from?.name === 'device' && Number(from.params.chipId) === queryDeviceId) {
+    router.back()
+  } else {
+    router.push('/')
+  }
 }
 
 function backToSensor() {

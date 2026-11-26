@@ -86,12 +86,12 @@
 
           <div v-if="!oldStandalone" class="field" :class="{ disabled: !settable }">
             <span class="field-label">Предел отличия от соседнего измерения</span>
-            <NumberPicker v-model="form.percentN" :options="percentOptions" label="Предел отличия от соседнего измерения" suffix=" %" :disabled="!settable" />
+            <NumberPicker v-model="form.percentN" class="percent-picker" :options="percentOptions" label="Предел отличия от соседнего измерения" suffix=" %" :disabled="!settable" />
           </div>
 
           <div v-if="!oldStandalone" class="field" :class="{ disabled: !settable }">
             <span class="field-label">Предел отличия от последнего переданного измерения</span>
-            <NumberPicker v-model="form.percentS" :options="percentOptions" label="Предел отличия от последнего переданного измерения" suffix=" %" :disabled="!settable" />
+            <NumberPicker v-model="form.percentS" class="percent-picker" :options="percentOptions" label="Предел отличия от последнего переданного измерения" suffix=" %" :disabled="!settable" />
           </div>
 
           <div class="field" :class="{ disabled: !settable }">
@@ -531,6 +531,7 @@ h2 { color: var(--text-strong); flex: 1; min-width: 0; overflow-wrap: anywhere; 
 .field-error { color: var(--danger); font-size: 0.72rem; }
 .field select { cursor: pointer; align-self: flex-start; max-width: 100%; }
 .duration-picker { display: inline-flex; align-items: center; align-self: flex-start; gap: 0.2rem; }
+.percent-picker :deep(.picker-trigger) { width: 5rem; justify-content: space-between; }
 .field-check { display: flex; align-items: center; gap: 0.3rem; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; }
 .field-check input { cursor: pointer; }
 .field-check { margin-bottom: 0.5rem; }
