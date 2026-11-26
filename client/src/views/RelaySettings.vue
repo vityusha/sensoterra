@@ -40,14 +40,14 @@
           />
 
           <div class="field" :class="{ disabled: !isOnline }">
-            <span class="field-label">Активация: {{ form.activate ? 'активирован' : 'неактивирован' }}</span>
+            <span class="field-label">Активация канала: {{ form.activate ? 'активирован' : 'неактивирован' }}</span>
             <span class="toggle" :class="{ on: form.activate }" @click="toggleActivate">
               <span class="toggle-dot"></span>
             </span>
           </div>
 
           <div class="field" :class="{ disabled: !isOnline }">
-            <span class="field-label">Тип</span>
+            <span class="field-label">Тип канала (включение)</span>
             <select v-model.number="form.type" :disabled="!isOnline">
               <option v-for="t in types" :key="t.value" :value="t.value">{{ t.label }}{{ t.comment ? ' — ' + t.comment : '' }}</option>
             </select>

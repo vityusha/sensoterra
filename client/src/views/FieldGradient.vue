@@ -257,7 +257,7 @@ async function save() {
         typeAlarm: typeAlarm.value,
       }, deviceId)
     }
-    pushNotification('Градиент сохранён', 'success')
+    pushNotification('Настройки сохранены', 'success')
     goBack()
   } catch (e) {
     message.value = formatApiError(e, 'Не удалось сохранить настройки')

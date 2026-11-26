@@ -214,7 +214,7 @@ async function save() {
       limit2: limit2Enabled.value ? Number(limit2.value) : null,
       typeAlarm: typeAlarm.value,
     }, deviceId)
-    pushNotification('Градиент сохранён', 'success')
+    pushNotification('Настройки сохранены', 'success')
     goBack()
   } catch (e) {
     pushNotification(formatApiError(e, 'Не удалось сохранить градиент'), 'error')
