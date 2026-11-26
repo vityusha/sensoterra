@@ -31,10 +31,13 @@
       <section class="section">
         <h3>Изменение</h3>
         <form class="settings-form" @submit.prevent="save">
-          <div class="field" :class="{ disabled: !isOnline }">
-            <span class="field-label">Название (до 32 символов)</span>
-            <input type="text" v-model="form.name" maxlength="32" :disabled="!isOnline" />
-          </div>
+          <DeviceNameField
+            class="field settings-name"
+            :class="{ disabled: !isOnline }"
+            :name="form.name"
+            :disabled="!isOnline"
+            @save="form.name = $event"
+          />
 
           <div class="field" :class="{ disabled: !isOnline }">
             <span class="field-label">Активация: {{ form.activate ? 'активирован' : 'неактивирован' }}</span>
@@ -225,6 +228,7 @@
 
 <script setup>
 import HeaderActions from '../components/HeaderActions.vue'
+import DeviceNameField from '../components/DeviceNameField.vue'
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getDevice, getDeviceRelays, getDeviceSensors, getDeviceRegisteredSensors, getDeviceStatuses, sendRelayParams, getMoistureScale, getSensorScale } from '../api/auth'
@@ -826,6 +830,7 @@ h2 { flex: 1; min-width: 0; color: var(--text-strong); overflow-wrap: anywhere; 
 .setting-label { color: var(--text-dim); }
 .setting-value { color: var(--text); text-align: right; max-width: 60%; }
 .settings-form { background: var(--bg-card); border-radius: 12px; padding: 1rem; }
+.settings-name { width: max-content; max-width: 100%; }
 .field { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
 .field.disabled { opacity: 0.5; }
 .field-label { color: var(--text-muted); font-size: 0.8rem; }
