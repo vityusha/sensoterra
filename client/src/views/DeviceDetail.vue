@@ -21,7 +21,7 @@
 
     <PageLoadState v-if="!pageReady" :error="pageError" @retry="loadPage" />
     <template v-else>
-    <DeviceNameField v-if="canControl" :name="editableName" @save="saveName" />
+    <DeviceNameField v-if="canEditDisplayName" :name="editableName" @save="saveName" />
 
     <!-- Оплата блока: срок один на всех, кто имеет доступ, и он общий, а не «мой». -->
     <div v-if="isBlock" class="pay-line" :class="payClass">{{ paymentText(payment) }}</div>
@@ -229,17 +229,14 @@
         <div v-if="activeRelay" class="relay-card channel-card">
           <div class="relay-top">
             <span class="dot" :class="relayDotClass(activeRelay)">{{ isRelayQuestion(activeRelay) ? '?' : '' }}</span>
-            <span class="relay-num">R{{ activeRelay.relayNumber }}</span>
-            <div class="relay-id">
-              <div class="relay-name-row">
-                <span class="relay-name">{{ activeRelay.name || '—' }}</span>
-                <span class="relay-last-time" v-if="activeRelay.activity && relayLastText(activeRelay)">{{ relayLastText(activeRelay) }}</span>
-              </div>
-              <span class="relay-type">
-                <strong>{{ relayTypeTitle(activeRelay) }}</strong>
-                <span v-if="relayTypeDetails(activeRelay)" class="relay-type-comment">{{ relayTypeDetails(activeRelay) }}</span>
-              </span>
-            </div>
+            <span class="relay-name">{{ activeRelay.name?.trim() || `R${activeRelay.relayNumber}` }}</span>
+          </div>
+          <div class="relay-type">
+            <strong>{{ relayTypeTitle(activeRelay) }}</strong>
+            <span v-if="relayTypeDetails(activeRelay)" class="relay-type-comment">{{ relayTypeDetails(activeRelay) }}</span>
+          </div>
+          <div v-if="activeRelay.activity && relayLastText(activeRelay)" class="relay-last-time">
+            {{ relayLastText(activeRelay) }}
           </div>
           <div class="relay-actions">
             <button
@@ -917,6 +914,9 @@ const ownerGrantedAdmins = computed(() => !isAdmin.value && !!auth.user?.adminAc
   && device.value?.ownerUsername === auth.user?.username)
 const canControl = computed(() => (isAdmin.value && !adminLocked.value)
   || (canControlRole(myAccessRole.value) && isDevicePaid(chipId)))
+// The name is stored in the current user's display preferences.
+const canEditDisplayName = computed(() => canControl.value || (isAdmin.value &&
+  (isBlock.value || device.value?.deviceType === 'INDIVIDUAL_SENSOR')))
 // Поделиться устройством может только владелец (OWNER); оплата для
 // этого не нужна — приглашение открывает доступ, а не возможность управлять. Админу
 // приглашение не показываем: у него другие механизмы (ключ комплектного листа, доступ).
@@ -1414,7 +1414,7 @@ async function toggle(r, state) {
 }
 
 function saveName(name) {
-  if (!canControl.value) return
+  if (!canEditDisplayName.value) return
   if (device.value?.deviceType === 'BLOCK') setBlockName(chipId, name)
   else setIndividualName(chipId, name)
 }
@@ -1737,14 +1737,11 @@ async function shiftBlockRange(direction) {
 .relay-card { background: var(--bg-card); border-radius: 12px; padding: 0.9rem 1rem; box-shadow: var(--card-shadow); }
 .relay-card.channel-card { border: 1px solid var(--accent); border-radius: 0 0 12px 12px; }
 .relay-top { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
-.relay-num { font-family: monospace; color: var(--text-muted); font-size: 0.9rem; flex-shrink: 0; }
-.relay-id { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 0.2rem; }
-.relay-name-row { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
 .relay-name { flex: 1; min-width: 0; color: var(--text); font-size: 0.9rem; }
 .state { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
 .state.on { background: var(--tag-bg-ok); color: var(--success); }
 .state.off { background: var(--bg-accent); color: var(--danger); }
-.relay-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 0.5rem; }
+.relay-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
 .relay-switch { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 100%; min-width: 0; min-height: 2.35rem; box-sizing: border-box; padding: 0.35rem 2rem; border: 1px solid var(--border); border-radius: 999px; background: var(--relay-off-bg); color: var(--relay-off-text); cursor: pointer; }
 .relay-switch.on { border-color: var(--success); background: var(--tag-bg-ok); }
 .relay-switch:disabled { opacity: 0.55; cursor: default; }
@@ -1759,7 +1756,6 @@ async function shiftBlockRange(direction) {
 .btn.ghost { background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--btn-text); }
 .btn.ghost:hover:not(:disabled) { background: var(--btn-bg-hover); border-color: var(--btn-border); color: var(--btn-text); }
 .relay-stats-panel { margin-top: 0.6rem; padding: 0.6rem 0.8rem; background: var(--bg); border-radius: 10px; }
-.relay-top { display: flex; align-items: center; gap: 0.6rem; }
 .dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; flex-shrink: 0; }
 .dot.on { background: var(--success); box-shadow: 0 0 6px rgba(46,204,113,0.5); }
   .dot.off { background: var(--danger); box-shadow: 0 0 6px rgba(231,76,60,0.5); }
@@ -1771,7 +1767,7 @@ async function shiftBlockRange(direction) {
 .relay-type strong { color: var(--text); font-weight: 700; }
 .relay-type-comment { display: block; font-weight: 400; color: var(--text-muted); white-space: normal; }
 .relay-type.unk { background: var(--banner-bg); border-color: var(--banner-border); color: var(--warn); }
-.relay-last-time { margin-left: auto; font-size: 0.72rem; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+.relay-last-time { margin-top: 0.4rem; text-align: right; font-size: 0.72rem; color: var(--text-dim); }
 .sensor-card { background: var(--bg-card); border-radius: 12px; padding: 0.9rem 1rem; box-shadow: var(--card-shadow); }
 .sensor-top { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
 .sensor-card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin: 0.4rem 0 0.6rem; }
