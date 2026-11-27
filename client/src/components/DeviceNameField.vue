@@ -1,6 +1,6 @@
 <template>
   <div class="device-name-field">
-    <span class="field-label">Название</span>
+    <span class="field-label">Название<template v-if="inlineLimit"> (до {{ nameLimit }} символов)</template></span>
     <div ref="editor" class="name-row" @keydown.esc.prevent="cancel">
       <input
         ref="input"
@@ -28,7 +28,7 @@
         </svg>
       </button>
     </div>
-    <span class="field-hint">до {{ nameLimit }} символов</span>
+    <span v-if="!inlineLimit" class="field-hint">до {{ nameLimit }} символов</span>
   </div>
 </template>
 
@@ -38,6 +38,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 const props = defineProps({
   name: { type: String, required: true },
   disabled: Boolean,
+  inlineLimit: Boolean,
 })
 const emit = defineEmits(['save'])
 const nameLimit = 32

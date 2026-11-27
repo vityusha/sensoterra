@@ -491,7 +491,7 @@ onUnmounted(() => {
 <style scoped>
 .sensor-settings { max-width: 600px; margin: 0 auto; padding: 1rem; }
 .header-row { display: flex; align-items: flex-start; gap: 0.5rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
-h2 { color: var(--text-strong); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+h2 { color: var(--text-strong); flex: 1; }
 .header-controls { display: flex; align-items: center; gap: 0.5rem; flex: none; }
 .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; background: var(--bg-primary); color: var(--text); }
 .btn.small { padding: 0.25rem 0.5rem; font-size: 0.7rem; }

@@ -220,6 +220,8 @@ body {
 /* Keep sticky page headers at the top of the visual viewport on iOS. */
 .header-row,
 .page-header { transform: translateY(var(--vv-offset-top, 0px)); }
+.header-row h2,
+.header-top h2 { min-width: 0; overflow-wrap: anywhere; }
 .header-row > button,
 .header-row > .header-actions,
 .header-top > button,

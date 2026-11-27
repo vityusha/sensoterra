@@ -1206,9 +1206,8 @@ onUnmounted(() => {
 .sensor { max-width: 600px; margin: 0 auto; padding: 1rem; }
 .page-header { position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 0.75rem 1rem 1rem; background: var(--bg); }
 .header-top { display: flex; align-items: center; gap: 0.75rem; }
-.header-top h2 { color: var(--text-strong); flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-top h2 { color: var(--text-strong); flex: 1; margin: 0; }
 .measurement-heading { flex: 1; min-width: 0; }
-.measurement-heading h2 { white-space: normal; overflow-wrap: anywhere; }
 .measurement-heading p { margin-top: 0.25rem; color: var(--text-muted); overflow-wrap: anywhere; }
 .header-meta { display: flex; justify-content: flex-start; margin-top: 0.35rem; }
 .type-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--tag-bg); color: var(--tag-text); }

@@ -251,7 +251,7 @@ function formatApiError(e, fallback) {
 <style scoped>
 .moisture-gradient { max-width: 600px; margin: 0 auto; padding: 1rem; }
 .header-row { display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 50; margin: -1rem -1rem 1.5rem; padding: 1rem; background: var(--bg); }
-.header-row h2 { color: var(--text-strong); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.header-row h2 { color: var(--text-strong); flex: 1; }
 @media (max-width: 480px) {
   .header-row { gap: 0.375rem; }
 }
